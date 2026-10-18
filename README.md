@@ -1,8 +1,22 @@
 # Interactive RL Course
 
-An interactive-first reinforcement learning curriculum, from MDPs to RLHF. Each chapter is a single self-contained HTML page with derivations and in-browser visualisations.
+An interactive-first reinforcement learning curriculum, from MDPs to RLHF. Each chapter is a single self-contained HTML page with LaTeX derivations and in-browser visualisations.
 
-- `index.md` — the curriculum outline
-- `RL.html` — design reference
+**Contents:** open [`index.html`](index.html) — the table of contents linking every chapter, grouped by part.
+
+- `index.html` — the table of contents / landing page
+- `outputs/` — the chapters (`NN-slug.html`), each fully self-contained
+- `RL.html` — the design reference every chapter is matched against
 - `prompt.md` — the brief each chapter is written from
-- `results/` — the chapters (`NN-slug.html`); open any file in a browser
+- `index.md` — the curriculum outline
+- `tools/` — small maintenance scripts
+
+Chapters link to one another with Previous / Next / Contents navigation at the foot of every page, and the brand in the top bar returns to the contents.
+
+## GitHub Pages
+
+The site deploys automatically from `main` via GitHub Actions
+(`.github/workflows/pages.yml`). The workflow assembles a static `_site/`
+containing `index.html`, `outputs/`, and `RL.html`, then publishes it to
+GitHub Pages. No build step and no gating checks — a push to `main` is all it
+takes.

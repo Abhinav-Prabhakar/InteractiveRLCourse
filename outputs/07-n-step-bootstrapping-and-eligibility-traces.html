@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<!--
+  Chapter 07 — n-Step Bootstrapping and Eligibility Traces.
+  Assumptions (per prompt.md): quizzes are omitted (the brief's quiz is folded
+  into the λ-return interactive and the forward/backward equivalence prose);
+  one extra visualizer beyond Trace Propagation (the n-step return composer and
+  the λ-return weights chart) is added because the two targets — a single
+  n-step return and the λ-mixture — are the load-bearing objects of the
+  chapter. Three visualizers total, matching the reference's interactive
+  density. No prev/next links because the reference has none.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>n-Step Bootstrapping &amp; Eligibility Traces</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- chain diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount / horizon chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+#traceSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .disc-col{max-width:44px}
+  .disc-cap,.disc-val{font-size:10px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">n-Step &amp; Traces</a>
+    <nav class="nav">
+      <a href="#nstep">n-step returns</a>
+      <a href="#sarsa">n-step Sarsa</a>
+      <a href="#lambda">TD(λ)</a>
+      <a href="#traces">Traces</a>
+      <a href="#watch">Sarsa(λ)</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Bootstrapping</p>
+    <h1>n-Step Bootstrapping<br>&amp; Eligibility Traces</h1>
+    <p class="lede">One reward and a guess, or every reward and no guess — and every mixture in between, computed online from a single error signal.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="nstep">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>The n-step return</h2>
+      <p><b>TD(0)</b> looks one step ahead and then guesses. <b>Monte Carlo</b> waits for the episode to end and uses everything. The <b>n-step return</b> puts a dial between them: take $n$ real rewards, then bootstrap from an estimate.</p>
+      <div class="eqbox">
+        $$G_{t:t+n}=R_{t+1}+\gamma R_{t+2}+\cdots+\gamma^{n-1}R_{t+n}+\gamma^{n}V(S_{t+n})
+          =\sum_{k=0}^{n-1}\gamma^{k}R_{t+k+1}+\gamma^{n}V(S_{t+n})$$
+      </div>
+      <p>The sum is *observed*; the last term is *imagined* from $V$. The moment you stop trusting observations and start trusting an estimate, you have bootstrapped. The prediction update is the one you already know, pointed at a longer target:</p>
+      <div class="eqbox">
+        $$V(S_t)\leftarrow V(S_t)+\alpha\big[G_{t:t+n}-V(S_t)\big]$$
+      </div>
+      <p>$n=1$ is exactly TD(0). $n\to\infty$ is exactly Monte Carlo. Every integer in between is a legitimate target.</p>
+      <div class="note">
+        <b>$n$ is a bias–variance dial.</b> Small $n$ keeps variance low but leans hard on a possibly-wrong $V$; large $n$ removes the bias but pays for it in the variance of long reward chains. TD($\lambda$), below, averages over every $n$ at once.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · assembling an n-step return</span>
+        <div class="btnrow">
+          <div class="slider-row" style="width:200px">
+            <span class="small muted">$n$</span>
+            <input type="range" id="compN" min="1" max="6" step="1" value="3" aria-label="n, the number of real rewards">
+            <span class="val" id="compNVal">3</span>
+          </div>
+          <div class="slider-row" style="width:200px">
+            <span class="small muted">$\gamma$</span>
+            <input type="range" id="compG" min="0" max="0.99" step="0.01" value="0.9" aria-label="discount factor gamma">
+            <span class="val" id="compGVal">0.90</span>
+          </div>
+        </div>
+      </div>
+      <div class="disc" id="compChart"></div>
+      <p class="small muted" style="text-align:center;margin-bottom:6px">Dashed outline = full reward $R_{t+k+1}$ &nbsp;·&nbsp; solid = its in-window contribution $\gamma^{k}R_{t+k+1}$ &nbsp;·&nbsp; far-right dashed bar = the bootstrap term $\gamma^{n}V(S_{t+n})$</p>
+      <p class="small muted" id="compHint" style="text-align:center;margin:0;font-family:ui-monospace,monospace"></p>
+      <div class="eqbox" id="compEq"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="sarsa">
+  <div class="wrap">
+    <h2><span class="num">02</span>n-step Sarsa</h2>
+    <p>Swap the state value for an action value and the same construction gives <b>n-step Sarsa</b>. The target now names the action actually taken at the horizon — hence the name.</p>
+    <div class="eqbox">
+      $$G_{t:t+n}=\sum_{k=0}^{n-1}\gamma^{k}R_{t+k+1}+\gamma^{n}Q(S_{t+n},A_{t+n}),
+        \qquad
+        Q(S_t,A_t)\leftarrow Q(S_t,A_t)+\alpha\big[G_{t:t+n}-Q(S_t,A_t)\big]$$
+    </div>
+    <p>$n=1$ recovers Sarsa. For an <b>off-policy</b> target every reward in the window must be reweighted by the importance ratio between the target policy $\pi$ and the behavior policy $b$:</p>
+    <div class="eqbox">
+      $$\rho_{t:t+n-1}=\prod_{k=t}^{\min(t+n-1,\,T-1)}\frac{\pi(A_k\mid S_k)}{b(A_k\mid S_k)},
+        \qquad
+        V(S_t)\leftarrow V(S_t)+\alpha\,\rho_{t:t+n-1}\big[G_{t:t+n}-V(S_t)\big]$$
+    </div>
+    <p>For on-policy $n$-step Sarsa the ratios are exactly $1$ — numerator and denominator are the same policy — so no correction is needed.</p>
+    <div class="note">
+      <b>Off-policy $n$-step learning is where the variance explodes.</b> The weight $\rho_{t:t+n-1}$ multiplies a product of sampled rewards, and its variance grows with $n$. The trace machinery below is the practical escape from that blow-up.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="lambda">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>TD(λ) and the λ-return</h2>
+      <p>Instead of committing to one $n$, average all the $n$-step returns with geometrically decaying weights.</p>
+      <div class="eqbox">
+        $$G_t^{\lambda}=(1-\lambda)\sum_{n=1}^{\infty}\lambda^{n-1}\,G_{t:t+n}$$
+      </div>
+      <p>The weights $(1-\lambda)\lambda^{n-1}$ are a distribution over horizons: they sum to $1$, put all their mass on $n=1$ when $\lambda=0$, and on the full Monte Carlo return when $\lambda=1$. <b>TD($\lambda$)</b> is the prediction update built on this target.</p>
+      <div class="eqbox">
+        $$V(S_t)\leftarrow V(S_t)+\alpha\big[G_t^{\lambda}-V(S_t)\big]$$
+      </div>
+      <p>This is the <b>forward view</b>: it names the target exactly, but to evaluate $G_t^{\lambda}$ online you would have to look forward over the entire future before making one update. Drag the slider and watch the weights slide between the two extremes.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the λ-return as a weighted mixture</span>
+        <div class="slider-row" style="width:220px">
+          <span class="small muted">$\lambda$</span>
+          <input type="range" id="lamLam" min="0" max="0.99" step="0.01" value="0.5" aria-label="lambda, the trace decay">
+          <span class="val" id="lamVal">0.50</span>
+        </div>
+      </div>
+      <div class="disc" id="lamChart"></div>
+      <p class="small muted" style="text-align:center;margin-bottom:6px">Bar height = the weight $w_n=(1-\lambda)\lambda^{n-1}$, with the last column carrying the leftover $\lambda^{N-1}$ so the weights still sum to $1$ ($\gamma=0.90$ fixed)</p>
+      <p class="small muted" id="lamHint" style="text-align:center;margin:0;font-family:ui-monospace,monospace"></p>
+      <div class="eqbox" id="lamEq"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="traces">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Eligibility traces: the backward view</h2>
+      <p>Here is the trick that makes the forward view runnable online. Give every state an <b>eligibility trace</b> $E_t(s)$ — a decaying memory of how recently, and how often, that state was visited.</p>
+      <div class="eqbox">
+        $$E_t(s)=\gamma\lambda\,E_{t-1}(s)+\mathbf{1}(S_t=s),\qquad E_0(s)=0$$
+      </div>
+      <p>Read it back: every step each trace fades by $\gamma\lambda$, and the state the agent is standing in receives a bump of $1$. A state visited $k$ steps ago carries $(\gamma\lambda)^{k}$ — a short memory when $\lambda$ is small, a long one when it is large. Then update <em>every</em> state on <em>every</em> step, driven by the one-step TD error:</p>
+      <div class="eqbox">
+        $$\delta_t=R_{t+1}+\gamma V(S_{t+1})-V(S_t),
+          \qquad
+          V(s)\leftarrow V(s)+\alpha\,\delta_t\,E_t(s)\quad\text{for all }s\in\mathcal{S}$$
+      </div>
+      <p>This is the <b>backward view</b>: one scalar error, broadcast backward over the trajectory in proportion to eligibility. The load-bearing step is the equivalence — for tabular accumulating traces the backward view applies exactly the credit the forward view promises, one step at a time, before the outcome is known.</p>
+      <div class="note">
+        <b>The whole story is one line: $\delta_t$ is spread back over the trajectory by $E_t$.</b> The forward view is *what* it computes; the backward view is *how* it computes it without ever waiting for the future.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · trace propagation</span>
+        <div class="btnrow">
+          <button id="trStep">Step</button>
+          <button id="trRun" class="primary">Run ▶</button>
+          <button id="trReset">Reset</button>
+          <button id="trShow">Show values</button>
+        </div>
+      </div>
+
+      <div class="gridwrap">
+        <div class="gw-left">
+          <svg id="traceSvg" viewBox="0 0 320 320" role="img" aria-label="Gridworld with eligibility traces lighting up along the trajectory"></svg>
+          <div class="legend"><span id="trLegLo">trace 0</span><span class="grad" id="trGrad" style="background:linear-gradient(90deg,#fff,rgba(37,99,235,.05),rgba(37,99,235,.85))"></span><span id="trLegHi">trace max</span></div>
+          <div class="btnrow" style="margin-top:16px;justify-content:center">
+            <div class="slider-row" style="width:230px">
+              <span class="small muted">$\lambda$</span>
+              <input type="range" id="trLam" min="0" max="0.99" step="0.01" value="0.8" aria-label="lambda, trace decay">
+              <span class="val" id="trLamVal">0.80</span>
+            </div>
+          </div>
+          <div class="btnrow" style="margin-top:8px;justify-content:center">
+            <div class="slider-row" style="width:230px">
+              <span class="small muted">$\alpha$</span>
+              <input type="range" id="trAlpha" min="0.02" max="0.5" step="0.01" value="0.1" aria-label="learning rate alpha">
+              <span class="val" id="trAlphaVal">0.10</span>
+            </div>
+          </div>
+          <p class="small muted" id="trInfo" style="text-align:center;margin-top:12px;font-family:ui-monospace,monospace"></p>
+        </div>
+
+        <div class="gw-right">
+          <p class="small muted" style="margin-top:0">The agent walks uniformly at random from the start (bottom-left) to the goal (top-right, $+1$, terminal). Each cell glows with its eligibility trace; the current cell is ringed.</p>
+          <p class="small muted" style="margin-bottom:0">Current episode</p>
+          <div class="traj" id="trTraj"></div>
+
+          <h4 style="margin-bottom:4px">Backward-view update</h4>
+          <div class="eqbox" id="trEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="watch">
+  <div class="wrap">
+    <h2><span class="num">05</span>Sarsa(λ) and Watkins' Q(λ)</h2>
+    <p>Put the traces on state–action pairs and drive them with the Sarsa error, and you have <b>Sarsa($\lambda$)</b> — the on-policy control algorithm.</p>
+    <div class="eqbox">
+      $$\begin{aligned}
+        \delta_t &= R_{t+1}+\gamma Q(S_{t+1},A_{t+1})-Q(S_t,A_t)\\[2pt]
+        E_t(s,a) &= \gamma\lambda\,E_{t-1}(s,a)+\mathbf{1}(s=S_t,\,a=A_t)\\[2pt]
+        Q(s,a) &\leftarrow Q(s,a)+\alpha\,\delta_t\,E_t(s,a)\quad\text{for all }(s,a)
+      \end{aligned}$$
+    </div>
+    <p><b>Watkins' Q($\lambda$)</b> changes the target to the greedy, Q-learning one — $\delta_t=R_{t+1}+\gamma\max_a Q(S_{t+1},a)-Q(S_t,A_t)$ — so the trace rule has to change with it. The $\max$ evaluates an action the behavior policy may never take, and any trace running through such an action would credit a path the target never follows. It must be erased.</p>
+    <div class="eqbox">
+      $$E_t(s,a)=\begin{cases}
+        \gamma\lambda\,E_{t-1}(s,a)+\mathbf{1}(s=S_t,\,a=A_t), & A_{t+1}=\arg\max_{a}Q(S_{t+1},a)\\[2pt]
+        0, & \text{otherwise}
+      \end{cases}$$
+    </div>
+    <div class="note">
+      <b>The trace is cut whenever the greedy target diverges from behavior.</b> That single guard is what keeps Watkins' Q($\lambda$) off-policy: credit flows back only along action sequences the Q-learning target would actually have taken.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">06</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Forward view</th><th>Backward view</th></tr>
+      <tr><td>What it is</td><td>A target: the $\lambda$-return $G_t^{\lambda}$</td><td>An update: the error $\delta_t$ spread over states</td></tr>
+      <tr><td>Needs the future?</td><td>Yes — the whole trajectory, then look back</td><td>No — online, one step at a time</td></tr>
+      <tr><td>Extra state</td><td>None</td><td>A trace $E_t(s)$ per state</td></tr>
+      <tr><td>Mechanism</td><td>Average all $n$-step returns with weights $(1-\lambda)\lambda^{n-1}$</td><td>Decay-and-accumulate, then broadcast $\delta_t$</td></tr>
+      <tr><td>Role of $\lambda$</td><td>Mixture weight over horizons</td><td>Forgetting factor inside $\gamma\lambda$</td></tr>
+      <tr><td>Role of $\gamma$</td><td>Discounts each reward in the window</td><td>Discounts the past inside the trace</td></tr>
+      <tr><td>Cost per step</td><td>Infeasible online</td><td>$O(|\mathcal{S}|)$ (or $O(|\mathcal{S}||\mathcal{A}|)$)</td></tr>
+      <tr><td>Algorithms</td><td>TD($\lambda$), $\lambda$-return, GAE</td><td>Sarsa($\lambda$), Watkins' Q($\lambda$)</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      G_{t:t+n} &= \sum_{k=0}^{n-1}\gamma^{k}R_{t+k+1}+\gamma^{n}V(S_{t+n})\\[2pt]
+      G_t^{\lambda} &= (1-\lambda)\sum_{n=1}^{\infty}\lambda^{n-1}G_{t:t+n}\\[2pt]
+      E_t(s) &= \gamma\lambda\,E_{t-1}(s)+\mathbf{1}(S_t=s)\\[2pt]
+      \delta_t &= R_{t+1}+\gamma V(S_{t+1})-V(S_t)\\[2pt]
+      V(s) &\leftarrow V(s)+\alpha\,\delta_t\,E_t(s)
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream — GAE in policy gradients, Dyna's planning backups, and the bias–variance dial every deep-RL target still tinkers with — is a choice about how far back to spread $\delta_t$ and how long to remember a state.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="06-temporal-difference-learning.html"><span class="pg-k">Previous</span><span class="pg-t">Temporal-Difference Learning</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="08-planning-and-learning-with-tabular-methods.html"><span class="pg-k">Next</span><span class="pg-t">Planning and Learning</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+/* =====================================================================
+   Shared illustrative stream (used by both forward-view panels)
+   ===================================================================== */
+const REW   = [2, 0, -1, 3, 1, -2];          // R_{t+k+1}, k = 0..5
+const VBOOT = [0, 0.2, 0.5, 0.3, 0.8, 0.1, 0.4]; // V(S_{t+n}) for n = 0..6
+const NSTREAM = REW.length;                   // 6
+
+function nStepReturn(n, g) {
+  let s = 0;
+  for (let k = 0; k < n; k++) s += Math.pow(g, k) * REW[k];
+  s += Math.pow(g, n) * VBOOT[n];
+  return s;
+}
+
+/* =====================================================================
+   01 — n-step return composer
+   ===================================================================== */
+function initComposer() {
+  const chart = $('#compChart');
+  const eqEl = $('#compEq');
+  const nSlider = $('#compN');
+  const nVal = $('#compNVal');
+  const gSlider = $('#compG');
+  const gVal = $('#compGVal');
+  const hint = $('#compHint');
+
+  let html = '';
+  for (let k = 0; k < NSTREAM; k++) {
+    html += `
+      <div class="disc-col">
+        <div class="disc-plot">
+          <div class="zl"></div>
+          <div class="disc-ghost" data-k="${k}"></div>
+          <div class="disc-bar" data-k="${k}"></div>
+        </div>
+        <div class="disc-cap">k=${k}</div>
+        <div class="disc-val" data-v="${k}"></div>
+      </div>`;
+  }
+  html += `
+      <div class="disc-col">
+        <div class="disc-plot">
+          <div class="zl"></div>
+          <div class="disc-bar" data-k="boot" style="background:transparent;border:1.5px dashed #111"></div>
+        </div>
+        <div class="disc-cap">boot</div>
+        <div class="disc-val" data-v="boot"></div>
+      </div>`;
+  chart.innerHTML = html;
+
+  function update() {
+    const n = parseInt(nSlider.value, 10);
+    const g = parseFloat(gSlider.value);
+    nVal.textContent = n;
+    gVal.textContent = g.toFixed(2);
+
+    const boot = Math.pow(g, n) * VBOOT[n];
+
+    let maxAbs = 0.5;
+    for (let k = 0; k < NSTREAM; k++) maxAbs = Math.max(maxAbs, Math.abs(REW[k]));
+    maxAbs = Math.max(maxAbs, Math.abs(boot));
+
+    let sum = 0;
+    for (let k = 0; k < NSTREAM; k++) {
+      const r = REW[k];
+      const inW = k < n;
+      const disc = inW ? Math.pow(g, k) * r : 0;
+      sum += disc;
+
+      const ghost = chart.querySelector(`.disc-ghost[data-k="${k}"]`);
+      const bar = chart.querySelector(`.disc-bar[data-k="${k}"]`);
+      const hFull = (Math.abs(r) / maxAbs) * 70;
+      const hDisc = (Math.abs(disc) / maxAbs) * 70;
+
+      ghost.style.height = hFull + 'px';
+      ghost.style.opacity = inW ? '1' : '0.3';
+      ghost.style[r >= 0 ? 'bottom' : 'top'] = '50%';
+
+      bar.style.height = (inW ? Math.max(hDisc, r === 0 ? 0 : 1) : 0) + 'px';
+      bar.style[r >= 0 ? 'bottom' : 'top'] = '50%';
+      bar.className = 'disc-bar ' + (r >= 0 ? 'pos' : 'neg');
+
+      chart.querySelector(`.disc-val[data-v="${k}"]`).textContent = inW ? disc.toFixed(2) : '·';
+    }
+
+    const bootBar = chart.querySelector('.disc-bar[data-k="boot"]');
+    bootBar.style.height = Math.max((Math.abs(boot) / maxAbs) * 70, 2) + 'px';
+    bootBar.style[boot >= 0 ? 'bottom' : 'top'] = '50%';
+    chart.querySelector('.disc-val[data-v="boot"]').textContent = boot.toFixed(2);
+
+    const total = sum + boot;
+    const terms = [];
+    for (let k = 0; k < n; k++) {
+      const v = Math.pow(g, k) * REW[k];
+      terms.push((v < 0 ? '-' : '+') + '\\,' + Math.abs(v).toFixed(2));
+    }
+    const termStr = terms.join(' ');
+    const bootSign = boot < 0 ? '-' : '+';
+
+    T(eqEl,
+      `\\begin{aligned}
+        G_{t:t+n} &= \\sum_{k=0}^{${n - 1}}\\gamma^{k}R_{t+k+1} + \\gamma^{${n}}V(S_{t+n})\\\\
+        &= ${termStr} \\;${bootSign}\\; ${Math.abs(boot).toFixed(2)}\\\\
+        &= \\mathbf{${total.toFixed(3)}}
+      \\end{aligned}`, true);
+
+    hint.textContent =
+      `n = ${n}   γ^${n}·V(S_{t+n}) = ${boot.toFixed(3)}   (window covers k = 0…${n - 1})`;
+  }
+
+  nSlider.addEventListener('input', update);
+  gSlider.addEventListener('input', update);
+  update();
+}
+
+/* =====================================================================
+   03 — λ-return weights
+   ===================================================================== */
+function initLambda() {
+  const chart = $('#lamChart');
+  const eqEl = $('#lamEq');
+  const slider = $('#lamLam');
+  const valEl = $('#lamVal');
+  const hint = $('#lamHint');
+  const LGAMMA = 0.9;
+  const N = NSTREAM; // 6
+
+  let html = '';
+  for (let n = 1; n <= N; n++) {
+    html += `
+      <div class="disc-col">
+        <div class="disc-plot">
+          <div class="zl" style="top:auto;bottom:0"></div>
+          <div class="disc-bar pos" data-n="${n}"></div>
+        </div>
+        <div class="disc-cap">n=${n}</div>
+        <div class="disc-val" data-w="${n}"></div>
+      </div>`;
+  }
+  chart.innerHTML = html;
+
+  function update() {
+    const lam = parseFloat(slider.value);
+    valEl.textContent = lam.toFixed(2);
+
+    const w = [];
+    for (let n = 1; n < N; n++) w[n] = (1 - lam) * Math.pow(lam, n - 1);
+    w[N] = Math.pow(lam, N - 1);
+
+    let total = 0;
+    for (let n = 1; n <= N; n++) {
+      const G = nStepReturn(n, LGAMMA);
+      total += w[n] * G;
+      const bar = chart.querySelector(`.disc-bar[data-n="${n}"]`);
+      bar.style.height = Math.max(w[n] * 140, w[n] > 0 ? 1 : 0) + 'px';
+      chart.querySelector(`.disc-val[data-w="${n}"]`).textContent = w[n].toFixed(2);
+    }
+
+    T(eqEl,
+      `\\begin{aligned}
+        G_t^{\\lambda} &= (1-${lam.toFixed(2)})\\sum_{n=1}^{${N - 1}}${lam.toFixed(2)}^{\\,n-1}G_{t:t+n} + ${lam.toFixed(2)}^{${N - 1}}G_{t:t+${N}}\\\\
+        &= \\sum_{n=1}^{${N}} w_n\\,G_{t:t+n} = \\mathbf{${total.toFixed(3)}}
+      \\end{aligned}`, true);
+
+    hint.textContent = `λ = ${lam.toFixed(2)}   Σ w_n = 1.000   (γ = ${LGAMMA.toFixed(2)}, N = ${N})`;
+  }
+
+  slider.addEventListener('input', update);
+  update();
+}
+
+/* =====================================================================
+   04 — trace propagation on a gridworld
+   ===================================================================== */
+function colorFor(v) {
+  const t = Math.max(-1, Math.min(1, v));
+  const a = Math.min(0.88, Math.abs(t) * 0.92);
+  return t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
+}
+function textColorFor(v) {
+  return Math.abs(v) > 0.5 ? '#fff' : '#111';
+}
+
+function initTrace() {
+  const N = 5, CELL = 64;
+  const GOAL = [0, 4], START = [4, 0];
+  const GAMMA = 0.9;
+  const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+
+  const svg = $('#traceSvg');
+  const info = $('#trInfo');
+  const trajEl = $('#trTraj');
+  const eqEl = $('#trEq');
+  const lamSlider = $('#trLam');
+  const lamVal = $('#trLamVal');
+  const aSlider = $('#trAlpha');
+  const aVal = $('#trAlphaVal');
+  const eqlEl = $('#trLegLo');
+  const eqhEl = $('#trLegHi');
+
+  let alpha = parseFloat(aSlider.value);
+  let lam = parseFloat(lamSlider.value);
+  let V = new Array(N * N).fill(0);
+  let E = new Array(N * N).fill(0);
+  let S = START[0] * N + START[1];
+  let delta = 0;
+  let episodes = 0;
+  let traj = [];
+  let showV = false;
+  let running = null;
+
+  const idx = (r, c) => r * N + c;
+  const isGoal = (r, c) => r === GOAL[0] && c === GOAL[1];
+
+  /* ---- build grid once ---- */
+  svg.innerHTML = '';
+  const cellLayer = el('g', {}, svg);
+  const cellEls = [];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const g = el('g', { class: 'cell' }, cellLayer);
+      const rect = el('rect', {
+        x: c * CELL + 1.5, y: r * CELL + 1.5,
+        width: CELL - 3, height: CELL - 3, rx: 6,
+        fill: '#fff', stroke: 'none'
+      }, g);
+      const vt = el('text', {
+        x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 5,
+        'text-anchor': 'middle', 'font-size': 13,
+        'font-family': 'ui-monospace, monospace', 'font-weight': 600,
+        fill: '#111'
+      }, g);
+      cellEls.push({ rect, vt, r, c });
+      if (isGoal(r, c)) {
+        el('text', {
+          x: c * CELL + CELL - 11, y: r * CELL + 17,
+          'text-anchor': 'middle', 'font-size': 11,
+          'font-family': 'ui-monospace, monospace', 'font-weight': 650, fill: '#6b7280'
+        }, g).textContent = 'G';
+      }
+      if (r === START[0] && c === START[1]) {
+        el('text', {
+          x: c * CELL + 11, y: r * CELL + CELL - 10,
+          'text-anchor': 'middle', 'font-size': 11,
+          'font-family': 'ui-monospace, monospace', 'font-weight': 650, fill: '#6b7280'
+        }, g).textContent = 'S';
+      }
+    }
+  }
+
+  function render() {
+    let maxE = 0.001;
+    for (let i = 0; i < E.length; i++) maxE = Math.max(maxE, E[i]);
+
+    cellEls.forEach(({ rect, vt, r, c }) => {
+      const i = idx(r, c);
+      let fill, txt, tcol;
+      if (showV) {
+        fill = colorFor(V[i]);
+        txt = V[i].toFixed(2);
+        tcol = textColorFor(V[i]);
+      } else {
+        const a = E[i] <= 0 ? 0 : Math.min(0.85, (E[i] / maxE) * 0.9);
+        fill = a > 0 ? `rgba(37,99,235,${a.toFixed(3)})` : '#fff';
+        txt = E[i].toFixed(2);
+        tcol = a > 0.45 ? '#fff' : '#111';
+      }
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('stroke', i === S ? '#111' : 'none');
+      rect.setAttribute('stroke-width', i === S ? 2.6 : 0);
+      vt.textContent = txt;
+      vt.setAttribute('fill', tcol);
+    });
+
+    const gl = GAMMA * lam;
+    const horizon = gl < 1 ? (1 / (1 - gl)) : Infinity;
+    const hStr = horizon === Infinity ? '∞' : horizon.toFixed(1);
+    info.textContent =
+      `episodes = ${episodes}   δ_t = ${delta.toFixed(3)}   γλ = ${gl.toFixed(2)}   horizon ≈ ${hStr}`;
+
+    trajEl.innerHTML = traj.slice(-14).map((s, i, arr) =>
+      `<span class="chip ${i === arr.length - 1 ? 'now' : ''}">${Math.floor(s / N)},${s % N}</span>`
+    ).join('<span class="arw">→</span>');
+
+    if (showV) {
+      eqlEl.textContent = 'V −1'; eqhEl.textContent = 'V +1';
+      $('#trGrad').style.background =
+        'linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)';
+    } else {
+      eqlEl.textContent = 'trace 0'; eqhEl.textContent = 'trace max';
+      $('#trGrad').style.background =
+        'linear-gradient(90deg,#fff,rgba(37,99,235,.05),rgba(37,99,235,.85))';
+    }
+
+    T(eqEl,
+      `\\begin{aligned}
+        E_t(s) &= \\gamma\\lambda\\,E_{t-1}(s) + \\mathbf{1}(S_t=s),\\quad \\gamma\\lambda = ${gl.toFixed(2)}\\\\
+        \\delta_t &= R_{t+1}+\\gamma V(S_{t+1})-V(S_t) = ${delta.toFixed(3)}\\\\
+        V(s) &\\leftarrow V(s)+\\alpha\\,\\delta_t\\,E_t(s),\\quad \\alpha = ${alpha.toFixed(2)}
+      \\end{aligned}`, true);
+  }
+
+  function step() {
+    const r = Math.floor(S / N), c = S % N;
+    const a = Math.floor(Math.random() * 4);
+    let nr = r + DIRS[a][0], nc = c + DIRS[a][1];
+    if (nr < 0 || nr >= N || nc < 0 || nc >= N) { nr = r; nc = c; }
+    const Sp = idx(nr, nc);
+    const term = isGoal(nr, nc);
+    const R = term ? 1 : 0;
+
+    delta = term ? (R - V[S]) : (R + GAMMA * V[Sp] - V[S]);
+
+    for (let i = 0; i < E.length; i++) E[i] *= GAMMA * lam;
+    E[S] += 1;
+    for (let i = 0; i < V.length; i++) V[i] += alpha * delta * E[i];
+
+    traj.push(S);
+    S = Sp;
+
+    if (term) {
+      S = START[0] * N + START[1];
+      E = new Array(N * N).fill(0);
+      traj = [];
+      episodes++;
+    }
+    render();
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  $('#trStep').addEventListener('click', () => { stop(); step(); });
+  $('#trRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(step, 110);
+  });
+  $('#trReset').addEventListener('click', () => {
+    stop();
+    V = new Array(N * N).fill(0);
+    E = new Array(N * N).fill(0);
+    S = START[0] * N + START[1];
+    delta = 0; episodes = 0; traj = [];
+    render();
+  });
+  $('#trShow').addEventListener('click', () => {
+    showV = !showV;
+    $('#trShow').classList.toggle('active', showV);
+    $('#trShow').textContent = showV ? 'Show traces' : 'Show values';
+    render();
+  });
+  lamSlider.addEventListener('input', () => {
+    lam = parseFloat(lamSlider.value);
+    lamVal.textContent = lam.toFixed(2);
+    render();
+  });
+  aSlider.addEventListener('input', () => {
+    alpha = parseFloat(aSlider.value);
+    aVal.textContent = alpha.toFixed(2);
+    render();
+  });
+
+  render();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initComposer();
+  initLambda();
+  initTrace();
+  initScroll();
+});
+</script>
+</body>
+</html>

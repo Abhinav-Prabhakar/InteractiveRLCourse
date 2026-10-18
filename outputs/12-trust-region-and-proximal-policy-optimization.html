@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trust-Region and Proximal Policy Optimization</title>
+
+<!-- Assumptions: the brief requests a quiz, which prompt.md forbids, so it is skipped and the prose is deepened instead.
+     The brief names one visualizer (the PPO Clip Visualizer); two more are added (the surrogate objective, the KL trust
+     region) because the clip cannot be motivated on the page without both the unbounded surrogate and the KL constraint.
+     No new CSS classes are introduced: all new visuals are SVG drawn programmatically, reusing the reference tokens. -->
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- chain diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">TRPO &amp; PPO</a>
+    <nav class="nav">
+      <a href="#step">Step size</a>
+      <a href="#surrogate">Surrogate</a>
+      <a href="#trpo">TRPO</a>
+      <a href="#ppo">PPO</a>
+      <a href="#tricks">Tricks</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Policy Optimization</p>
+    <h1>Trust-Region and<br>Proximal Policy Optimization</h1>
+    <p class="lede">A gradient tells you which way to step, never how far — TRPO and PPO are two ways of drawing that line.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="step">
+  <div class="wrap">
+    <h2><span class="num">01</span>The step-size problem</h2>
+    <p>Chapter 11 left us with an unbiased estimate of the policy gradient:</p>
+    <div class="eqbox">
+      $$\nabla_\theta J(\theta)=\mathbb{E}_{\pi_\theta}\!\left[\nabla_\theta\log\pi_\theta(A_t\mid S_t)\,\hat{A}(S_t,A_t)\right].$$
+    </div>
+    <p>The vanilla update follows it with one learning rate, $\theta\leftarrow\theta+\alpha\nabla_\theta J(\theta)$ — and that is exactly where things break. The gradient is evaluated under $\pi_\theta$, but the moment you apply it, the data in hand was collected by the <b>old</b> policy, not the new one.</p>
+    <div class="note">
+      <b>The gradient is a direction, not a distance.</b> It promises that $J$ increases for a small move; it says nothing about how far the increase survives. Step too far and the update is <b>destructive</b> — a probability collapses toward zero, its gradient vanishes with it, and the agent cannot walk itself back. Step too timidly and every rollout is wasted. What we need is a limit on how far the policy may move per update.
+    </div>
+    <p>The next two algorithms fix the same defect. They keep the cheap first-order ascent direction and bolt on a bound on the size of the step — once explicitly, once implicitly.</p>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="surrogate">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>The surrogate objective</h2>
+      <p>To reuse a batch collected under $\pi_{\theta_{\text{old}}}$, correct for the off-policy mismatch with importance sampling. Pack the correction into a single number, the <b>probability ratio</b>:</p>
+      <div class="eqbox">
+        $$r_t(\theta)=\frac{\pi_\theta(A_t\mid S_t)}{\pi_{\theta_{\text{old}}}(A_t\mid S_t)},\qquad r_t(\theta_{\text{old}})=1 .$$
+      </div>
+      <p>Reweighting the advantage by that ratio gives the <b>surrogate objective</b>:</p>
+      <div class="eqbox">
+        $$L^{\text{CPI}}(\theta)=\mathbb{E}_{t}\!\left[r_t(\theta)\,\hat{A}_t\right].$$
+      </div>
+      <p>Read it back: the surrogate credits an action in proportion to how much the update raises its probability, weighted by whether that action beat the average.</p>
+      <div class="note">
+        <b>The surrogate is exact only at home.</b> At $\theta=\theta_{\text{old}}$ we have $r_t=1$, and the surrogate matches $J$ in both value and gradient — so a small step is safe. Away from home the ratio stops tracking the objective; it is a first-order stand-in, trustworthy only while $r_t$ stays near $1$.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the surrogate</span>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="surrSvg" viewBox="0 0 460 280" role="img" aria-label="Surrogate objective plotted against the probability ratio; the curve is a straight line that grows without bound for positive advantage"></svg>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row">
+            <span class="small muted">$r_t$</span>
+            <input type="range" id="surrR" min="0.1" max="3" step="0.05" value="1.5" aria-label="probability ratio">
+            <span class="val" id="surrRVal">1.50</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$\hat{A}_t$</span>
+            <input type="range" id="surrA" min="-2" max="2" step="0.1" value="1" aria-label="advantage">
+            <span class="val" id="surrAVal">1.00</span>
+          </div>
+          <div class="eqbox" id="surrEq" style="min-height:70px"></div>
+          <p class="small muted" style="margin:6px 0 0">The surrogate is a straight line in $r_t$. For $\hat A_t>0$ it rises forever; for $\hat A_t<0$ it falls forever. Maximizing it over an unconstrained policy has no interior solution.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>There is no brake. Follow this objective and the optimizer drives $r_t\to\infty$ whenever the sampled action was good, and $r_t\to 0$ whenever it was bad — long past the point where the ratio means anything. The missing ingredient is a leash.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="trpo">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>TRPO: a hard trust region</h2>
+      <p><b>Trust Region Policy Optimization</b> makes the leash explicit. Keep maximizing the surrogate, but forbid the action distribution from moving more than $\delta$ in KL divergence:</p>
+      <div class="eqbox">
+        $$\max_\theta\;\mathbb{E}_{t}\!\left[\frac{\pi_\theta(A_t\mid S_t)}{\pi_{\theta_{\text{old}}}(A_t\mid S_t)}\,\hat{A}_t\right]\quad\text{s.t.}\quad \mathbb{E}_{t}\!\left[D_{\mathrm{KL}}\!\left(\pi_{\theta_{\text{old}}}(\cdot\mid S_t)\,\big\|\,\pi_\theta(\cdot\mid S_t)\right)\right]\le\delta .$$
+      </div>
+      <p>The KL divergence measures how far the whole action distribution slid, averaged over the states in the batch. It is not a distance on parameters — two very different $\theta$ can induce the same policy, and a tiny parameter change can flip a near-deterministic action — which is exactly why the constraint lives on the induced distributions instead.</p>
+      <p>The constraint is exactly where the trust-region machinery is spent: bounding the KL turns the surrogate into a lower bound on the true improvement, so every accepted step is a guaranteed non-decrease in $J$. The optimizer first picks the steepest ascent direction under the Fisher information metric — the <b>natural gradient</b> $F^{-1}g$ — then scales it until it just touches the boundary of the trust region:</p>
+      <div class="eqbox">
+        $$F=\mathbb{E}_{t}\!\left[\nabla_\theta\log\pi_\theta(A_t\mid S_t)\,\nabla_\theta\log\pi_\theta(A_t\mid S_t)^{\!\top}\right],\qquad
+          \theta\leftarrow\theta+\sqrt{\frac{2\delta}{g^{\top}F^{-1}g}}\,F^{-1}g .$$
+      </div>
+      <p>In practice $F^{-1}g$ is never formed: it is applied by conjugate gradient using Fisher-vector products, then a backtracking line search accepts the first candidate whose measured KL sits under $\delta$.</p>
+      <div class="note">
+        <b>The constraint is the whole idea.</b> Bound the KL and the surrogate becomes a promise rather than a guess — but the price is a second-order solver, dozens of matrix-vector products per update, and a line search that must be tuned. That cost is precisely what PPO removes.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the KL trust region</span>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="klSvg" viewBox="0 0 460 260" role="img" aria-label="Two action distributions, old and new, over five actions; a slider moves the new policy and the exact KL divergence is shown against the budget"></svg>
+          <p class="small muted" style="text-align:center;margin:6px 0 0">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#c2c9d4;vertical-align:middle"></span> old $\pi_{\theta_{\text{old}}}$ &nbsp;&nbsp;
+            <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#2563eb;vertical-align:middle"></span> new $\pi_\theta$
+          </p>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row">
+            <span class="small muted">update $m$</span>
+            <input type="range" id="klM" min="0" max="1" step="0.01" value="0.25" aria-label="how far the new policy moves from the old">
+            <span class="val" id="klMVal">0.25</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$\delta$</span>
+            <input type="range" id="klDelta" min="0.005" max="0.3" step="0.005" value="0.02" aria-label="KL budget delta">
+            <span class="val" id="klDeltaVal">0.020</span>
+          </div>
+          <div class="eqbox" id="klEq" style="min-height:64px"></div>
+          <p class="val" id="klStatus" style="text-align:left;font-size:13px;margin:8px 0 0"></p>
+          <p class="small muted" style="margin:6px 0 0">Shown is the KL at one state. The constraint averages this over every state in the batch; move the update past $\delta$ and the candidate step is rejected and shrunk.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="ppo">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>PPO: a soft trust region</h2>
+      <p><b>Proximal Policy Optimization</b> keeps TRPO's behavior and throws away its solver. Instead of an explicit KL constraint, it clips the ratio per sample and never lets the update profit from leaving the neighborhood:</p>
+      <div class="eqbox">
+        $$L^{\text{CLIP}}(\theta)=\mathbb{E}_{t}\!\left[\min\!\left(r_t(\theta)\,\hat{A}_t,\;\operatorname{clip}\!\left(r_t(\theta),\,1-\epsilon,\,1+\epsilon\right)\hat{A}_t\right)\right].$$
+      </div>
+      <p>Read the two branches by the sign of the advantage. When $\hat A_t>0$ the action was better than average, so the objective is $\hat A_t\min(r_t,1+\epsilon)$: raising $r_t$ helps <em>only</em> up to $1+\epsilon$, then the curve goes flat. When $\hat A_t<0$ the action was worse, so the objective is $\hat A_t\max(r_t,1-\epsilon)$: lowering $r_t$ helps only down to $1-\epsilon$, then it too goes flat.</p>
+      <div class="note">
+        <b>The $\min$ is the pessimism.</b> It always takes the smaller of the unclipped and clipped objectives, so the update never earns credit for extrapolating past the trust region — and, symmetrically, it keeps every penalty for moving too far in a harmful direction, where the unclipped term is the smaller one.
+      </div>
+      <p>Differentiate it. Since $\nabla_\theta r_t=r_t\,\nabla_\theta\log\pi_\theta(A_t\mid S_t)$, the chain rule hands back Chapter 11's gradient with an indicator that switches it off exactly where the ratio has left the region:</p>
+      <div class="eqbox">
+        $$\nabla_\theta L^{\text{CLIP}}(\theta)=\mathbb{E}_{t}\!\Big[\,\mathbf{1}\big\{(A_t>0\wedge r_t<1+\epsilon)\;\vee\;(A_t<0\wedge r_t>1-\epsilon)\big\}\;r_t\,\nabla_\theta\log\pi_\theta(A_t\mid S_t)\,\hat{A}_t\Big].$$
+      </div>
+      <p>The indicator is exactly where the trust region is spent: when it is zero — the ratio has traveled past the boundary in the direction that would help — the gradient for that sample vanishes, and the update simply walks away from it.</p>
+
+      <h3>Why clipping <em>is</em> a trust region</h3>
+      <p>Write $r_t-1=\big(\pi_\theta-\pi_{\theta_{\text{old}}}\big)/\pi_{\theta_{\text{old}}}$; it is the first-order change in the policy. The KL divergence is quadratic in that deviation to leading order,</p>
+      <div class="eqbox">
+        $$D_{\mathrm{KL}}\!\left(\pi_{\theta_{\text{old}}}\,\big\|\,\pi_\theta\right)=\tfrac{1}{2}\,\mathbb{E}_{\pi_{\theta_{\text{old}}}}\!\left[(r_t-1)^2\right]+\mathcal{O}\!\left((r_t-1)^3\right).$$
+      </div>
+      <p>So bounding $|r_t-1|\le\epsilon$ per sample bounds that second-order KL by roughly $\tfrac12\epsilon^2$: clipping replaces the exact KL ball with a box in ratio space, a first-order surrogate for the trust region TRPO enforces exactly. Nothing is solved for; $\epsilon$ is the only trust-region knob, and the whole update is plain SGD on a loss.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · PPO clip</span>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="ppoClipSvg" viewBox="0 0 460 280" role="img" aria-label="PPO clipped objective as a function of the probability ratio, with the clip band and the active branch marked"></svg>
+          <p class="small muted" style="text-align:center;margin:6px 0 0">Light dashed = unclipped $r_t\hat A_t$ · solid = $L^{\text{CLIP}}$ · shaded = clip band $[1-\epsilon,\,1+\epsilon]$</p>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <div class="slider-row">
+            <span class="small muted">$r_t$</span>
+            <input type="range" id="ppoR" min="0" max="3" step="0.01" value="1.3" aria-label="probability ratio">
+            <span class="val" id="ppoRVal">1.30</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$\hat{A}_t$</span>
+            <input type="range" id="ppoA" min="-2" max="2" step="0.05" value="1" aria-label="advantage">
+            <span class="val" id="ppoAVal">1.00</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$\epsilon$</span>
+            <input type="range" id="ppoEps" min="0.05" max="0.5" step="0.01" value="0.2" aria-label="clip range epsilon">
+            <span class="val" id="ppoEpsVal">0.20</span>
+          </div>
+          <div class="eqbox" id="ppoClipEq" style="min-height:130px"></div>
+          <p class="val" id="ppoGrad" style="text-align:left;font-size:13px;margin:8px 0 0"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="tricks">
+  <div class="wrap">
+    <h2><span class="num">05</span>Practical tricks</h2>
+    <p>The clipped loss is only half the algorithm. The rest lives in details that decide whether it trains at all.</p>
+
+    <h3>Advantage normalization</h3>
+    <p>Normalize the advantages across the batch before they touch the surrogate:</p>
+    <div class="eqbox">
+      $$\hat{A}_t\;\leftarrow\;\frac{\hat{A}_t-\mu_A}{\sigma_A+\varepsilon_{\text{num}}}.$$
+    </div>
+    <p>This is not cosmetic. $\epsilon$ is a ratio, so the effective trust region scales inversely with the size of the advantages; a task whose rewards are $100\times$ larger would silently shrink it. Standardizing the batch fixes that scale once and for all.</p>
+
+    <h3>Entropy bonus</h3>
+    <p>Add a bounty for staying stochastic, and pair the actor with a value head for the critic:</p>
+    <div class="eqbox">
+      $$L(\theta)=L^{\text{CLIP}}(\theta)+c_1\,L^{\text{VF}}(\theta)-c_2\,\mathbb{E}_{t}\!\left[H\!\left(\pi_\theta(\cdot\mid S_t)\right)\right].$$
+    </div>
+    <p>The entropy term $H$ keeps the policy from collapsing to a near-deterministic action before it has explored, and $L^{\text{VF}}$ fits the value function that GAE leans on.</p>
+
+    <h3>Learning-rate annealing</h3>
+    <p>Linearly decay the step size toward zero over training. Early updates want to move; late updates want to settle, and annealing buys both without touching the clip range.</p>
+    <div class="note">
+      <b>Scale is not a detail.</b> Because $\epsilon$ is defined on the ratio, the surrogate's magnitude is load-bearing: normalize the advantage, anneal the rate, and cap the number of epochs per batch. Run too many epochs and $r_t$ drifts past $1+\epsilon$ on every sample, at which point the clip has quietly disengaged and the trust region is gone.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">06</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>TRPO</th><th>PPO</th></tr>
+      <tr><td>Objective</td><td>Constrained surrogate</td><td>Clipped surrogate</td></tr>
+      <tr><td>Trust region</td><td>Explicit KL ball, radius $\delta$</td><td>Implicit box on the ratio, half-width $\epsilon$</td></tr>
+      <tr><td>Update rule</td><td>Natural gradient $F^{-1}g$, scaled to the boundary, then line search</td><td>Plain SGD on $L^{\text{CLIP}}$</td></tr>
+      <tr><td>Derivatives</td><td>Second-order (Fisher–vector products, conjugate gradient)</td><td>First-order only</td></tr>
+      <tr><td>Cost per step</td><td>High and fiddly</td><td>Low — a min and a clip</td></tr>
+      <tr><td>Guarantee</td><td>Monotone improvement (theory)</td><td>Approximate, empirical</td></tr>
+      <tr><td>Key knob</td><td>$\delta$ (KL budget)</td><td>$\epsilon$ (clip range)</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      r_t(\theta) &= \frac{\pi_\theta(A_t\mid S_t)}{\pi_{\theta_{\text{old}}}(A_t\mid S_t)}\\[2pt]
+      L^{\text{CPI}}(\theta) &= \mathbb{E}_{t}\!\left[r_t(\theta)\,\hat{A}_t\right]\\[2pt]
+      \text{TRPO:}\quad &\max_\theta\;\mathbb{E}_{t}\!\left[r_t\,\hat{A}_t\right]\quad\text{s.t.}\quad \mathbb{E}_{t}\!\left[D_{\mathrm{KL}}\!\left(\pi_{\theta_{\text{old}}}\,\big\|\,\pi_\theta\right)\right]\le\delta\\[2pt]
+      L^{\text{CLIP}}(\theta) &= \mathbb{E}_{t}\!\left[\min\!\left(r_t\,\hat{A}_t,\;\operatorname{clip}(r_t,1-\epsilon,1+\epsilon)\,\hat{A}_t\right)\right]
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream — GAE, RLHF, DPO, GRPO — is a variation on this one move: take the policy-gradient step, then decide how far the policy is allowed to travel.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="11-policy-gradient-methods.html"><span class="pg-k">Previous</span><span class="pg-t">Policy Gradient Methods</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="13-model-based-reinforcement-learning.html"><span class="pg-k">Next</span><span class="pg-t">Model-Based RL</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+const MONO = "ui-monospace, monospace";
+function txt(svg, x, y, s, opts = {}) {
+  const t = el('text', Object.assign({
+    x, y, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af', 'font-family': MONO
+  }, opts), svg);
+  t.textContent = s;
+  return t;
+}
+
+/* =====================================================================
+   02 — Surrogate objective vs the ratio
+   ===================================================================== */
+function initSurrogate() {
+  const svg = $('#surrSvg'), eqEl = $('#surrEq');
+  const rS = $('#surrR'), rV = $('#surrRVal');
+  const aS = $('#surrA'), aV = $('#surrAVal');
+
+  const W = 460, H = 280, mL = 46, mR = 18, mT = 16, mB = 38;
+  const XMAX = 3, YMAX = 6;
+  const xPx = r => mL + (r / XMAX) * (W - mL - mR);
+  const yPx = v => mT + ((YMAX - v) / (2 * YMAX)) * (H - mT - mB);
+
+  function render() {
+    const r = parseFloat(rS.value), A = parseFloat(aS.value);
+    rV.textContent = r.toFixed(2);
+    aV.textContent = A.toFixed(2);
+    svg.innerHTML = '';
+
+    el('rect', { x: mL, y: mT, width: W - mL - mR, height: H - mT - mB, fill: '#fff', stroke: '#f0f0f0' }, svg);
+
+    [-6, -3, 0, 3, 6].forEach(v => {
+      el('line', { x1: mL, x2: W - mR, y1: yPx(v), y2: yPx(v), stroke: v === 0 ? '#e5e5e5' : '#f4f4f5' }, svg);
+      txt(svg, mL - 8, yPx(v) + 4, String(v), { 'text-anchor': 'end' });
+    });
+    [0, 1, 2, 3].forEach(rr => txt(svg, xPx(rr), H - mB + 18, String(rr)));
+    txt(svg, (mL + W - mR) / 2, H - 4, 'probability ratio  rₜ(θ)', { 'font-size': 12, fill: '#6b7280' });
+
+    el('line', { x1: xPx(1), x2: xPx(1), y1: mT, y2: H - mB, stroke: '#c2c9d4', 'stroke-dasharray': '5 4' }, svg);
+    txt(svg, xPx(1) + 6, mT + 14, 'r = 1  (θ = θ_old)', { 'text-anchor': 'start', fill: '#6b7280' });
+
+    el('line', {
+      x1: xPx(0), y1: yPx(0), x2: xPx(XMAX), y2: yPx(XMAX * A),
+      stroke: '#111', 'stroke-width': 2.2, 'stroke-linecap': 'round'
+    }, svg);
+
+    const v = r * A;
+    const col = v >= 0 ? '#2563eb' : '#dc2626';
+    el('line', { x1: xPx(r), x2: xPx(r), y1: yPx(0), y2: yPx(v), stroke: col, 'stroke-width': 1.5, 'stroke-dasharray': '3 3' }, svg);
+    el('circle', { cx: xPx(r), cy: yPx(v), r: 5.5, fill: col, stroke: '#fff', 'stroke-width': 2 }, svg);
+    txt(svg, xPx(r) + (r > 2.2 ? -10 : 10), yPx(v) - 9, v.toFixed(2), {
+      'text-anchor': r > 2.2 ? 'end' : 'start', 'font-size': 12, 'font-weight': 650, fill: '#111'
+    });
+
+    T(eqEl, `r_t\\hat A_t = (${r.toFixed(2)})\\cdot(${A.toFixed(2)}) = \\mathbf{${v.toFixed(2)}}`, true);
+  }
+
+  rS.addEventListener('input', render);
+  aS.addEventListener('input', render);
+  render();
+}
+/* =====================================================================
+   03 — KL trust region: old vs new distribution
+   ===================================================================== */
+function initKL() {
+  const svg = $('#klSvg'), eqEl = $('#klEq'), statusEl = $('#klStatus');
+  const mS = $('#klM'), mV = $('#klMVal');
+  const dS = $('#klDelta'), dV = $('#klDeltaVal');
+
+  const OLD = [0.40, 0.25, 0.15, 0.12, 0.08];
+  const TGT = [0.80, 0.05, 0.05, 0.05, 0.05];
+  const NAMES = ['a₁', 'a₂', 'a₃', 'a₄', 'a₅'];
+
+  const W = 460, H = 260, mL = 40, mR = 16, mT = 16, mB = 44;
+  const plotW = W - mL - mR, plotH = H - mT - mB;
+  const xPx = i => mL + plotW * (i + 0.5) / 5;
+
+  function render() {
+    const m = parseFloat(mS.value), delta = parseFloat(dS.value);
+    mV.textContent = m.toFixed(2);
+    dV.textContent = delta.toFixed(3);
+    const NEW = OLD.map((o, i) => (1 - m) * o + m * TGT[i]);
+
+    let kl = 0;
+    for (let i = 0; i < 5; i++) kl += OLD[i] * Math.log(OLD[i] / NEW[i]);
+    const inside = kl <= delta + 1e-12;
+
+    svg.innerHTML = '';
+    el('rect', { x: mL, y: mT, width: plotW, height: plotH, fill: '#fafafa', stroke: '#f0f0f0' }, svg);
+    el('line', { x1: mL, x2: W - mR, y1: mT + plotH, y2: mT + plotH, stroke: '#e5e5e5' }, svg);
+
+    [0.25, 0.5, 0.75, 1].forEach(g => {
+      const y = mT + plotH * (1 - g);
+      el('line', { x1: mL, x2: W - mR, y1: y, y2: y, stroke: '#f0f0f0' }, svg);
+      txt(svg, mL - 8, y + 4, g.toFixed(2), { 'text-anchor': 'end', 'font-size': 10.5 });
+    });
+
+    const bw = 26;
+    for (let i = 0; i < 5; i++) {
+      const cx = xPx(i);
+      const oh = plotH * OLD[i], nh = plotH * NEW[i];
+      el('rect', { x: cx - bw - 3, y: mT + plotH - oh, width: bw, height: Math.max(oh, 0.5), rx: 3, fill: '#c2c9d4' }, svg);
+      el('rect', { x: cx + 3, y: mT + plotH - nh, width: bw, height: Math.max(nh, 0.5), rx: 3, fill: '#2563eb' }, svg);
+      txt(svg, cx, H - mB + 18, NAMES[i], { 'font-size': 11.5, fill: '#6b7280' });
+    }
+
+    const meterW = W - mL - mR, meterH = 6, my = H - 14;
+    el('rect', { x: mL, y: my, width: meterW, height: meterH, rx: 3, fill: '#f0f0f0' }, svg);
+    el('rect', {
+      x: mL, y: my, height: meterH, rx: 3, fill: inside ? '#2563eb' : '#dc2626',
+      width: Math.max(2, meterW * Math.min(1, kl / Math.max(2 * delta, 1e-9)))
+    }, svg);
+    el('line', { x1: mL + meterW / 2, x2: mL + meterW / 2, y1: my - 2, y2: my + meterH + 2, stroke: '#111', 'stroke-width': 1.4 }, svg);
+
+    statusEl.textContent = inside ? 'inside the trust region — step accepted' : 'outside — step rejected and shrunk';
+    statusEl.style.color = inside ? '#2563eb' : '#dc2626';
+
+    T(eqEl,
+      `D_{\\mathrm{KL}}\\!\\left(\\pi_{\\theta_{old}}\\,\\|\\,\\pi_\\theta\\right) = ${kl.toFixed(4)} \\;${inside ? '\\le' : '>'}\\; \\delta = ${delta.toFixed(3)}\\;${inside ? '\\;\\checkmark' : '\\;\\times'}`,
+      true);
+  }
+
+  mS.addEventListener('input', render);
+  dS.addEventListener('input', render);
+  render();
+}
+
+/* =====================================================================
+   04 — PPO clipped objective
+   ===================================================================== */
+function initPPO() {
+  const svg = $('#ppoClipSvg'), eqEl = $('#ppoClipEq'), gEl = $('#ppoGrad');
+  const rS = $('#ppoR'), rV = $('#ppoRVal');
+  const aS = $('#ppoA'), aV = $('#ppoAVal');
+  const eS = $('#ppoEps'), eV = $('#ppoEpsVal');
+
+  const W = 460, H = 280, mL = 46, mR = 18, mT = 16, mB = 38;
+  const XMAX = 3, YMAX = 6;
+  const xPx = r => mL + (r / XMAX) * (W - mL - mR);
+  const yPx = v => mT + ((YMAX - v) / (2 * YMAX)) * (H - mT - mB);
+  const clip = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+  const Lclip = (r, A, eps) => Math.min(r * A, clip(r, 1 - eps, 1 + eps) * A);
+
+  function render() {
+    const r = parseFloat(rS.value), A = parseFloat(aS.value), eps = parseFloat(eS.value);
+    rV.textContent = r.toFixed(2);
+    aV.textContent = A.toFixed(2);
+    eV.textContent = eps.toFixed(2);
+
+    svg.innerHTML = '';
+    el('rect', { x: mL, y: mT, width: W - mL - mR, height: H - mT - mB, fill: '#fff', stroke: '#f0f0f0' }, svg);
+
+    [-6, -3, 0, 3, 6].forEach(v => {
+      el('line', { x1: mL, x2: W - mR, y1: yPx(v), y2: yPx(v), stroke: v === 0 ? '#e5e5e5' : '#f4f4f5' }, svg);
+      txt(svg, mL - 8, yPx(v) + 4, String(v), { 'text-anchor': 'end' });
+    });
+    [0, 1, 2, 3].forEach(rr => txt(svg, xPx(rr), H - mB + 18, String(rr)));
+    txt(svg, (mL + W - mR) / 2, H - 4, 'probability ratio  rₜ(θ)', { 'font-size': 12, fill: '#6b7280' });
+
+    el('rect', {
+      x: xPx(1 - eps), y: mT, width: Math.max(0, xPx(1 + eps) - xPx(1 - eps)),
+      height: H - mT - mB, fill: 'rgba(37,99,235,0.06)'
+    }, svg);
+    el('line', { x1: xPx(1), x2: xPx(1), y1: mT, y2: H - mB, stroke: '#c2c9d4', 'stroke-dasharray': '5 4' }, svg);
+    txt(svg, xPx(1) + 5, mT + 14, 'r = 1', { 'text-anchor': 'start', fill: '#6b7280' });
+
+    el('line', {
+      x1: xPx(0), y1: yPx(0), x2: xPx(XMAX), y2: yPx(XMAX * A),
+      stroke: '#c2c9d4', 'stroke-width': 1.4, 'stroke-dasharray': '5 4'
+    }, svg);
+
+    const N = 240;
+    let d = '';
+    for (let i = 0; i <= N; i++) {
+      const rr = (i / N) * XMAX;
+      d += (i ? ' L ' : 'M ') + xPx(rr).toFixed(2) + ' ' + yPx(Lclip(rr, A, eps)).toFixed(2);
+    }
+    el('path', { d, fill: 'none', stroke: '#111', 'stroke-width': 2.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, svg);
+
+    const term1 = r * A;
+    const term2 = clip(r, 1 - eps, 1 + eps) * A;
+    const L = Math.min(term1, term2);
+    const gradActive = (A > 0 && r < 1 + eps) || (A < 0 && r > 1 - eps);
+
+    const col = L >= 0 ? '#2563eb' : '#dc2626';
+    el('circle', { cx: xPx(r), cy: yPx(term1), r: 4, fill: '#fff', stroke: '#c2c9d4', 'stroke-width': 1.5 }, svg);
+    el('circle', { cx: xPx(r), cy: yPx(L), r: 5.5, fill: gradActive ? col : '#111', stroke: '#fff', 'stroke-width': 2 }, svg);
+    txt(svg, xPx(r) + (r > 2.2 ? -10 : 10), yPx(L) - 10, L.toFixed(2), {
+      'text-anchor': r > 2.2 ? 'end' : 'start', 'font-size': 12, 'font-weight': 650, fill: '#111'
+    });
+
+    T(eqEl,
+      `\\begin{aligned}
+        L^{\\text{CLIP}} &= \\min\\!\\big(r_t\\hat A_t,\\;\\operatorname{clip}(r_t,1-\\epsilon,1+\\epsilon)\\,\\hat A_t\\big)\\\\
+        &= \\min\\!\\big(${term1.toFixed(2)},\\;${term2.toFixed(2)}\\big)\\\\
+        &= \\mathbf{${L.toFixed(2)}}
+      \\end{aligned}`,
+      true);
+
+    gEl.textContent = gradActive
+      ? 'gradient active — the update can still move r_t'
+      : 'gradient zero — the ratio is clipped, this sample is ignored';
+    gEl.style.color = gradActive ? '#2563eb' : '#dc2626';
+  }
+
+  rS.addEventListener('input', render);
+  aS.addEventListener('input', render);
+  eS.addEventListener('input', render);
+  render();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initSurrogate();
+  initKL();
+  initPPO();
+  initScroll();
+});
+</script>
+</body>
+</html>

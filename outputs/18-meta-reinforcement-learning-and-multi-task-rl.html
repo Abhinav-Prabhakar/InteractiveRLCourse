@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<!--
+  Chapter 18 — Meta-Reinforcement Learning and Multi-Task RL.
+  Assumptions (per prompt.md):
+   - The brief requests a quiz; per prompt.md quizzes are SKIPPED. The two quiz
+     questions ("write the meta-RL objective", "why a recurrent policy adapts
+     without gradient steps") are answered in prose in sections 01 and 02, and
+     the second is shown live by the few-shot adaptation visualizer.
+   - Three visualizers are used: the required Few-Shot Adaptation trainer
+     (a real ES + Adam meta-learner over a recurrent policy, trained live in
+     the page), a hindsight-relabelling (HER) panel, and a task-inference
+     posterior panel. All numbers are produced by in-page code.
+   - The meta-RL agent is a hand-written Elman-RNN policy optimized by an
+     OpenAI-style evolution-strategy outer loop with rank-normalized
+     mirrored sampling and Adam; no libraries beyond KaTeX are used.
+   - No prev/next links: the reference chapter has none.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meta-Reinforcement Learning &amp; Multi-Task RL</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- diagram / svg ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.axis{stroke:#e5e5e5;stroke-width:1}
+.axislab{font-size:10.5px;fill:#9ca3af;font-family:ui-monospace,monospace}
+.gridline{stroke:#f0f0f0;stroke-width:1}
+.swatch{display:inline-block;width:16px;height:3px;border-radius:2px;vertical-align:middle}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:118px;flex:0 0 auto}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:0;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:56px;text-align:right;font-weight:600}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:26%}
+
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:10px;justify-content:center;font-family:ui-monospace,monospace;flex-wrap:wrap}
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .vlabel{width:96px;font-size:11.5px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Meta-RL</a>
+    <nav class="nav">
+      <a href="#tasks">Tasks</a>
+      <a href="#rl2">RL&sup2;</a>
+      <a href="#maml">MAML</a>
+      <a href="#adapt">Adaptation</a>
+      <a href="#goals">Goals &amp; HER</a>
+      <a href="#context">Context</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Advanced Topics</p>
+    <h1>Meta-Reinforcement Learning<br>&amp; Multi-Task RL</h1>
+    <p class="lede">Learn over a distribution of tasks — so that a task it has never seen is solved in a handful of steps.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="tasks">
+  <div class="wrap">
+    <h2><span class="num">01</span>The meta-RL problem</h2>
+    <p>Every MDP so far was fixed. Meta-RL changes the unit of learning: not one task, but a <b>task distribution</b>.</p>
+    <div class="eqbox">
+      $$\mathcal{T}\sim p(\mathcal{T}),\qquad
+        \mathcal{T}=(\mathcal{S},\mathcal{A},P_{\mathcal{T}},R_{\mathcal{T}},\gamma)$$
+    </div>
+    <p>A <b>meta-learner</b> sees a stream of tasks and must produce an agent that, dropped into a fresh task, adapts quickly from a little experience. The quantity it optimizes is the <b>meta-objective</b>: expected return over the task distribution, *after* adaptation.</p>
+    <div class="eqbox">
+      $$\theta^{*}=\arg\max_{\theta}\ \mathbb{E}_{\mathcal{T}\sim p(\mathcal{T})}
+        \Big[\ \mathbb{E}_{\tau\sim p_{\theta}(\tau\mid \mathcal{T})}
+        \big[\textstyle\sum_{t=0}^{H} r_{\mathcal{T}}(s_t,a_t)\big]\ \Big]$$
+    </div>
+    <p>Read it back: the outer expectation is over tasks, the inner one over trajectories the policy produces once it has been allowed to adapt to that task. Ordinary RL is the special case where $p(\mathcal{T})$ is a point mass.</p>
+    <div class="note">
+      <b>Multi-task learning is not meta-learning.</b> Multi-task trains one policy that is good on every training task. Meta-RL trains a *procedure* — a rule for turning experience into a good policy — so that the next task is cheap. Two independent choices remain: how the agent adapts (recurrence, gradients, a context variable), and how $\theta$ itself is optimized (policy gradient, evolution, meta-gradient).
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="rl2">
+  <div class="wrap">
+    <h2><span class="num">02</span>Recurrent meta-RL (RL&sup2;)</h2>
+    <p>The cheapest place to put adaptation is inside the policy's memory. Feed the agent its own recent experience and let a recurrent network decide what matters.</p>
+    <div class="eqbox">
+      $$u_t=(s_t,\ a_{t-1},\ r_{t-1}),\qquad
+        h_t=f_{\theta}(h_{t-1},u_t),\qquad
+        a_t\sim\pi_{\theta}(a_t\mid s_t,h_t)$$
+    </div>
+    <p>The hidden state $h_t$ is a learned summary of everything seen so far in this task. Training is ordinary RL on the meta-objective: sample a task, roll out, push up the return — with the recurrent weights $W_h,W_u$ shared across every task.</p>
+    <div class="eqbox">
+      $$\nabla_{\theta}J(\theta)=\mathbb{E}_{\mathcal{T}}\Big[\textstyle\sum_{t}\nabla_{\theta}\log\pi_{\theta}(a_t\mid s_t,h_t)\,
+        \hat{A}_t\Big]$$
+    </div>
+    <p>The hidden state is to the task distribution what the Markov state is to a single MDP: a sufficient statistic that makes the earlier history irrelevant. That is exactly why a recurrent policy can implement adaptation <em>without taking a single gradient step at test time</em>. The map $f_{\theta}$ is fixed; running it forward as data arrives *is* the adaptation. All the learning happened once, at meta-training time.</p>
+    <div class="note">
+      <b>The recurrence is the adapter.</b> Nothing about $f_{\theta}$ changes when a new task appears. The agent simply feeds observations in and reads a task-appropriate action out — the way $V(s)$ needs no re-solving once you are handed $s$.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="maml">
+  <div class="wrap">
+    <h2><span class="num">03</span>Gradient-based meta-RL (MAML)</h2>
+    <p>If adaptation can be a few gradient steps, why not learn the *initialization* those steps start from? That is MAML: an inner loop that adapts, and an outer loop that scores the adapted result.</p>
+    <div class="eqbox">
+      $$\begin{aligned}
+        \text{inner:}\quad & \theta_i'=\theta-\alpha\,\nabla_{\theta}\mathcal{L}_{\mathcal{T}_i}(\theta)\\[2pt]
+        \text{outer:}\quad & \theta\leftarrow\theta-\beta\,\nabla_{\theta}\sum_i
+          \mathcal{L}_{\mathcal{T}_i}\!\big(\theta-\alpha\,\nabla_{\theta}\mathcal{L}_{\mathcal{T}_i}(\theta)\big)
+      \end{aligned}$$
+    </div>
+    <p>$\mathcal{L}_{\mathcal{T}_i}$ is the task objective — negative return, or a policy-gradient surrogate. The inner step is fast adaptation; the outer step asks: from which $\theta$ do a few inner steps do the most good? Differentiating the outer loss reaches *through* the inner update by the chain rule:</p>
+    <div class="eqbox">
+      $$\nabla_{\theta}\mathcal{L}_{\mathcal{T}_i}(\theta_i')
+        =\Big(I-\alpha\,\nabla^{2}_{\theta}\mathcal{L}_{\mathcal{T}_i}(\theta)\Big)
+        \,\nabla_{\theta'}\mathcal{L}_{\mathcal{T}_i}(\theta')$$
+    </div>
+    <p>The second term is exactly where MAML pays its cost: the Hessian of the inner objective. First-order variants — FOMAML, Reptile — drop it and optimize $\nabla_{\theta'}\mathcal{L}$ alone, buying cheapness at the price of an approximate meta-gradient.</p>
+    <div class="note">
+      <b>The Hessian is the whole story.</b> RL&sup2; adapts by running a network; MAML adapts by taking gradients. RL&sup2; learns one fixed <em>function</em>; MAML learns one fixed <em>starting point</em> — and the inner loop is a real optimization, so its derivative is what the meta-gradient must carry.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="adapt">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Few-shot adaptation</h2>
+      <p>A family of point-mass reaching tasks on a line: the agent starts at the centre and must drive to a goal it cannot see. The reward is dense — $r_t=-\lvert x_{t+1}-g\rvert$ — so the goal is knowable only from the *history* of rewards. A recurrent policy is meta-trained across five goals, then tested on one it never saw.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · train a meta-RL agent, then adapt on a held-out task</span>
+        <div class="btnrow">
+          <button id="mrPlay" class="primary" disabled>Play test episode ▶</button>
+          <button id="mrRetrain">Retrain</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="mrEnv" viewBox="0 0 360 120" role="img" aria-label="Point-mass reaching task on a line"></svg>
+          <div class="slider-row" style="margin-top:6px">
+            <span class="small muted">held-out goal $g$</span>
+            <input type="range" id="mrGoal" min="-0.9" max="0.9" step="0.02" value="0.62" aria-label="held-out goal position">
+            <span class="val" id="mrGoalVal">0.62</span>
+          </div>
+          <p class="small muted" id="mrTrainInfo" style="font-family:ui-monospace,monospace;margin:10px 0 0">meta-training …</p>
+        </div>
+
+        <div class="col" style="flex:1 1 320px">
+          <svg id="mrAdapt" viewBox="0 0 360 200" role="img" aria-label="Within-episode distance-to-goal curve"></svg>
+          <div class="legend">
+            <span class="swatch" style="background:#2563eb"></span><span>meta-RL (recurrent)</span>
+            <span class="swatch" style="background:#c2c9d4"></span><span>no memory</span>
+          </div>
+          <svg id="mrTrain" viewBox="0 0 360 96" style="margin-top:12px" role="img" aria-label="Meta-training return curve"></svg>
+          <p class="small muted" style="text-align:center;margin:2px 0 0">meta-training · mean return per iteration</p>
+        </div>
+      </div>
+
+      <div class="eqbox" id="mrEq"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="goals">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Goal-conditioned policies &amp; hindsight</h2>
+      <p>Make the goal an input and one policy covers every task in the family. A <b>goal-conditioned policy</b> is just $\pi_{\theta}(a\mid s,g)$; the goal enters the reward.</p>
+      <div class="eqbox">
+        $$\pi_{\theta}(a\mid s,g),\qquad r(s,a,g)=-\lVert s'-g\rVert$$
+      </div>
+      <p>Sparse goal rewards make learning brutal: a random policy almost never reaches $g$, so almost every transition looks like failure. <b>Hindsight experience replay</b> (HER) fixes the labels, not the policy. A failed episode still *reached* the states along its path — so relabel those as goals.</p>
+      <div class="eqbox">
+        $$g'\ \sim\ \{\,s_{t'}:t'\in\{t+1,\dots,T\}\,\},\qquad
+          r'_t=r(s_t,a_t,g')$$
+      </div>
+      <p>Every trajectory is a catalogue of goals that <em>were</em> achieved. Replaying it against those goals turns one failure into many successes.</p>
+      <div class="note">
+        <b>Hindsight turns each failure into a lesson.</b> The policy is unchanged; only the goal attached to each transition is swapped. Drag the transition slider — near the end of the trajectory the relabelled goal is a state the agent just reached, so the reward becomes an exact hit.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · hindsight relabelling</span>
+        <div class="btnrow">
+          <button id="herToggle">HER: off</button>
+          <button id="herNew">New episode</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 300px">
+          <svg id="herSvg" viewBox="0 0 340 340" role="img" aria-label="Two-dimensional point-mass task with a reached trajectory"></svg>
+          <p class="small muted" style="text-align:center;margin:8px 0 0">Click inside the square to move the goal.</p>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <div class="slider-row">
+            <span class="small muted">transition $t$</span>
+            <input type="range" id="herT" min="0" max="6" step="1" value="2" aria-label="selected transition index">
+            <span class="val" id="herTVal">2</span>
+          </div>
+          <div class="eqbox" id="herEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="context">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>Task inference &amp; context variables</h2>
+      <p>Tasks in a family usually differ along a few hidden coordinates. Collect them into a low-dimensional <b>context</b> $z$ that indexes the task, and let the agent infer $z$ from experience.</p>
+      <div class="eqbox">
+        $$q_{\phi}(z\mid c_t),\qquad c_t=\{(s_i,a_i,r_i)\}_{i\le t}$$
+      </div>
+      <p>The posterior $q_{\phi}$ is the probabilistic version of RL&sup2;'s hidden state: a belief over which task is being faced, sharpened online. Latent-context methods (PEARL and its descendants) train policy and inference together:</p>
+      <div class="eqbox">
+        $$\max_{\theta,\phi}\ \mathbb{E}_{\mathcal{T}}\Big[
+          \mathbb{E}_{z\sim q_{\phi}(z\mid c^{\mathcal{T}})}\big[\hat{J}(\theta,z)\big]
+          -\beta\,D_{\mathrm{KL}}\!\big(q_{\phi}(z\mid c^{\mathcal{T}})\,\|\,p(z)\big)\Big]$$
+      </div>
+      <p>The return term rewards contexts that lead to good actions; the KL keeps the posterior honest and close to the prior. Below, observations arrive one at a time and the belief concentrates on the task that generated them.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · inferring the task from evidence</span>
+        <div class="btnrow">
+          <button id="ctxObserve" class="primary">Observe sample</button>
+          <button id="ctxReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <div id="ctxBars"></div>
+          <p class="small muted" style="margin-bottom:0">Four tasks; each emits rewards centred on $\mu_k$. The true task is hidden — the bars are $q_{\phi}(z{=}k\mid c_t)$.</p>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row">
+            <span class="small muted">noise $\sigma$</span>
+            <input type="range" id="ctxSigma" min="0.15" max="1.5" step="0.05" value="0.5" aria-label="observation noise">
+            <span class="val" id="ctxSigmaVal">0.50</span>
+          </div>
+          <p class="small muted" style="margin-top:4px">observed rewards $c_t$</p>
+          <div class="traj" id="ctxTraj"></div>
+          <div class="eqbox" id="ctxEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">07</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Recurrent meta-RL (RL&sup2;)</th><th>Gradient-based meta-RL (MAML)</th></tr>
+      <tr><td>Adapts by</td><td>A learned recurrence over $(s,a,r)$</td><td>A few gradient steps on the task loss</td></tr>
+      <tr><td>What $\theta$ is</td><td>Recurrent-policy weights</td><td>A single shared initialization</td></tr>
+      <tr><td>Inner computation</td><td>$h_t=f_{\theta}(h_{t-1},u_t)$ — a forward pass</td><td>$\theta_i'=\theta-\alpha\nabla_{\theta}\mathcal{L}_{\mathcal{T}_i}$</td></tr>
+      <tr><td>Meta-objective</td><td>$\mathbb{E}_{\mathcal{T}}[\text{return of rollouts}]$</td><td>$\mathbb{E}_{\mathcal{T}}[\mathcal{L}_{\mathcal{T}}(\theta-\alpha\nabla\mathcal{L}_{\mathcal{T}})]$</td></tr>
+      <tr><td>Meta-gradient</td><td>REINFORCE or evolution — no curvature</td><td>Through the inner step — a Hessian term</td></tr>
+      <tr><td>Test-time cost</td><td>One forward pass per step</td><td>A short inner optimization per task</td></tr>
+      <tr><td>Weakness</td><td>Adaptation limited to what recurrence can express</td><td>Second-order cost; sensitive to the inner loop</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      \theta^{*} &= \arg\max_{\theta}\ \mathbb{E}_{\mathcal{T}\sim p(\mathcal{T})}
+        \big[\mathbb{E}_{\tau}\big[\textstyle\sum_t r_{\mathcal{T}}(s_t,a_t)\big]\big]\\[3pt]
+      h_t &= f_{\theta}(h_{t-1},(s_t,a_{t-1},r_{t-1})),\qquad a_t\sim\pi_{\theta}(a_t\mid s_t,h_t)\\[3pt]
+      \theta &\leftarrow \theta-\beta\,\nabla_{\theta}\textstyle\sum_i
+        \mathcal{L}_{\mathcal{T}_i}\!\big(\theta-\alpha\nabla_{\theta}\mathcal{L}_{\mathcal{T}_i}(\theta)\big)\\[3pt]
+      r'_t &= r(s_t,a_t,g'),\qquad g'\sim\{s_{t'}:t'>t\}\\[3pt]
+      q_{\phi}(z\mid c_t) &\propto p(z)\prod_{i\le t} p(r_i\mid z),\qquad \pi_{\theta}(a\mid s,z)
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream — goal-conditioned decision making, latent-context methods like PEARL, and the distributional and risk-sensitive objectives of the next chapter — is a way of conditioning one of these lines on more than the current state.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="17-multi-agent-reinforcement-learning.html"><span class="pg-k">Previous</span><span class="pg-t">Multi-Agent RL</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="19-distributional-and-risk-sensitive-rl.html"><span class="pg-k">Next</span><span class="pg-t">Distributional &amp; Risk-Sensitive RL</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* =====================================================================
+   04 — Few-shot adaptation: a recurrent policy meta-trained by ES
+   Env: 1-D point mass, x <- x + STEP*tanh(policy), r = -|x-g|.
+   Policy (RL^2): h_t = tanh(Wu u_t + Wh h_{t-1} + bh),
+                  u_t = (x_t, a_{t-1}, r_{t-1}),  single continuous action.
+   ===================================================================== */
+const MR = {
+  H: 12, IN: 3, T: 12, STEP: 0.2,
+  goals: Array.from({ length: 5 }, (_, i) => -0.75 + 1.5 * i / 4),
+  npop: 20, iters: 900, sigma: 0.12, lr: 0.06
+};
+const MRD = (() => {
+  const nWu = MR.H * MR.IN, nWh = MR.H * MR.H, nbh = MR.H, nWo = MR.H, nbo = 1;
+  const oWu = 0, oWh = oWu + nWu, obh = oWh + nWh, oWo = obh + nbh, obo = oWo + nWo;
+  return { nWu, nWh, nbh, nWo, nbo, oWu, oWh, obh, oWo, obo,
+           DIM: nWu + nWh + nbh + nWo + nbo };
+})();
+
+let mrSeed = 777;
+function mrUnif() { mrSeed = (mrSeed * 1103515245 + 12345) & 0x7fffffff; return (mrSeed + 1) / 0x80000000; }
+function mrGauss() {
+  const u1 = mrUnif(), u2 = mrUnif();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+function mrEpisode(theta, g, useMemory) {
+  const H = MR.H, IN = MR.IN, T = MR.T, S = MR.STEP;
+  const h = new Array(H).fill(0);
+  const xs = [0], dist = [Math.abs(g)], acts = [], rews = [];
+  let x = 0, aPrev = 0, rPrev = 0, total = 0;
+  for (let t = 0; t < T; t++) {
+    const u = useMemory ? [x, aPrev, rPrev] : [x, 0, 0];
+    const hNew = new Array(H);
+    for (let i = 0; i < H; i++) {
+      let s = theta[MRD.obh + i];
+      for (let j = 0; j < IN; j++) s += theta[MRD.oWu + i * IN + j] * u[j];
+      if (useMemory) for (let j = 0; j < H; j++) s += theta[MRD.oWh + i * H + j] * h[j];
+      hNew[i] = Math.tanh(s);
+    }
+    for (let i = 0; i < H; i++) h[i] = hNew[i];
+    let o = theta[MRD.obo];
+    for (let i = 0; i < H; i++) o += theta[MRD.oWo + i] * h[i];
+    const a = Math.tanh(o);
+    x = clamp(x + S * a, -1, 1);
+    const r = -Math.abs(x - g);
+    total += r; aPrev = a; rPrev = r;
+    xs.push(x); dist.push(Math.abs(x - g)); acts.push(a); rews.push(r);
+  }
+  return { total, dist, xs, acts, rews };
+}
+function mrFit(theta) {
+  let s = 0;
+  for (const g of MR.goals) s += mrEpisode(theta, g, true).total;
+  return s / MR.goals.length;
+}
+
+function mrTrainer() {
+  const D = MRD.DIM;
+  let theta = new Array(D).fill(0), m = new Array(D).fill(0), v = new Array(D).fill(0);
+  let bestf = -1e9, best = theta.slice(), curve = [], it = 0;
+  return {
+    step(n) {
+      for (let c = 0; c < n && it < MR.iters; c++) {
+        it++;
+        const E = [], F = [];
+        for (let p = 0; p < MR.npop; p++) {
+          const e = new Array(D), tp = new Array(D), tm = new Array(D);
+          for (let i = 0; i < D; i++) { e[i] = mrGauss(); tp[i] = theta[i] + MR.sigma * e[i]; tm[i] = theta[i] - MR.sigma * e[i]; }
+          E.push(e); F.push(mrFit(tp), mrFit(tm));
+        }
+        const idx = F.map((f, i) => i).sort((a, b) => F[a] - F[b]);
+        const rank = new Array(F.length);
+        idx.forEach((id, r) => rank[id] = r / (F.length - 1) - 0.5);
+        const g = new Array(D).fill(0);
+        for (let p = 0; p < MR.npop; p++) {
+          const d = rank[2 * p] - rank[2 * p + 1];
+          for (let i = 0; i < D; i++) g[i] += d * E[p][i];
+        }
+        for (let i = 0; i < D; i++) g[i] /= (MR.npop * MR.sigma);
+        for (let i = 0; i < D; i++) {
+          m[i] = 0.9 * m[i] + 0.1 * g[i];
+          v[i] = 0.999 * v[i] + 0.001 * g[i] * g[i];
+          const mh = m[i] / (1 - Math.pow(0.9, it)), vh = v[i] / (1 - Math.pow(0.999, it));
+          theta[i] += MR.lr * mh / (Math.sqrt(vh) + 1e-8);
+        }
+        const f = mrFit(theta);
+        if (f > bestf) { bestf = f; best = theta.slice(); }
+        curve.push(bestf);
+      }
+      return { done: it >= MR.iters, it, bestf, best: best.slice(), curve: curve.slice() };
+    },
+    reset() {
+      mrSeed = 777;
+      theta = new Array(D).fill(0); m = new Array(D).fill(0); v = new Array(D).fill(0);
+      bestf = -1e9; best = theta.slice(); curve = []; it = 0;
+    }
+  };
+}
+
+function initMetaRL() {
+  const env = $('#mrEnv'), adaptSvg = $('#mrAdapt'), trainSvg = $('#mrTrain'), eqEl = $('#mrEq');
+  const goalSlider = $('#mrGoal'), goalVal = $('#mrGoalVal');
+  const info = $('#mrTrainInfo'), playBtn = $('#mrPlay'), retrainBtn = $('#mrRetrain');
+
+  const trainer = mrTrainer();
+  let trained = false, theta = null, goal = 0.62;
+  let metaEp = null, noMemEp = null;
+  let anim = null, t = 0, trainRaf = null;
+
+  /* ---------- env track ---------- */
+  const EX = x => 30 + (x + 1) / 2 * 300;
+  function drawEnv(curX, trail) {
+    env.innerHTML = '';
+    el('line', { x1: 30, y1: 74, x2: 330, y2: 74, class: 'axis' }, env);
+    MR.goals.forEach(g => el('line', { x1: EX(g), y1: 68, x2: EX(g), y2: 80, stroke: '#e5e5e5', 'stroke-width': 1 }, env));
+    el('text', { x: 30, y: 96, class: 'axislab' }, env).textContent = 'x = −1';
+    el('text', { x: 330, y: 96, class: 'axislab', 'text-anchor': 'end' }, env).textContent = 'x = +1';
+    el('text', { x: EX(0), y: 110, class: 'axislab', 'text-anchor': 'middle' }, env).textContent = 'start';
+    /* goal */
+    el('line', { x1: EX(goal), y1: 34, x2: EX(goal), y2: 74, stroke: '#111', 'stroke-width': 1.6, 'stroke-dasharray': '3 3' }, env);
+    el('text', { x: EX(goal), y: 26, class: 'axislab', 'text-anchor': 'middle', fill: '#111' }, env).textContent = 'goal';
+    /* trail */
+    if (trail && trail.length > 1) {
+      let d = '';
+      trail.forEach((xx, i) => { d += (i ? ' L ' : 'M ') + EX(xx) + ' 74'; });
+      el('path', { d, fill: 'none', stroke: '#2563eb', 'stroke-width': 2.4, 'stroke-linecap': 'round', opacity: .5 }, env);
+    }
+    el('circle', { cx: EX(curX), cy: 74, r: 7.5, fill: '#111' }, env);
+    el('text', { x: EX(curX), y: 50, class: 'axislab', 'text-anchor': 'middle', fill: '#111' }, env).textContent = 'x=' + curX.toFixed(2);
+  }
+
+  /* ---------- adaptation curve ---------- */
+  const AX = k => 44 + k / MR.T * 300;
+  const AY = d => 178 - clamp(d / 2, 0, 1) * 150;
+  function drawAdapt(meta, noMem, upto) {
+    adaptSvg.innerHTML = '';
+    [0.5, 1, 1.5].forEach(d => el('line', { x1: 44, y1: AY(d), x2: 344, y2: AY(d), class: 'gridline' }, adaptSvg));
+    if (meta) el('line', { x1: 44, y1: AY(meta[0]), x2: 344, y2: AY(meta[0]), stroke: '#d4d4d8', 'stroke-width': 1, 'stroke-dasharray': '4 4' }, adaptSvg);
+    el('line', { x1: 44, y1: 178, x2: 344, y2: 178, class: 'axis' }, adaptSvg);
+    el('line', { x1: 44, y1: 20, x2: 44, y2: 178, class: 'axis' }, adaptSvg);
+    el('text', { x: 344, y: 194, class: 'axislab', 'text-anchor': 'end' }, adaptSvg).textContent = 'step t';
+    el('text', { x: 40, y: 26, class: 'axislab', 'text-anchor': 'end' }, adaptSvg).textContent = '|x−g|';
+    el('text', { x: 40, y: AY(1) + 4, class: 'axislab', 'text-anchor': 'end' }, adaptSvg).textContent = '1';
+    const n = (upto === undefined ? MR.T : upto);
+    const poly = (arr, color, w) => {
+      if (!arr) return;
+      let d = '';
+      for (let k = 0; k <= n; k++) d += (k ? ' L ' : 'M ') + AX(k) + ' ' + AY(arr[k]);
+      el('path', { d, fill: 'none', stroke: color, 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, adaptSvg);
+    };
+    poly(noMem, '#c2c9d4', 2);
+    poly(meta, '#2563eb', 2.6);
+    if (meta) {
+      el('circle', { cx: AX(n), cy: AY(meta[n]), r: 3.6, fill: '#2563eb' }, adaptSvg);
+      el('text', { x: AX(n), y: AY(meta[n]) - 8, class: 'axislab', 'text-anchor': 'middle', fill: '#2563eb' }, adaptSvg).textContent = meta[n].toFixed(2);
+    }
+  }
+
+  /* ---------- training curve ---------- */
+  function drawTrain(curve) {
+    trainSvg.innerHTML = '';
+    el('line', { x1: 44, y1: 82, x2: 344, y2: 82, class: 'axis' }, trainSvg);
+    el('line', { x1: 44, y1: 10, x2: 44, y2: 82, class: 'axis' }, trainSvg);
+    const lo = -16, hi = 0;
+    const CX = i => 44 + (curve.length > 1 ? i / (MR.iters - 1) : 0) * 300;
+    const CY = f => 82 - clamp((f - lo) / (hi - lo), 0, 1) * 72;
+    let d = '';
+    curve.forEach((f, i) => { d += (i ? ' L ' : 'M ') + CX(i) + ' ' + CY(f); });
+    el('path', { d, fill: 'none', stroke: '#2563eb', 'stroke-width': 2, 'stroke-linejoin': 'round' }, trainSvg);
+    el('text', { x: 40, y: 14, class: 'axislab', 'text-anchor': 'end' }, trainSvg).textContent = '0';
+    el('text', { x: 340, y: 92, class: 'axislab', 'text-anchor': 'end' }, trainSvg).textContent = 'iter ' + MR.iters;
+    if (curve.length) {
+      const f = curve[curve.length - 1];
+      el('circle', { cx: CX(curve.length - 1), cy: CY(f), r: 3.2, fill: '#111' }, trainSvg);
+    }
+  }
+
+  /* ---------- equation ---------- */
+  function renderEq(x0, aPrev, rPrev) {
+    if (!trained) {
+      T(eqEl, `\\theta^{*}=\\arg\\max_{\\theta}\\ \\mathbb{E}_{\\mathcal{T}\\sim p(\\mathcal{T})}
+        \\big[\\textstyle\\sum_t r_{\\mathcal{T}}(s_t,a_t)\\big]
+        \\qquad\\text{(meta-training in progress…)}`, true);
+      return;
+    }
+    const ep = metaEp;
+    const last = (x0 !== undefined);
+    const st = last ? x0 : ep.xs[t];
+    const ap = last ? aPrev : (t > 0 ? ep.acts[t - 1] : 0);
+    const rp = last ? rPrev : (t > 0 ? ep.rews[t - 1] : 0);
+    T(eqEl, `\\begin{aligned}
+      u_t &= (s_t,\\ a_{t-1},\\ r_{t-1}) = (${st.toFixed(2)},\\ ${ap.toFixed(2)},\\ ${rp.toFixed(2)})\\\\
+      h_t &= \\tanh\\!\\big(W_h h_{t-1}+W_u u_t+b_h\\big)\\\\
+      \\lvert x_t-g\\rvert &= \\mathbf{${ep.dist[Math.min(t, MR.T)].toFixed(3)}}
+    \\end{aligned}`, true);
+  }
+
+  function computeEpisodes() {
+    metaEp = mrEpisode(theta, goal, true);
+    noMemEp = mrEpisode(theta, goal, false);
+  }
+
+  function stopPlay() { if (anim) { clearInterval(anim); anim = null; } }
+
+  function resetView() {
+    stopPlay();
+    t = 0;
+    computeEpisodes();
+    drawEnv(metaEp.xs[0], [metaEp.xs[0]]);
+    drawAdapt(metaEp.dist, noMemEp.dist, 0);
+    renderEq(0, 0, 0);
+  }
+
+  function play() {
+    if (!trained) return;
+    stopPlay();
+    t = 0;
+    const trail = [metaEp.xs[0]];
+    drawEnv(metaEp.xs[0], trail);
+    drawAdapt(metaEp.dist, noMemEp.dist, 0);
+    renderEq(metaEp.xs[0], 0, 0);
+    anim = setInterval(() => {
+      t++;
+      trail.push(metaEp.xs[t]);
+      drawEnv(metaEp.xs[t], trail);
+      drawAdapt(metaEp.dist, noMemEp.dist, t);
+      renderEq();
+      if (t >= MR.T) { stopPlay(); playBtn.disabled = false; }
+    }, 300);
+  }
+
+  function onTrained() {
+    trained = true;
+    theta = trainer.step(0).best;
+    goal = parseFloat(goalSlider.value);
+    goalVal.textContent = goal.toFixed(2);
+    resetView();
+    playBtn.disabled = false;
+    info.textContent = `meta-trained · ${MR.iters} iters · mean return ${mrFit(theta).toFixed(2)}`;
+  }
+
+  /* ---------- controls ---------- */
+  playBtn.addEventListener('click', play);
+  retrainBtn.addEventListener('click', startTraining);
+
+  goalSlider.addEventListener('input', () => {
+    goal = parseFloat(goalSlider.value);
+    goalVal.textContent = goal.toFixed(2);
+    if (trained) resetView();
+    else drawEnv(0, [0]);
+  });
+
+  function startTraining() {
+    stopPlay();
+    trained = false; theta = null; t = 0;
+    playBtn.disabled = true;
+    trainer.reset();
+    drawEnv(0, [0]);
+    adaptSvg.innerHTML = '';
+    drawTrain([]);
+    info.textContent = 'meta-training … 0 / ' + MR.iters;
+    renderEq();
+    if (trainRaf) cancelAnimationFrame(trainRaf);
+    const tick = () => {
+      const start = performance.now();
+      let res;
+      do { res = trainer.step(1); } while (!res.done && performance.now() - start < 12);
+      drawTrain(res.curve);
+      info.textContent = `meta-training … ${res.it} / ${MR.iters}  best return ${res.bestf.toFixed(2)}`;
+      if (res.done) { trainRaf = null; onTrained(); return; }
+      trainRaf = requestAnimationFrame(tick);
+    };
+    trainRaf = requestAnimationFrame(tick);
+  }
+
+  drawEnv(0, [0]);
+  startTraining();
+}
+
+/* =====================================================================
+   05 — Hindsight relabelling
+   ===================================================================== */
+function initHER() {
+  const svg = $('#herSvg'), eqEl = $('#herEq'), tSlider = $('#herT'), tVal = $('#herTVal');
+  const toggle = $('#herToggle'), newBtn = $('#herNew');
+  const Tn = 7, STEP = 0.13;
+  const SIDE = 340, PAD = 30, W = SIDE - 2 * PAD;
+  const PX = x => PAD + (x + 1) / 2 * W;
+  const PY = y => SIDE - PAD - (y + 1) / 2 * W;
+  let goal = { x: 0.8, y: 0.6 };
+  let herOn = false, tsel = 2, seed = 42;
+  const s0 = { x: -0.8, y: -0.8 };
+
+  function rng() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed + 1) / 0x80000000; }
+
+  function rollout() {
+    const traj = [s0];
+    let p = { ...s0 };
+    for (let i = 0; i < Tn; i++) {
+      const dx = goal.x - p.x, dy = goal.y - p.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const jx = (rng() - 0.5) * 0.5, jy = (rng() - 0.5) * 0.5;
+      let nx = p.x + STEP * (dx / len) + jx * STEP;
+      let ny = p.y + STEP * (dy / len) + jy * STEP;
+      nx = clamp(nx, -0.98, 0.98); ny = clamp(ny, -0.98, 0.98);
+      p = { x: nx, y: ny };
+      traj.push(p);
+    }
+    return traj;
+  }
+  let traj = rollout();
+
+  function futureGoal(tt) {
+    const lo = tt + 1, hi = Tn;
+    const u = rng();
+    const idx = Math.min(hi, lo + Math.floor(u * (hi - lo + 1)));
+    return { g: traj[idx], idx };
+  }
+  /* deterministic per (episode, t) future goal */
+  function relabeledGoal(tt) {
+    const save = seed;
+    seed = 1000 + tt * 7919;
+    const out = futureGoal(tt);
+    seed = save;
+    return out;
+  }
+
+  function draw() {
+    svg.innerHTML = '';
+    el('rect', { x: PAD, y: PAD, width: W, height: W, fill: '#fafafa', stroke: '#e8e8e8', rx: 10 }, svg);
+    el('line', { x1: PAD, y1: SIDE / 2, x2: SIDE - PAD, y2: SIDE / 2, class: 'gridline' }, svg);
+    el('line', { x1: SIDE / 2, y1: PAD, x2: SIDE / 2, y2: SIDE - PAD, class: 'gridline' }, svg);
+
+    /* trajectory */
+    let d = '';
+    traj.forEach((p, i) => { d += (i ? ' L ' : 'M ') + PX(p.x) + ' ' + PY(p.y); });
+    el('path', { d, fill: 'none', stroke: '#c2c9d4', 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+
+    /* highlight selected transition */
+    const ts = clamp(tsel, 0, Tn - 1);
+    el('line', { x1: PX(traj[ts].x), y1: PY(traj[ts].y), x2: PX(traj[ts + 1].x), y2: PY(traj[ts + 1].y), stroke: '#111', 'stroke-width': 3, 'stroke-linecap': 'round' }, svg);
+
+    /* states */
+    traj.forEach((p, i) => el('circle', { cx: PX(p.x), cy: PY(p.y), r: 3.4, fill: i === 0 ? '#111' : '#9ca3af' }, svg));
+
+    /* start + goal */
+    el('circle', { cx: PX(s0.x), cy: PY(s0.y), r: 6, fill: '#111' }, svg);
+    if (herOn) {
+      traj.forEach((p, i) => { if (i > ts) el('circle', { cx: PX(p.x), cy: PY(p.y), r: 5, fill: 'none', stroke: '#2563eb', 'stroke-width': 1.6 }, svg); });
+      const rg = relabeledGoal(ts);
+      el('line', { x1: PX(traj[ts + 1].x), y1: PY(traj[ts + 1].y), x2: PX(rg.g.x), y2: PY(rg.g.y), stroke: '#2563eb', 'stroke-width': 1.6, 'stroke-dasharray': '4 3' }, svg);
+      el('circle', { cx: PX(rg.g.x), cy: PY(rg.g.y), r: 7, fill: '#2563eb' }, svg);
+    }
+    el('circle', { cx: PX(goal.x), cy: PY(goal.y), r: 8, fill: '#fff', stroke: '#dc2626', 'stroke-width': 3 }, svg);
+    el('text', { x: PX(goal.x), y: PY(goal.y) - 13, class: 'axislab', 'text-anchor': 'middle', fill: '#dc2626' }, svg).textContent = 'g';
+
+    renderEq(ts);
+  }
+
+  function renderEq(ts) {
+    const s1 = traj[ts + 1];
+    const rOrig = -Math.hypot(s1.x - goal.x, s1.y - goal.y);
+    const rg = relabeledGoal(ts);
+    const rNew = -Math.hypot(s1.x - rg.g.x, s1.y - rg.g.y);
+    if (!herOn) {
+      T(eqEl, `\\begin{aligned}
+        r_t &= -\\lVert s_{t+1}-g\\rVert
+          = -\\lVert(${s1.x.toFixed(2)},${s1.y.toFixed(2)})-(${goal.x.toFixed(2)},${goal.y.toFixed(2)})\\rVert
+          = \\mathbf{${rOrig.toFixed(3)}}\\\\
+        &\\text{HER off — every transition looks like failure.}
+      \\end{aligned}`, true);
+    } else {
+      T(eqEl, `\\begin{aligned}
+        g' &= s_{t'} = (${rg.g.x.toFixed(2)},${rg.g.y.toFixed(2)})\\quad(t'=${rg.idx})\\\\
+        r'_t &= -\\lVert s_{t+1}-g'\\rVert
+          = -\\lVert(${s1.x.toFixed(2)},${s1.y.toFixed(2)})-(${rg.g.x.toFixed(2)},${rg.g.y.toFixed(2)})\\rVert
+          = \\mathbf{${rNew.toFixed(3)}}
+      \\end{aligned}`, true);
+    }
+  }
+
+  /* interactions */
+  svg.addEventListener('click', ev => {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) / r.width * SIDE;
+    const py = (ev.clientY - r.top) / r.height * SIDE;
+    const gx = (px - PAD) / W * 2 - 1;
+    const gy = (SIDE - PAD - py) / W * 2 - 1;
+    if (Math.abs(gx) <= 1 && Math.abs(gy) <= 1) { goal = { x: clamp(gx, -0.95, 0.95), y: clamp(gy, -0.95, 0.95) }; traj = rollout(); draw(); }
+  });
+  tSlider.addEventListener('input', () => { tsel = parseInt(tSlider.value, 10); tVal.textContent = tsel; draw(); });
+  toggle.addEventListener('click', () => {
+    herOn = !herOn;
+    toggle.textContent = 'HER: ' + (herOn ? 'on' : 'off');
+    toggle.classList.toggle('active', herOn);
+    draw();
+  });
+  newBtn.addEventListener('click', () => { seed = 42 + Math.floor(Math.random() * 100000); traj = rollout(); draw(); });
+  tSlider.max = Tn - 1;
+  draw();
+}
+
+/* =====================================================================
+   06 — Task inference: Bayesian posterior over 4 tasks
+   ===================================================================== */
+function initContext() {
+  const barsEl = $('#ctxBars'), trajEl = $('#ctxTraj'), eqEl = $('#ctxEq');
+  const sigSlider = $('#ctxSigma'), sigVal = $('#ctxSigmaVal');
+  const MU = [-1.5, -0.5, 0.5, 1.5];
+  let sigma = 0.5, obs = [], trueTask = 1, seed = 12345;
+
+  function rng() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed + 1) / 0x80000000; }
+  function gauss() { const u1 = rng(), u2 = rng(); return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2); }
+
+  barsEl.innerHTML = MU.map((m, k) => `
+    <div class="vrow" data-k="${k}">
+      <span class="vlabel">z=${k} · μ=${m.toFixed(2)}</span>
+      <div class="vtrack"><div class="vbar pos" style="width:0%"></div></div>
+      <span class="vval">0.000</span>
+    </div>`).join('');
+
+  function posterior() {
+    if (!obs.length) return MU.map(() => 1 / MU.length);
+    const logp = MU.map(m => -0.5 / (sigma * sigma) * obs.reduce((a, r) => a + (r - m) * (r - m), 0));
+    const mx = Math.max(...logp);
+    const ex = logp.map(v => Math.exp(v - mx));
+    const Z = ex.reduce((a, b) => a + b, 0);
+    return ex.map(v => v / Z);
+  }
+
+  function render() {
+    sigVal.textContent = sigma.toFixed(2);
+    const q = posterior();
+    q.forEach((p, k) => {
+      const row = barsEl.querySelector(`.vrow[data-k="${k}"]`);
+      const bar = row.querySelector('.vbar');
+      const val = row.querySelector('.vval');
+      bar.style.width = (p * 100).toFixed(1) + '%';
+      val.textContent = p.toFixed(3);
+    });
+    trajEl.innerHTML = obs.length
+      ? obs.map((r, i) => `<span class="chip ${i === obs.length - 1 ? 'now' : ''}">${r.toFixed(2)}</span>`).join('<span class="arw">,</span>')
+      : '<span class="small muted">no observations yet</span>';
+    const sumSq = k => obs.reduce((a, r) => a + (r - MU[k]) * (r - MU[k]), 0);
+    const argmax = q.indexOf(Math.max(...q));
+    T(eqEl, `\\begin{aligned}
+      q_{\\phi}(z{=}k\\mid c_t) &\\propto \\exp\\!\\Big(-\\tfrac{1}{2\\sigma^{2}}
+        \\textstyle\\sum_{i\\le t}(r_i-\\mu_k)^{2}\\Big)\\\\
+      &\\propto \\exp\\!\\Big(-\\tfrac{1}{2\\cdot ${sigma.toFixed(2)}^{2}}
+        \\big[\\,${MU.map((m, k) => (obs.length ? sumSq(k).toFixed(2) : '0')).join(',\\ ')}\\,\\big]\\Big)\\\\
+      &\\Rightarrow \\hat{z}=\\arg\\max_k q_{\\phi} = \\mathbf{${argmax}}
+    \\end{aligned}`, true);
+  }
+
+  $('#ctxObserve').addEventListener('click', () => {
+    obs.push(MU[trueTask] + sigma * gauss());
+    if (obs.length > 24) obs.shift();
+    render();
+  });
+  $('#ctxReset').addEventListener('click', () => {
+    trueTask = Math.floor(rng() * 4);
+    obs = [];
+    render();
+  });
+  sigSlider.addEventListener('input', () => { sigma = parseFloat(sigSlider.value); render(); });
+
+  trueTask = Math.floor(rng() * 4);
+  render();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initMetaRL();
+  initHER();
+  initContext();
+  initScroll();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<!--
+  Chapter 1 — What Reinforcement Learning Really Is
+  Assumptions (per prompt.md):
+   · Quizzes are omitted; they are replaced with deeper prose and extra interactives.
+   · Design tokens, component class names, KaTeX CDN, and the section skeleton are
+     reproduced verbatim from RL.html.
+   · Beyond the required Reward-Signal Explorer, three chapter-specific interactives
+     are added (one per 2–3 prose sections): an agent–environment loop stepper, an
+     exploit/explore index explorer, and a taxonomy combinator. Four visualizers total.
+   · The Summary table.cmp compares the chapter's two conceptual objects:
+     supervised learning vs. reinforcement learning.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Reinforcement Learning Really Is</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- chain diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">What RL Really Is</a>
+    <nav class="nav">
+      <a href="#loop">The loop</a>
+      <a href="#reward">Reward</a>
+      <a href="#feedback">Feedback</a>
+      <a href="#explore">Explore</a>
+      <a href="#taxonomy">Taxonomy</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Foundations</p>
+    <h1>What Reinforcement Learning<br>Really Is</h1>
+    <p class="lede">An agent acts, the world pushes back, and a single scalar is the only teacher — here is the language of that loop, and why the loss functions you already know cannot fill in for it.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="loop">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>The agent–environment loop</h2>
+      <p>Reinforcement learning is one loop repeated forever. An <b>agent</b> observes a <b>state</b>, takes an <b>action</b>, and the <b>environment</b> answers with a <b>reward</b> and a <b>next state</b>. Nothing else is handed over.</p>
+      <p>Formally, at each step $t$ the agent receives $S_t\in\mathcal{S}$ and picks $A_t\in\mathcal{A}$ from its <b>policy</b> $\pi(a\mid s)$. The environment then samples the next state and reward from its <b>dynamics</b>:</p>
+      <div class="eqbox">
+        $$S_{t+1}\sim P(\cdot\mid S_t,A_t),\qquad R_{t+1}=R(S_t,A_t,S_{t+1})$$
+      </div>
+      <p>Unroll the loop and you get a <b>trajectory</b> — the only data RL ever sees:</p>
+      <div class="eqbox">
+        $$\tau=(S_0,A_0,R_1,S_1,A_1,R_2,S_2,\dots)$$
+      </div>
+      <div class="note">
+        <b>The reward is the only teacher.</b> The policy is what the agent controls; the scalar is everything it is told. Change the reward and you have changed the problem — not merely its difficulty.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the loop in a 3-state world</span>
+        <div class="btnrow"><button id="loopReset">Reset</button></div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <svg id="loopSvg" class="diagram" viewBox="0 0 400 200" role="img" aria-label="A three-state world with left and right moves"></svg>
+          <p class="small muted" style="text-align:center;margin:8px 0 0" id="loopInfo"></p>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <div class="btnrow" style="justify-content:center;margin-bottom:14px">
+            <button id="loopLeft">◀ Move left</button>
+            <button id="loopRight" class="primary">Move right ▶</button>
+          </div>
+          <p class="small muted" style="margin:0 0 6px">State sequence</p>
+          <div class="traj" id="loopTraj"></div>
+          <p class="small muted" style="margin:16px 0 6px">Reward received on each step</p>
+          <div class="traj" id="loopRew"></div>
+          <h4 style="margin:20px 0 4px">Trajectory</h4>
+          <div class="eqbox" id="loopEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="reward">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>The reward, and what it buys you</h2>
+      <p>A <b>reward</b> is a scalar and nothing more — no gradient, no label, no hint about which action was correct. The <b>reward hypothesis</b> says every goal worth pursuing can be written as maximizing expected cumulative reward. That cumulative total is the <b>return</b>:</p>
+      <div class="eqbox">
+        $$G_t=\sum_{k=0}^{\infty}\gamma^{k}R_{t+k+1},\qquad 0\le\gamma<1$$
+      </div>
+      <p>The discount $\gamma$ keeps the sum finite and prices how much the agent cares about the future. The job, then, is to pick a policy that makes the return large in expectation:</p>
+      <div class="eqbox">
+        $$J(\pi)=\mathbb{E}_{\tau\sim\pi}\!\big[G_0\big]=\mathbb{E}\!\Big[\textstyle\sum_{t\ge0}\gamma^{t}R_{t+1}\Big]$$
+      </div>
+      <p class="small muted">Read that last line back: $J$ averages over trajectories the policy <em>itself</em> generates — the thing being graded decides which data it gets to see.</p>
+      <p>Because $G$ is built from $R$, the optimal policy is a function of the reward. Drag one reward and the greedy arrows swing.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · Reward-Signal Explorer</span>
+        <div class="btnrow">
+          <button id="rwdReset">Reset</button>
+          <button id="rwdRandom">Random</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="rwdSvg" viewBox="0 0 320 320" role="img" aria-label="Reward grid with greedy policy arrows"
+               style="width:100%;max-width:340px;margin:0 auto;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed"></svg>
+          <div class="legend"><span>$-1$</span><span class="grad"></span><span>$+1$</span></div>
+          <p class="small muted" style="text-align:center;margin:12px 0 0" id="rwdInfo"></p>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <p class="small muted" style="margin-top:0">Drag a cell <em>up or down</em> to change its reward, or select a cell and use the slider. Fill colour is $V$, arrows are the greedy action $a_*=\arg\max_a Q(s,a)$.</p>
+          <div class="slider-row">
+            <span class="small muted">$\gamma$</span>
+            <input type="range" id="rwdGamma" min="0.5" max="0.95" step="0.01" value="0.75" aria-label="discount factor">
+            <span class="val" id="rwdGammaVal">0.75</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$r$</span>
+            <input type="range" id="rwdVal" min="-1" max="1" step="0.05" value="0" aria-label="reward of the selected cell">
+            <span class="val" id="rwdValVal">0.00</span>
+          </div>
+          <h4 style="margin-bottom:4px">Bellman optimality check</h4>
+          <div class="eqbox" id="rwdEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="feedback">
+  <div class="wrap">
+    <h2><span class="num">03</span>Evaluative vs. instructive feedback</h2>
+    <p>Supervised learning is told the right answer for every input — <b>instructive feedback</b>. RL is told only how good the last action turned out — <b>evaluative feedback</b>. The two objectives look similar on the page and are nothing alike in practice:</p>
+    <div class="eqbox">
+      $$\text{supervised: }\min_{\theta}\sum_i \ell\!\big(f_\theta(x_i),\,y_i\big)
+        \qquad\text{vs.}\qquad
+        \text{RL: }\max_{\theta}\ \mathbb{E}_{\tau\sim\pi_\theta}\!\big[G_0\big]$$
+    </div>
+    <p>Three consequences fall out immediately. <b>Credit assignment</b>: which of the last hundred actions earned this reward? <b>Non-stationarity</b>: the policy reshapes the very distribution it trains on. <b>Exploration</b>: a good action must be tried before it can ever be learned.</p>
+
+    <p class="small muted" style="margin-bottom:0">Instructive — a target for every input</p>
+    <div class="traj">
+      <span class="chip">$y_1$</span><span class="arw">·</span>
+      <span class="chip">$y_2$</span><span class="arw">·</span>
+      <span class="chip">$y_3$</span><span class="arw">·</span>
+      <span class="chip">$y_4$</span>
+    </div>
+    <p class="small muted" style="margin-bottom:0">Evaluative — a scalar after every action</p>
+    <div class="traj">
+      <span class="chip" style="background:#eef2ff;color:#2563eb">$+1$</span><span class="arw">·</span>
+      <span class="chip">$0$</span><span class="arw">·</span>
+      <span class="chip" style="background:#fdecec;color:#dc2626">$-0.5$</span><span class="arw">·</span>
+      <span class="chip" style="background:#eef2ff;color:#2563eb">$+0.2$</span>
+    </div>
+
+    <div class="note">
+      <b>A label is a teacher; a scalar is a grade.</b> Supervised learning can copy the label directly. RL must first discover which action earned the grade — usually by trying it, and living with the cost of having tried it.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="explore">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>The exploration–exploitation dilemma</h2>
+      <p>A greedy agent always takes $a^{*}_{t}=\arg\max_a \hat Q_t(a)$, where $\hat Q_t$ is its current estimate. That is <em>myopic</em>: an action that looks mediocre now may be worth taking precisely to find out what lies beyond it. The worth of that information is the whole dilemma.</p>
+      <p>Make it concrete. Add a bonus for actions you have barely tried and act greedily on the result:</p>
+      <div class="eqbox">
+        $$a_t=\arg\max_a\Big[\underbrace{\hat Q_t(a)}_{\text{exploit}}\;+\;\underbrace{c\sqrt{\tfrac{\ln t}{N_t(a)}}}_{\text{explore}}\Big]$$
+      </div>
+      <p>The second term is exactly where exploration is spent: it is large for actions with a small count $N_t(a)$ and shrinks as that count grows. It is a stand-in for a quantity RL would love and cannot get — the option value of one more sample.</p>
+      <div class="note">
+        <b>You cannot both maximize now and learn best.</b> A rule that always exploits stops gathering the evidence it would need to discover that it is wrong.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head"><span class="panel-title">Interactive · exploit vs. explore</span></div>
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <p class="small muted" style="margin-top:0">Action $A$ pays a known $1.00$. Action $B$ looks worse, but it is under-sampled — its estimate is noisy and its bonus is large.</p>
+          <div id="expBars" style="margin:16px 0 6px"></div>
+          <p class="small muted" id="expInfo" style="font-family:ui-monospace,monospace"></p>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <div class="slider-row">
+            <span class="small muted">$\hat Q(B)$</span>
+            <input type="range" id="expQb" min="0" max="1.5" step="0.01" value="0.6" aria-label="estimated value of action B">
+            <span class="val" id="expQbVal">0.60</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$c$</span>
+            <input type="range" id="expC" min="0" max="1.5" step="0.01" value="0.7" aria-label="exploration weight">
+            <span class="val" id="expCVal">0.70</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$N(B)$</span>
+            <input type="range" id="expN" min="1" max="50" step="1" value="4" aria-label="number of samples of action B">
+            <span class="val" id="expNVal">4</span>
+          </div>
+          <div class="eqbox" id="expEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="taxonomy">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>A first taxonomy</h2>
+      <p>Three axes run through every algorithm in this book. Each answers one question about what the agent knows and how it is allowed to use its data. Everything later is a point in this cube.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head"><span class="panel-title">Interactive · the three axes</span></div>
+      <svg id="taxSvg" viewBox="0 0 900 220" role="img" aria-label="Three taxonomy axes: model, policy, and data" style="width:100%;height:auto"></svg>
+      <div class="row" style="margin-top:16px">
+        <div class="col" style="flex:1 1 200px">
+          <h4 style="margin-top:0">Model</h4>
+          <div class="btnrow" id="taxModel">
+            <button data-v="0" class="active">Model-free</button>
+            <button data-v="1">Model-based</button>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 200px">
+          <h4 style="margin-top:0">Policy</h4>
+          <div class="btnrow" id="taxPolicy">
+            <button data-v="0" class="active">On-policy</button>
+            <button data-v="1">Off-policy</button>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 200px">
+          <h4 style="margin-top:0">Data</h4>
+          <div class="btnrow" id="taxData">
+            <button data-v="0" class="active">Online</button>
+            <button data-v="1">Offline</button>
+          </div>
+        </div>
+      </div>
+      <p class="small" id="taxDesc" style="margin-top:16px"></p>
+      <div class="eqbox" id="taxEq"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">06</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Supervised learning</th><th>Reinforcement learning</th></tr>
+      <tr><td>Feedback</td><td>Instructive — the label $y_i$</td><td>Evaluative — the scalar $R_{t+1}$</td></tr>
+      <tr><td>What you are given</td><td>i.i.d. pairs $(x_i,y_i)$</td><td>A stream from a policy-controlled process</td></tr>
+      <tr><td>Objective</td><td>Minimize prediction loss</td><td>Maximize expected return $J(\pi)$</td></tr>
+      <tr><td>Learned object</td><td>A function $f_\theta(x)$</td><td>A policy $\pi(a\mid s)$; values $V,Q$</td></tr>
+      <tr><td>Data distribution</td><td>Fixed</td><td>Shifts as the policy changes</td></tr>
+      <tr><td>Hard part</td><td>Generalization</td><td>Credit assignment and exploration</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      \tau &= (S_0,A_0,R_1,S_1,A_1,R_2,\dots)\\[2pt]
+      G_t &= \sum_{k=0}^{\infty}\gamma^{k}R_{t+k+1}\\[2pt]
+      J(\pi) &= \mathbb{E}_{\tau\sim\pi}\!\big[G_0\big]\\[2pt]
+      \pi_{*}(s) &= \arg\max_{a} Q_{*}(s,a)\\[2pt]
+      a_t &= \arg\max_{a}\Big[\hat Q_t(a)+c\sqrt{\tfrac{\ln t}{N_t(a)}}\Big]
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream — multi-armed bandits, $\varepsilon$-greedy, UCB, then MDPs, TD learning, Q-learning, policy gradients, PPO — is a way of sampling, estimating, or improving one of these five lines.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" aria-disabled="true"><span class="pg-k">Previous</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="02-multi-armed-bandits.html"><span class="pg-k">Next</span><span class="pg-t">Multi-Armed Bandits</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Everything is a loop; step it.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+/* sign-colouring helpers, after the reference's colorFor / textColorFor */
+function colorFor(v) {
+  const t = Math.max(-1, Math.min(1, Math.tanh(v)));
+  const a = Math.min(0.88, Math.abs(t) * 0.92);
+  return t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
+}
+function textColorFor(v) {
+  return Math.abs(Math.tanh(v)) > 0.5 ? '#fff' : '#111';
+}
+
+/* =====================================================================
+   01 — the agent–environment loop
+   ===================================================================== */
+function initLoop() {
+  const svg = $('#loopSvg');
+  const order = ['A', 'B', 'C'];
+  const pos = { A: { x: 70, y: 100 }, B: { x: 200, y: 100 }, C: { x: 330, y: 100 } };
+  const REW = { A: -1, B: 0, C: 1 };
+  const R = 26;
+  let cur = 'B';
+  let hist = [];
+  let seq = [{ t: 'S', tex: '\\text{B}' }];
+
+  svg.innerHTML = '';
+  const defs = el('defs', {}, svg);
+  const m = el('marker', {
+    id: 'lp-gray', viewBox: '0 0 10 10', refX: 10, refY: 5,
+    markerWidth: 7, markerHeight: 7, orient: 'auto', markerUnits: 'userSpaceOnUse'
+  }, defs);
+  el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: '#c2c9d4' }, m);
+  const AR = 'url(#lp-gray)';
+
+  const edge = (x1, y1, x2, y2) => el('path', {
+    d: `M ${x1} ${y1} L ${x2} ${y2}`, fill: 'none', stroke: '#c2c9d4',
+    'stroke-width': 1.6, 'stroke-linecap': 'round', 'marker-end': AR
+  }, svg);
+  edge(96, 94, 174, 94);
+  edge(174, 106, 96, 106);
+  edge(226, 94, 304, 94);
+  edge(304, 106, 226, 106);
+  const loop = x => el('path', {
+    d: `M ${x - 11} ${100 - R} Q ${x} ${100 - R - 34} ${x + 11} ${100 - R}`,
+    fill: 'none', stroke: '#c2c9d4', 'stroke-width': 1.6, 'stroke-linecap': 'round', 'marker-end': AR
+  }, svg);
+  loop(70); loop(330);
+
+  const nodeEls = {};
+  order.forEach(s => {
+    const g = el('g', {}, svg);
+    const c = el('circle', { cx: pos[s].x, cy: pos[s].y, r: R, fill: '#fff', stroke: '#111', 'stroke-width': 1.6, style: 'transition:fill .15s' }, g);
+    const t = el('text', { x: pos[s].x, y: pos[s].y + 5, 'text-anchor': 'middle', class: 'node-label' }, g);
+    t.textContent = s;
+    const rl = el('text', { x: pos[s].x, y: pos[s].y + R + 17, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, g);
+    rl.textContent = 'R=' + (REW[s] > 0 ? '+' : '') + REW[s];
+    nodeEls[s] = { c, t };
+  });
+
+  const trajEl = $('#loopTraj');
+  const rewEl = $('#loopRew');
+  const eqEl = $('#loopEq');
+  const infoEl = $('#loopInfo');
+
+  function paint() {
+    order.forEach(s => {
+      const on = s === cur;
+      nodeEls[s].c.setAttribute('fill', on ? '#111' : '#fff');
+      nodeEls[s].t.setAttribute('fill', on ? '#fff' : '#111');
+    });
+  }
+  function renderTraj() {
+    const show = hist.slice(-18);
+    trajEl.innerHTML = (show.length ? show : [{ s2: 'B' }]).map((h, i, arr) =>
+      `<span class="chip ${i === arr.length - 1 ? 'now' : ''}">${h.s2}</span>`
+    ).join('<span class="arw">→</span>');
+    rewEl.innerHTML = show.length
+      ? show.map(h => {
+          const c = h.r > 0 ? '#2563eb' : h.r < 0 ? '#dc2626' : '#6b7280';
+          const bg = h.r > 0 ? '#eef2ff' : h.r < 0 ? '#fdecec' : '#f4f4f5';
+          return `<span class="chip" style="background:${bg};color:${c}">${h.r > 0 ? '+' : ''}${h.r}</span>`;
+        }).join('<span class="arw">·</span>')
+      : '<span class="small muted">no steps yet</span>';
+  }
+  function renderEq() {
+    const inner = seq.slice(-13).map(t => t.tex).join(',\\,');
+    T(eqEl, `\\tau = (\\dots,\\, ${inner})`, true);
+  }
+  function act(dir) {
+    const i = order.indexOf(cur);
+    const ni = Math.max(0, Math.min(2, i + dir));
+    const s2 = order[ni];
+    const rr = REW[s2];
+    hist.push({ s: cur, a: dir, r: rr, s2 });
+    if (hist.length > 40) hist.shift();
+    seq.push({ t: 'A', tex: dir < 0 ? '{\\leftarrow}' : '{\\rightarrow}' });
+    seq.push({ t: 'R', tex: (rr >= 0 ? '+' : '') + rr });
+    seq.push({ t: 'S', tex: `\\text{${s2}}` });
+    if (seq.length > 40) seq.splice(0, seq.length - 40);
+    cur = s2;
+    paint(); renderTraj(); renderEq();
+    infoEl.textContent = `S_t = ${cur}   ·   last reward R_{t+1} = ${rr >= 0 ? '+' : ''}${rr}`;
+  }
+
+  $('#loopLeft').addEventListener('click', () => act(-1));
+  $('#loopRight').addEventListener('click', () => act(1));
+  $('#loopReset').addEventListener('click', () => {
+    cur = 'B'; hist = []; seq = [{ t: 'S', tex: '\\text{B}' }];
+    paint(); renderTraj(); renderEq();
+    infoEl.textContent = 'S_t = B';
+  });
+
+  paint(); renderTraj(); renderEq();
+  infoEl.textContent = 'S_t = B';
+}
+
+/* =====================================================================
+   02 — Reward-Signal Explorer (grid MDP + value iteration)
+   ===================================================================== */
+function initReward() {
+  const N = 4, CELL = 80;
+  const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; // up right down left
+  const NAMES = ['\\uparrow', '\\rightarrow', '\\downarrow', '\\leftarrow'];
+  let rewards = new Array(N * N).fill(0);
+  rewards[3] = 1;                       // one +1 in the top-right
+  let gamma = 0.75;
+  let V = new Array(N * N).fill(0);
+  let sel = 3;
+  let drag = null;
+
+  const svg = $('#rwdSvg');
+  const eqEl = $('#rwdEq');
+  const infoEl = $('#rwdInfo');
+  const rSlider = $('#rwdVal');
+  const rVal = $('#rwdValVal');
+  const gSlider = $('#rwdGamma');
+  const gVal = $('#rwdGammaVal');
+
+  function nxt(r, c, a) {
+    let nr = r + DIRS[a][0], nc = c + DIRS[a][1];
+    if (nr < 0 || nr >= N || nc < 0 || nc >= N) { nr = r; nc = c; }
+    return nr * N + nc;
+  }
+  function solve() {
+    V = new Array(N * N).fill(0);
+    for (let it = 0; it < 4000; it++) {
+      let delta = 0;
+      const nv = new Array(N * N);
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        const i = r * N + c;
+        let best = -Infinity;
+        for (let a = 0; a < 4; a++) {
+          const j = nxt(r, c, a);
+          const q = (j === i ? 0 : rewards[j]) + gamma * V[j];
+          if (q > best) best = q;
+        }
+        nv[i] = best;
+        delta = Math.max(delta, Math.abs(best - V[i]));
+      }
+      V = nv;
+      if (delta < 1e-7) break;
+    }
+  }
+  function bestA(r, c) {
+    let best = -Infinity, bi = 0;
+    for (let a = 0; a < 4; a++) {
+      const j = nxt(r, c, a);
+      const q = (j === r * N + c ? 0 : rewards[j]) + gamma * V[j];
+      if (q > best) { best = q; bi = a; }
+    }
+    return { a: bi, q: best };
+  }
+
+  function render() {
+    svg.innerHTML = '';
+    const defs = el('defs', {}, svg);
+    const mk = (id, col) => {
+      const mm = el('marker', {
+        id, viewBox: '0 0 10 10', refX: 10, refY: 5,
+        markerWidth: 6, markerHeight: 6, orient: 'auto', markerUnits: 'userSpaceOnUse'
+      }, defs);
+      el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: col }, mm);
+      return `url(#${id})`;
+    };
+    const dark = mk('rw-dark', '#111'), white = mk('rw-white', '#ffffff');
+
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const i = r * N + c;
+      const g = el('g', { style: 'cursor:ns-resize' }, svg);
+      el('rect', {
+        x: c * CELL + 3, y: r * CELL + 3, width: CELL - 6, height: CELL - 6, rx: 9,
+        fill: colorFor(V[i]), stroke: i === sel ? '#111' : '#ededed',
+        'stroke-width': i === sel ? 2.6 : 1
+      }, g);
+      const rtxt = el('text', {
+        x: c * CELL + 11, y: r * CELL + 20, 'font-size': 12, 'font-weight': 600,
+        'font-family': 'ui-monospace, monospace', fill: textColorFor(V[i]), opacity: 0.85
+      }, g);
+      rtxt.textContent = (rewards[i] > 0 ? '+' : '') + rewards[i].toFixed(1);
+
+      const ba = bestA(r, c);
+      const cx = c * CELL + CELL / 2 + 3, cy = r * CELL + CELL / 2 + 7;
+      const dx = DIRS[ba.a][1], dy = DIRS[ba.a][0];
+      const col = textColorFor(V[i]) === '#fff' ? '#ffffff' : '#111111';
+      el('path', {
+        d: `M ${cx - dx * 9} ${cy - dy * 9} L ${cx + dx * 9} ${cy + dy * 9}`,
+        fill: 'none', stroke: col, 'stroke-width': 2.4, 'stroke-linecap': 'round',
+        'marker-end': col === '#ffffff' ? white : dark
+      }, g);
+
+      g.addEventListener('pointerdown', e => {
+        sel = i;
+        drag = { i, y: e.clientY, r0: rewards[i], moved: false };
+        rSlider.value = rewards[i]; rVal.textContent = rewards[i].toFixed(2);
+        e.preventDefault();
+        render(); updateEq();
+      });
+    }
+    infoEl.textContent = `γ = ${gamma.toFixed(2)}   ·   selected cell r = ${rewards[sel].toFixed(2)}`;
+  }
+
+  function updateEq() {
+    const r = Math.floor(sel / N), c = sel % N;
+    const cands = [];
+    for (let a = 0; a < 4; a++) {
+      const j = nxt(r, c, a);
+      cands.push((j === sel ? 0 : rewards[j]) + gamma * V[j]);
+    }
+    const ba = bestA(r, c);
+    T(eqEl,
+      `\\begin{aligned}
+        V(${r},${c}) &= \\max_{a}\\big[R(s')+\\gamma V(s')\\big]\\\\
+        &= \\max\\{\\,${cands.map(v => v.toFixed(2)).join(',\\,')}\\,\\}\\\\
+        &= \\mathbf{${V[sel].toFixed(3)}} \\qquad a_*=${NAMES[ba.a]}
+      \\end{aligned}`, true);
+  }
+
+  window.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dy = drag.y - e.clientY;
+    if (Math.abs(dy) > 3) drag.moved = true;
+    if (!drag.moved) return;
+    rewards[drag.i] = Math.max(-1, Math.min(1, drag.r0 + dy * 0.01));
+    sel = drag.i;
+    rSlider.value = rewards[sel];
+    rVal.textContent = rewards[sel].toFixed(2);
+    solve(); render(); updateEq();
+  });
+  window.addEventListener('pointerup', () => { drag = null; });
+
+  rSlider.addEventListener('input', () => {
+    rewards[sel] = parseFloat(rSlider.value);
+    rVal.textContent = rewards[sel].toFixed(2);
+    solve(); render(); updateEq();
+  });
+  gSlider.addEventListener('input', () => {
+    gamma = parseFloat(gSlider.value);
+    gVal.textContent = gamma.toFixed(2);
+    solve(); render(); updateEq();
+  });
+  $('#rwdReset').addEventListener('click', () => {
+    rewards = new Array(N * N).fill(0);
+    rewards[3] = 1; sel = 3;
+    rSlider.value = rewards[sel]; rVal.textContent = rewards[sel].toFixed(2);
+    solve(); render(); updateEq();
+  });
+  $('#rwdRandom').addEventListener('click', () => {
+    rewards = rewards.map(() => Math.round((Math.random() * 2 - 1) * 10) / 10);
+    rSlider.value = rewards[sel]; rVal.textContent = rewards[sel].toFixed(2);
+    solve(); render(); updateEq();
+  });
+
+  solve(); render(); updateEq();
+}
+
+/* =====================================================================
+   04 — exploit vs. explore
+   ===================================================================== */
+function initExplore() {
+  const state = { qB: 0.6, c: 0.7, n: 4 };
+  const qA = 1.0;
+  const barsEl = $('#expBars');
+  const eqEl = $('#expEq');
+  const infoEl = $('#expInfo');
+  const sQb = $('#expQb'), vQb = $('#expQbVal');
+  const sC = $('#expC'), vC = $('#expCVal');
+  const sN = $('#expN'), vN = $('#expNVal');
+
+  barsEl.innerHTML = ['A', 'B'].map(a => `
+    <div class="vrow" data-a="${a}">
+      <span class="vlabel">${a}</span>
+      <div class="vtrack"><div class="vzero"></div><div class="vbar pos" style="width:0%"></div></div>
+      <span class="vval">0.000</span>
+    </div>`).join('');
+
+  function render() {
+    const bonus = state.n > 0 ? state.c / Math.sqrt(state.n) : 0;
+    const iB = state.qB + bonus;
+    const iA = qA;
+    const pick = iB > iA ? 'B' : 'A';
+    const scale = Math.max(1, iA, iB);
+
+    [['A', iA], ['B', iB]].forEach(([a, val]) => {
+      const row = barsEl.querySelector(`.vrow[data-a="${a}"]`);
+      const bar = row.querySelector('.vbar');
+      bar.style.width = (val / scale) * 100 + '%';
+      row.querySelector('.vval').textContent = val.toFixed(3);
+      row.classList.toggle('sel', a === pick);
+    });
+
+    infoEl.textContent = pick === 'A'
+      ? 'index picks A — exploit the known action'
+      : 'index picks B — explore the under-sampled action';
+
+    T(eqEl,
+      `\\begin{aligned}
+        a_t &= \\arg\\max_{a}\\Big[\\hat Q_t(a)+c\\sqrt{\\tfrac{\\ln t}{N_t(a)}}\\Big]\\\\
+        &= \\arg\\max\\Big\\{\\,A:${iA.toFixed(2)},\\; B:${state.qB.toFixed(2)}+\\tfrac{${state.c.toFixed(2)}}{\\sqrt{${state.n}}}=${iB.toFixed(2)}\\,\\Big\}\\\\
+        &= \\mathbf{${pick}}
+      \\end{aligned}`, true);
+  }
+
+  sQb.addEventListener('input', () => { state.qB = parseFloat(sQb.value); vQb.textContent = state.qB.toFixed(2); render(); });
+  sC.addEventListener('input', () => { state.c = parseFloat(sC.value); vC.textContent = state.c.toFixed(2); render(); });
+  sN.addEventListener('input', () => { state.n = parseInt(sN.value, 10); vN.textContent = state.n; render(); });
+  render();
+}
+
+/* =====================================================================
+   05 — taxonomy combinator
+   ===================================================================== */
+function initTaxonomy() {
+  const S = { model: false, offpolicy: false, offline: false };
+  const svg = $('#taxSvg');
+  const X0 = 150, X1 = 750, YS = [60, 120, 180];
+  const CATS = ['MODEL', 'POLICY', 'DATA'];
+  const L = [['Model-free', 'Model-based'], ['On-policy', 'Off-policy'], ['Online', 'Offline']];
+
+  svg.innerHTML = '';
+  const dots = [];
+  YS.forEach((y, i) => {
+    const cl = el('text', { x: X0, y: y - 16, 'font-size': 11, 'letter-spacing': '.08em', fill: '#9ca3af', 'font-weight': 600 }, svg);
+    cl.textContent = CATS[i];
+    el('line', { x1: X0, y1: y, x2: X1, y2: y, stroke: '#e5e5e5', 'stroke-width': 3, 'stroke-linecap': 'round' }, svg);
+    el('circle', { cx: (X0 + X1) / 2, cy: y, r: 3, fill: '#e5e5e5' }, svg);
+    const l1 = el('text', { x: X0 - 16, y: y + 5, 'text-anchor': 'end', 'font-size': 14, fill: '#6b7280' }, svg);
+    l1.textContent = L[i][0];
+    const l2 = el('text', { x: X1 + 16, y: y + 5, 'text-anchor': 'start', 'font-size': 14, fill: '#6b7280' }, svg);
+    l2.textContent = L[i][1];
+    dots.push(el('circle', { cx: X0, cy: y, r: 8, fill: '#111', style: 'transition:cx .25s' }, svg));
+  });
+
+  const btn = { model: $$('#taxModel button'), policy: $$('#taxPolicy button'), data: $$('#taxData button') };
+  const descEl = $('#taxDesc');
+  const eqEl = $('#taxEq');
+
+  function render() {
+    dots[0].setAttribute('cx', S.model ? X1 : X0);
+    dots[1].setAttribute('cx', S.offpolicy ? X1 : X0);
+    dots[2].setAttribute('cx', S.offline ? X1 : X0);
+    btn.model.forEach(b => b.classList.toggle('active', (b.dataset.v === '1') === S.model));
+    btn.policy.forEach(b => b.classList.toggle('active', (b.dataset.v === '1') === S.offpolicy));
+    btn.data.forEach(b => b.classList.toggle('active', (b.dataset.v === '1') === S.offline));
+
+    const mdl = S.model
+      ? 'learns a model of the dynamics and plans with it'
+      : 'learns values straight from experience, with no model';
+    const pol = S.offpolicy
+      ? 'improves a target policy that differs from the one generating its data'
+      : 'improves the very policy it uses to act';
+    const dat = S.offline
+      ? 'comes from a fixed logged dataset, with no new interaction'
+      : 'streams in from live interaction';
+    let ex;
+    if (S.offline) ex = 'CQL, IQL';
+    else if (S.model) ex = 'Dyna-Q, MCTS, Dreamer';
+    else if (S.offpolicy) ex = 'Q-learning, DDPG';
+    else ex = 'Sarsa, REINFORCE, PPO';
+    descEl.textContent = `The agent ${mdl}, ${pol}; its data ${dat}. In this corner of the cube: ${ex}.`;
+
+    T(eqEl,
+      `\\begin{aligned}
+        \\text{model} &:\\ ${S.model ? "\\hat P(s'\\mid s,a),\\ \\hat R(s,a)\\ \\text{(learned)}" : "\\varnothing\\ \\text{(model-free)}"}\\\\[2pt]
+        \\text{policy} &:\\ ${S.offpolicy ? "\\pi\\neq b\\ \\text{(off-policy)}" : "\\pi=b\\ \\text{(on-policy)}"}\\\\[2pt]
+        \\text{data} &:\\ ${S.offline ? "\\mathcal{D}\\ \\text{fixed (offline)}" : "\\text{online stream}"}
+      \\end{aligned}`, true);
+  }
+
+  function wire(list, key) {
+    list.forEach(b => b.addEventListener('click', () => { S[key] = b.dataset.v === '1'; render(); }));
+  }
+  wire(btn.model, 'model');
+  wire(btn.policy, 'offpolicy');
+  wire(btn.data, 'offline');
+  render();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initLoop();
+  initReward();
+  initExplore();
+  initTaxonomy();
+  initScroll();
+});
+</script>
+</body>
+</html>

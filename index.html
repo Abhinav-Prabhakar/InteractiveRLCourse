@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<!--
+  Interactive RL Course — table of contents.
+  Reuses the design tokens and component vocabulary of RL.html verbatim.
+  Links to each fully self-contained chapter under outputs/.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interactive Reinforcement Learning — From MDPs to RLHF</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em;text-decoration:none}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- table of contents ---------------- */
+.toc{list-style:none;margin:22px 0 0;padding:0}
+.toc li{border-top:1px solid #f0f0f0}
+.toc li:first-child{border-top:none}
+.toc a{display:flex;gap:16px;align-items:baseline;text-decoration:none;color:inherit;padding:15px 6px;border-radius:10px;transition:background .12s}
+.toc a:hover{background:#fafafa}
+.ch-num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;font-weight:600;letter-spacing:.06em;color:#9ca3af;min-width:24px;transform:translateY(-1px)}
+.ch-body{flex:1;min-width:0}
+.ch-title{display:block;font-weight:650;letter-spacing:-.01em}
+.ch-desc{display:block;color:#6b7280;font-size:14.5px;line-height:1.5;margin-top:3px}
+.ch-arrow{margin-left:auto;align-self:center;color:#c2c9d4;transition:color .12s,transform .12s}
+.toc a:hover .ch-arrow{color:#111;transform:translateX(2px)}
+
+/* ---------------- note / footer ---------------- */
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+footer a{color:#6b7280;text-decoration:none}
+footer a:hover{color:#111}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .toc a{padding:13px 4px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="#top">Interactive RL Course</a>
+    <nav class="nav">
+      <a href="#part1">Foundations</a>
+      <a href="#part2">Tabular Methods</a>
+      <a href="#part3">Deep RL</a>
+      <a href="#part4">Advanced Topics</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <p class="eyebrow">A Complete, Interactive-First Reinforcement Learning Curriculum</p>
+    <h1>From MDPs to RLHF</h1>
+    <p class="lede">Twenty-two self-contained chapters, each with LaTeX derivations and at least one live visualizer you can drag. Read them in order, or jump to a part.</p>
+  </div>
+</header>
+
+<section id="part1">
+  <div class="wrap">
+    <h2><span class="num">I</span>Foundations</h2>
+    <p class="muted">The language of sequential decision making — the loop, the bandit, and the MDP.</p>
+    <ol class="toc">
+      <li><a href="outputs/01-what-reinforcement-learning-really-is.html">
+        <span class="ch-num">01</span>
+        <span class="ch-body"><span class="ch-title">What Reinforcement Learning Really Is</span><span class="ch-desc">The agent–environment loop, evaluative vs. instructive feedback, and the exploration–exploitation dilemma.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/02-multi-armed-bandits.html">
+        <span class="ch-num">02</span>
+        <span class="ch-body"><span class="ch-title">Multi-Armed Bandits</span><span class="ch-desc">Action-value estimates, &#949;-greedy, UCB, and the regret curves that separate them.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/03-markov-decision-processes.html">
+        <span class="ch-num">03</span>
+        <span class="ch-body"><span class="ch-title">Markov Decision Processes</span><span class="ch-desc">The MDP tuple, returns, and the Bellman expectation and optimality equations.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+    </ol>
+  </div>
+</section>
+
+<section id="part2">
+  <div class="wrap">
+    <h2><span class="num">II</span>Exact and Sample-Based Tabular Methods</h2>
+    <p class="muted">Knowing the model, sampling from it, and bootstrapping without one.</p>
+    <ol class="toc">
+      <li><a href="outputs/04-dynamic-programming.html">
+        <span class="ch-num">04</span>
+        <span class="ch-body"><span class="ch-title">Dynamic Programming</span><span class="ch-desc">Policy evaluation, policy iteration, value iteration, and generalized policy iteration.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/05-monte-carlo-methods.html">
+        <span class="ch-num">05</span>
+        <span class="ch-body"><span class="ch-title">Monte Carlo Methods</span><span class="ch-desc">Averaging sampled returns, exploring starts, and off-policy importance sampling.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/06-temporal-difference-learning.html">
+        <span class="ch-num">06</span>
+        <span class="ch-body"><span class="ch-title">Temporal-Difference Learning</span><span class="ch-desc">TD(0), the TD error, Sarsa, Q-learning, and maximization bias.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/07-n-step-bootstrapping-and-eligibility-traces.html">
+        <span class="ch-num">07</span>
+        <span class="ch-body"><span class="ch-title">n-Step Bootstrapping and Eligibility Traces</span><span class="ch-desc">n-step returns, TD(&#955;), and traces as backward credit assignment.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/08-planning-and-learning-with-tabular-methods.html">
+        <span class="ch-num">08</span>
+        <span class="ch-body"><span class="ch-title">Planning and Learning with Tabular Methods</span><span class="ch-desc">Dyna, prioritized sweeping, and Monte-Carlo tree search.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+    </ol>
+  </div>
+</section>
+
+<section id="part3">
+  <div class="wrap">
+    <h2><span class="num">III</span>Function Approximation and Deep RL</h2>
+    <p class="muted">When the table is too big to write down.</p>
+    <ol class="toc">
+      <li><a href="outputs/09-function-approximation.html">
+        <span class="ch-num">09</span>
+        <span class="ch-body"><span class="ch-title">Function Approximation</span><span class="ch-desc">Parametric value functions, semi-gradient TD, and the deadly triad.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/10-deep-q-networks.html">
+        <span class="ch-num">10</span>
+        <span class="ch-body"><span class="ch-title">Deep Q-Networks and Value-Based Deep RL</span><span class="ch-desc">DQN's replay and target networks, then Double, Dueling, and distributional variants.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/11-policy-gradient-methods.html">
+        <span class="ch-num">11</span>
+        <span class="ch-body"><span class="ch-title">Policy Gradient Methods</span><span class="ch-desc">The policy gradient theorem, REINFORCE, actor–critic, and GAE.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/12-trust-region-and-proximal-policy-optimization.html">
+        <span class="ch-num">12</span>
+        <span class="ch-body"><span class="ch-title">Trust-Region and Proximal Policy Optimization</span><span class="ch-desc">TRPO's trust region and PPO's clipped objective.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+    </ol>
+  </div>
+</section>
+
+<section id="part4">
+  <div class="wrap">
+    <h2><span class="num">IV</span>Modern and Advanced Topics</h2>
+    <p class="muted">Model-based, offline, multi-agent, and the alignment stack.</p>
+    <ol class="toc">
+      <li><a href="outputs/13-model-based-reinforcement-learning.html">
+        <span class="ch-num">13</span>
+        <span class="ch-body"><span class="ch-title">Model-Based Reinforcement Learning</span><span class="ch-desc">Learned dynamics models, Dyna-style planning, MPC, and latent world models.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/14-offline-reinforcement-learning.html">
+        <span class="ch-num">14</span>
+        <span class="ch-body"><span class="ch-title">Offline Reinforcement Learning</span><span class="ch-desc">Distribution shift, CQL, IQL, and learning from a fixed dataset.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/15-exploration-and-intrinsic-motivation.html">
+        <span class="ch-num">15</span>
+        <span class="ch-body"><span class="ch-title">Exploration and Intrinsic Motivation</span><span class="ch-desc">Count-based bonuses, curiosity, and random network distillation.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/16-hierarchical-reinforcement-learning.html">
+        <span class="ch-num">16</span>
+        <span class="ch-body"><span class="ch-title">Hierarchical Reinforcement Learning</span><span class="ch-desc">Options, temporally extended actions, and the option-critic architecture.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/17-multi-agent-reinforcement-learning.html">
+        <span class="ch-num">17</span>
+        <span class="ch-body"><span class="ch-title">Multi-Agent Reinforcement Learning</span><span class="ch-desc">Markov games, centralized training with decentralized execution, and value factorization.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/18-meta-reinforcement-learning-and-multi-task-rl.html">
+        <span class="ch-num">18</span>
+        <span class="ch-body"><span class="ch-title">Meta-RL and Multi-Task RL</span><span class="ch-desc">Learning to adapt to a task distribution — RL², MAML-style updates, and HER.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/19-distributional-and-risk-sensitive-rl.html">
+        <span class="ch-num">19</span>
+        <span class="ch-body"><span class="ch-title">Distributional and Risk-Sensitive RL</span><span class="ch-desc">Return distributions, C51/QR-DQN/IQN, and risk measures like CVaR.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/20-imitation-learning-and-inverse-rl.html">
+        <span class="ch-num">20</span>
+        <span class="ch-body"><span class="ch-title">Imitation Learning and Inverse RL</span><span class="ch-desc">Behavioral cloning, DAgger, and recovering rewards from demonstrations.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/21-safe-and-constrained-rl.html">
+        <span class="ch-num">21</span>
+        <span class="ch-body"><span class="ch-title">Safe and Constrained RL</span><span class="ch-desc">Constrained MDPs, Lagrangian methods, and the price of safety.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+      <li><a href="outputs/22-rlhf-and-llm-alignment.html">
+        <span class="ch-num">22</span>
+        <span class="ch-body"><span class="ch-title">RLHF and LLM Alignment</span><span class="ch-desc">The RLHF pipeline, DPO, GRPO, and what alignment asks of reinforcement learning.</span></span>
+        <span class="ch-arrow">&#8594;</span>
+      </a></li>
+    </ol>
+  </div>
+</section>
+
+<section id="about">
+  <div class="wrap">
+    <div class="note">
+      <b>How to read this.</b> Each chapter is one self-contained HTML file — open any of them directly, or follow the <em>Previous</em> / <em>Next</em> links at the bottom of every page. Parts III–V can be reordered after Part II.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Pick a chapter and step it.</div>
+</footer>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initScroll();
+});
+</script>
+</body>
+</html>

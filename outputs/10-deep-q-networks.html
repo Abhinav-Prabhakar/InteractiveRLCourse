@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<!--
+  Chapter 10 — Deep Q-Networks and Value-Based Deep RL.
+  Assumptions / adaptations (per prompt.md):
+   1. The brief's quiz (derive the Double-DQN target; explain risk-sensitive
+      policies) is SKIPPED per prompt.md's "no quizzes" rule. Both topics are
+      handled by deepened prose plus a fourth interactive panel (mean vs. tail)
+      instead of a quiz.
+   2. The "DQN Training Dashboard" trains a hand-written 3-layer MLP
+      (4-32-32-2, ReLU, Adam, 3-step targets, 500-step hard target sync) fully
+      in-page — no PyTorch/TF/WebGL. Every number shown is computed live.
+   3. Four panels: replay buffer, the CartPole dashboard, the Dueling
+      decomposition, and mean-vs-tail risk. The file is larger than the
+      reference because the live CartPole DQN genuinely requires it; tokens and
+      class names are otherwise identical to RL.html.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deep Q-Networks &amp; Value-Based Deep RL</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- diagrams ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Deep Q-Networks</a>
+    <nav class="nav">
+      <a href="#scaling">Scaling</a>
+      <a href="#loss">The loss</a>
+      <a href="#replay">Replay</a>
+      <a href="#targets">Targets</a>
+      <a href="#dashboard">Dashboard</a>
+      <a href="#improvements">Improvements</a>
+      <a href="#distributional">Distributional</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Deep Value-Based Methods</p>
+    <h1>Deep Q-Networks<br>&amp; Value-Based Deep RL</h1>
+    <p class="lede">One network, one replay buffer, and one frozen copy of itself — enough to learn control without ever writing down the transition table.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="scaling">
+  <div class="wrap">
+    <h2><span class="num">01</span>From a table to a network</h2>
+    <p>Tabular Q-learning stores one number per state–action pair. That is fine for a $5\times5$ gridworld and hopeless past it: the table has $|\mathcal{S}||\mathcal{A}|$ entries and you will never visit them all.</p>
+    <div class="eqbox">
+      $$\hat q_\theta(s,a)\approx Q_*(s,a),\qquad \theta\in\mathbb{R}^{d},\quad d\ll|\mathcal{S}||\mathcal{A}|$$
+    </div>
+    <p>A <b>function approximator</b> replaces the table with parameters $\theta$. The <b>deep Q-network (DQN)</b> makes that approximator a neural network, so a single gradient step in one state nudges the estimate in <em>many</em> nearby states. That generalization is the gift.</p>
+    <p>It is also the curse. The tabular backup $Q(s,a)\leftarrow r+\gamma\max_{a'}Q(s',a')$ assumed each entry could move without touching another. Share parameters, and three ingredients together — <b>function approximation</b>, <b>bootstrapping</b>, and <b>off-policy</b> data — can diverge. This is the <b>deadly triad</b>. DQN's reputation rests on the two cheap tricks that keep it in check, and this chapter is about them.</p>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="loss">
+  <div class="wrap">
+    <h2><span class="num">02</span>The DQN objective</h2>
+    <p>Keep the Bellman optimality target, but regress the network onto it. Each transition $(s,a,r,s')$ contributes a squared <b>temporal-difference (TD) error</b>, and the loss is its expectation over a <b>replay buffer</b> $\mathcal{D}$:</p>
+    <div class="eqbox">
+      $$L(\theta)=\mathbb{E}_{(s,a,r,s')\sim\mathcal{D}}\Big[\big(r+\gamma\max_{a'}Q_{\theta^-}(s',a')-Q_\theta(s,a)\big)^2\Big]$$
+    </div>
+    <p>Two design decisions hide in that one line. The expectation runs over transitions drawn from $\mathcal{D}$ — past experience, not the current trajectory — and the target is computed with $Q_{\theta^-}$, a <em>separate</em> parameter vector rather than the $\theta$ being differentiated.</p>
+    <p>The gradient flows only through $Q_\theta(s,a)$; the target is held constant:</p>
+    <div class="eqbox">
+      $$\nabla_\theta L(\theta)=-2\,\mathbb{E}_{(s,a,r,s')\sim\mathcal{D}}\Big[\underbrace{\big(r+\gamma\max_{a'}Q_{\theta^-}(s',a')\big)}_{\text{regression target }y}-Q_\theta(s,a)\Big]\nabla_\theta Q_\theta(s,a)$$
+    </div>
+    <p>This is why it is the <b>semi-gradient</b> method: the $\nabla_\theta$ stops at the prediction. The target is a number the network is asked to hit, not a term it can differentiate through.</p>
+    <div class="note">
+      <b>Freeze the target or chase your own tail.</b> If $\theta^-=\theta$, every gradient step moves the target along with the prediction. The regression never settles — you are fitting a function to a moving version of itself. Replay and the target network are precisely the two mechanisms that stop the motion.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="replay">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Experience replay</h2>
+      <p>An <b>experience replay</b> buffer stores transitions $(s,a,r,s')$ as they arrive and hands back random minibatches. Two things are bought at once.</p>
+      <p>The first is sample efficiency: a single transition can be reused across hundreds of gradient steps. The second is subtler — <b>decorrelation</b>. Consecutive transitions in a trajectory are nearly identical, and SGD on a correlated stream chases a moving objective and forgets what it learned a moment ago. A minibatch drawn at random across many past episodes looks far closer to i.i.d.:</p>
+      <div class="eqbox">
+        $$i\sim\text{Uniform}\{1,\dots,|\mathcal{D}|\},\qquad \text{batch}=\{(s_i,a_i,r_i,s'_i)\}_{i\in\text{batch}}$$
+      </div>
+      <p>Uniformity is the baseline. <b>Prioritized experience replay</b>, later in this chapter, replaces the uniform draw with one proportional to the TD error — but first see how much breadth the plain draw already buys.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the replay buffer</span>
+        <div class="btnrow">
+          <button id="rlStream" class="primary">Stream ▶</button>
+          <button id="rlSample">Sample batch</button>
+          <button id="rlReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 380px">
+          <svg id="rlBuf" viewBox="0 0 300 300" role="img" aria-label="Replay buffer slots, coloured by the episode each came from" style="width:100%;max-width:520px"></svg>
+          <p class="small muted" style="margin:8px 0 0">Each square is a stored transition; its shade is the episode it came from. A minibatch drawn uniformly spans many shades; a sequential batch spans one.</p>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="btnrow" id="rlModeBtns" style="margin-bottom:6px">
+            <button data-mode="uniform" class="active">Uniform replay</button>
+            <button data-mode="sequential">Sequential (no replay)</button>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">capacity</span>
+            <input type="range" id="rlCap" min="100" max="400" step="20" value="200" aria-label="Replay buffer capacity">
+            <span class="val" id="rlCapVal">200</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">batch</span>
+            <input type="range" id="rlBatch" min="8" max="64" step="8" value="32" aria-label="Minibatch size">
+            <span class="val" id="rlBatchVal">32</span>
+          </div>
+          <p class="small muted" id="rlInfo" style="font-family:ui-monospace,monospace;margin-top:14px">buffer 0 / 200 · 0 episodes</p>
+          <div class="eqbox" id="rlEq" style="margin-top:6px;min-height:104px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="targets">
+  <div class="wrap">
+    <h2><span class="num">04</span>Target networks</h2>
+    <p>The second stabilizer is the frozen copy $\theta^-$. Every $C$ gradient steps it is refreshed from $\theta$, and in between it does not move:</p>
+    <div class="eqbox">
+      $$\theta^-\leftarrow\theta\ \text{ every }C\ \text{steps}\quad\text{(hard update)},\qquad \theta^-\leftarrow\tau\,\theta+(1-\tau)\,\theta^-\quad\text{(soft / Polyak)}$$
+    </div>
+    <p>With $\theta^-$ frozen, the loss in Section 02 becomes an ordinary supervised regression onto fixed labels $y$. The labels are stale — that is precisely the point. They move slowly rather than every step, so the network can catch up before the target runs off.</p>
+    <p class="small muted">Read the loss back with this in mind: $L$ is not the squared Bellman residual at the current parameters; it is the regression error against a slowly drifting snapshot of them.</p>
+    <div class="note">
+      <b>The target network trades bias for stability.</b> A copy that lags the true target is momentarily wrong. But a wrong target held still is something gradient descent can actually hit, whereas a correct target that moves every step is not. In the dashboard below you can watch the lag directly: the stored values freeze for $C$ steps, then jump.
+    </div>
+    <p>Notice the division of labour. Replay attacks the correlation of the <em>data</em>; the target network attacks the correlation of the <em>objective</em> with its own parameters. Both are approximations, and both are load-bearing.</p>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="dashboard">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>The training dashboard</h2>
+      <p>Everything above is one program: a network, a buffer, a frozen copy, and a loop. Watch it train on <b>CartPole</b>. The state is $(x,\dot x,\theta,\dot\theta)$ — cart position, cart velocity, pole angle, pole angular velocity; two actions push left or right; the reward is $+1$ for every step the pole stays up.</p>
+      <p>The network is tiny — 4 inputs, two hidden layers of 32, two Q-outputs — trained here with nothing but the equations on this page. The heatmap is the learned $\max_a Q(s,a)$ over cart position (horizontal) and pole angle (vertical), with both velocities zero. Blue is high value, red is low; the dot is the agent's live state. Watch the stripes form: the network is learning where the pole can still be saved.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · DQN training dashboard</span>
+        <div class="btnrow">
+          <button id="dqnRun" class="primary">Train ▶</button>
+          <button id="dqnReset">Reset</button>
+          <span class="small muted" style="align-self:center">speed</span>
+          <input type="range" id="dqnSpeed" min="1" max="48" step="1" value="24" style="width:110px;margin:0" aria-label="Training steps per animation frame">
+          <span class="val" id="dqnSpeedVal" style="font-family:ui-monospace,monospace;font-size:13px;min-width:28px">24</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <svg id="dqnEnv" viewBox="0 0 340 130" role="img" aria-label="Cart and pole animation" style="width:100%;max-width:420px;margin:0 auto"></svg>
+          <p class="small muted" id="dqnInfo" style="font-family:ui-monospace,monospace;margin:10px 0 4px;line-height:1.7">step 0 · episode 0 · ε 1.00 · buffer 0% · sync in 500 · return —</p>
+          <svg id="dqnCurve" viewBox="0 0 340 96" role="img" aria-label="Episode return over training" style="width:100%;max-width:420px;margin:0 auto;height:96px"></svg>
+          <p class="small muted" style="text-align:center;margin:2px 0 0">Return per episode (20-episode moving average)</p>
+          <svg id="dqnLag" viewBox="0 0 340 74" role="img" aria-label="Online versus target network value on a probe state" style="width:100%;max-width:420px;margin:6px auto 0;height:74px"></svg>
+          <p class="small muted" style="text-align:center;margin:2px 0 0"><span style="color:#111">online</span> vs <span style="color:#2563eb">target</span> $Q$ on the probe state — note the frozen plateaus</p>
+        </div>
+
+        <div class="col" style="flex:1 1 320px">
+          <svg id="dqnHeat" viewBox="0 0 288 216" role="img" aria-label="Q-value heatmap over cart position and pole angle" style="width:100%;max-width:360px;margin:0 auto"></svg>
+          <div class="legend"><span>low $Q$</span><span class="grad"></span><span>high $Q$</span></div>
+          <p class="small muted" style="text-align:center;margin:6px 0 0">cart position $x$ (left→right) vs pole angle $\theta$ (bottom→top)</p>
+          <div class="eqbox" id="dqnEq" style="margin-top:14px;min-height:126px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="improvements">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>Double, Dueling, Prioritized</h2>
+      <p>Three repairs, each a few lines of code, each a large change in behaviour.</p>
+
+      <h3>Double DQN</h3>
+      <p>The target's $\max$ is an estimator, and the maximum of noisy estimates is biased upward. Even when every $\hat Q(s,a)$ is unbiased, the largest one is not:</p>
+      <div class="eqbox">
+        $$\mathbb{E}\Big[\max_a\hat Q(s,a)\Big]\ \ge\ \max_a\mathbb{E}\big[\hat Q(s,a)\big]$$
+      </div>
+      <p>Jensen's inequality, with $\max$ the convex function. A greedy target that chases this inflated estimate inflates it further, step after step. <b>Double DQN</b> splits the two roles: the online network <em>picks</em> the greedy action, the target network <em>scores</em> it.</p>
+      <div class="eqbox">
+        $$y^{\text{Double}}=r+\gamma\,Q_{\theta^-}\!\Big(s',\ \arg\max_{a'}Q_\theta(s',a')\Big)$$
+      </div>
+      <p>The selection and the evaluation are exactly where the two networks are spent: one chooses the action, the other reports its value — and they are no longer the same network grading its own homework.</p>
+      <div class="note">
+        <b>The greedy $\max$ in the target is the whole story of the bias.</b> Double DQN does not remove the $\max$; it only stops a single, correlated network from both proposing and pricing the action. Overestimation shrinks, and the policy stops locking onto actions that merely <em>look</em> best.
+      </div>
+
+      <h3>Dueling DQN</h3>
+      <p>Some states are valuable no matter what you do; in others the choice of action dominates. <b>Dueling DQN</b> splits the value into a state value $V(s)$ and an <b>advantage</b> $A(s,a)=Q(s,a)-V(s)$:</p>
+      <div class="eqbox">
+        $$Q_\theta(s,a)=\underbrace{V_\eta(s)}_{\text{state value}}+\underbrace{A_\psi(s,a)-\frac{1}{|\mathcal{A}|}\sum_{a'}A_\psi(s,a')}_{\text{centred advantage}}$$
+      </div>
+      <p>The mean subtraction is not cosmetic. The decomposition $Q=V+A$ is unidentifiable: add a constant to $V$, subtract it from every $A$, and $Q$ is unchanged. Pinning $\sum_a A(s,a)=0$ fixes the split — it makes $V$ the value of the average action.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the Dueling decomposition</span>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 280px">
+          <div class="slider-row">
+            <span class="small muted">$V(s)$</span>
+            <input type="range" id="duV" min="-3" max="3" step="0.1" value="1" aria-label="State value V of s">
+            <span class="val" id="duVVal">1.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$A_1$</span>
+            <input type="range" id="duA0" min="-3" max="3" step="0.1" value="1" aria-label="Advantage of action 1">
+            <span class="val" id="duA0Val">1.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$A_2$</span>
+            <input type="range" id="duA1" min="-3" max="3" step="0.1" value="-1" aria-label="Advantage of action 2">
+            <span class="val" id="duA1Val">-1.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$A_3$</span>
+            <input type="range" id="duA2" min="-3" max="3" step="0.1" value="0" aria-label="Advantage of action 3">
+            <span class="val" id="duA2Val">0.0</span>
+          </div>
+          <p class="small muted" style="margin-top:16px">Move $V$ and every $Q$ shifts together; the ranking of the actions is decided by $A$ alone.</p>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <div id="duBars"></div>
+          <div class="eqbox" id="duEq" style="margin-top:12px;min-height:150px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <h3>Prioritized replay</h3>
+      <p>Uniform replay spends equal effort on transitions the network already predicts well. <b>Prioritized experience replay</b> samples in proportion to the last TD error, and corrects the resulting bias with an importance weight:</p>
+      <div class="eqbox">
+        $$P(i)=\frac{p_i^{\alpha}}{\sum_k p_k^{\alpha}},\qquad p_i=|\delta_i|+\varepsilon,\qquad w_i=\Big(\frac{1}{|\mathcal{D}|\,P(i)}\Big)^{\beta}$$
+      </div>
+      <p>Here $\alpha$ sets how greedily the buffer favours surprising transitions, and $\beta$, annealed to $1$, removes the bias the non-uniform draw introduces. The three ideas compose: <b>Rainbow</b> stacks Double, Dueling, prioritized replay, $n$-step returns, and the distributional head treated next.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="distributional">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">07</span>Distributional DQN</h2>
+      <p>Everything so far learns a <em>number</em> — the mean return. But the return is a random variable. <b>Distributional RL</b> learns its whole law:</p>
+      <div class="eqbox">
+        $$Z(s,a)\ \sim\ \text{law of }G_t\mid S_t=s,\,A_t=a,\qquad Q(s,a)=\mathbb{E}\big[Z(s,a)\big]$$
+      </div>
+      <p>The Bellman operator lifts from values to distributions. Expectation is linear, so it passes inside; the reward shift and the discount act on the random variable itself. Writing $\overset{D}{=}$ for equality <em>in distribution</em>,</p>
+      <div class="eqbox">
+        $$(\mathcal{T}Z)(s,a)\ \overset{D}{=}\ r+\gamma\,Z(s',a'),\qquad s'\sim P(\cdot\mid s,a)$$
+      </div>
+      <p class="small muted">Read that back: the operator never touches means. It shifts and scales the entire distribution, and the value $Q$ is just one functional of its fixed point.</p>
+
+      <h3>Representing a distribution</h3>
+      <p><b>C51</b> fixes $N$ atoms on a grid $z_i=V_{\min}+i\,\Delta z$ and learns a categorical distribution over them; each Bellman backup is followed by a projection back onto the grid. <b>QR-DQN</b> instead learns $N$ quantiles $\theta_i(s,a)\approx F^{-1}_{Z(s,a)}(\tau_i)$ with the pinball loss</p>
+      <div class="eqbox">
+        $$\rho_{\tau}(\delta)=\delta\big(\tau-\mathbb{1}[\delta<0]\big),\qquad \delta_{ij}=y_j-\theta_i(s,a)$$
+      </div>
+      <p>and <b>IQN</b> makes the level $\tau\sim U(0,1)$ a continuous input, learning the full quantile function $Z_\tau(s,a)$ rather than a fixed set of atoms.</p>
+
+      <h3>Why the tail, not the mean</h3>
+      <p>A mean is one summary; risk lives in the tail. Once $Z$ is learned, any <b>risk measure</b> is a single functional of it. The canonical example is the conditional value at risk — the average of the worst $\tau$-fraction of outcomes:</p>
+      <div class="eqbox">
+        $$\mathrm{CVaR}_{\tau}(Z)=\frac{1}{\tau}\int_0^{\tau}F^{-1}_{Z}(u)\,du$$
+      </div>
+      <p>A <b>risk-averse</b> agent maximizes $\mathrm{CVaR}_\tau$; a <b>risk-seeking</b> one maximizes an upper-tail functional. Same learned distribution, different question asked of it — and different optimal actions.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · mean vs. the tail</span>
+        <div class="btnrow" id="distModeBtns">
+          <button data-mode="neutral" class="active">Neutral $\mathbb{E}[Z]$</button>
+          <button data-mode="averse">Averse $\mathrm{CVaR}_\tau$</button>
+          <button data-mode="seeking">Seeking (upper tail)</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 420px">
+          <svg id="distSvg" viewBox="0 0 340 210" role="img" aria-label="Two-outcome lotteries for a risky and a safe action" style="width:100%;max-width:520px;margin:0 auto"></svg>
+          <div class="slider-row" style="margin-top:10px">
+            <span class="small muted">loss prob. $p$</span>
+            <input type="range" id="distP" min="0.02" max="0.5" step="0.01" value="0.2" aria-label="Probability of the crash outcome">
+            <span class="val" id="distPVal">0.20</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">tail $\tau$</span>
+            <input type="range" id="distTau" min="0.05" max="1" step="0.05" value="0.5" aria-label="Tail fraction for CVaR">
+            <span class="val" id="distTauVal">0.50</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 280px">
+          <p class="small muted" style="margin-top:0">Two actions. <b>Risky</b> usually returns $+2$ but crashes to $-2$ with probability $p$; <b>safe</b> returns $+0.6$ for certain. Drag $p$ and $\tau$ and watch the preferred action flip when the criterion switches from the mean to the tail.</p>
+          <div id="distRead" style="margin:14px 0"></div>
+          <div class="eqbox" id="distEq" style="min-height:132px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <div class="note">
+        <b>A distribution is strictly more information than a mean.</b> Two actions can share an expected return while one is a coin flip and the other is certain. Only $Z$ tells them apart, and only $Z$ lets the agent act on the difference.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">08</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Expected-value DQN</th><th>Distributional DQN</th></tr>
+      <tr><td>Learns</td><td>$Q_\theta(s,a)\approx\mathbb{E}[Z]$</td><td>$Z_\theta(s,a)$, a full distribution over returns</td></tr>
+      <tr><td>Output per action</td><td>one number</td><td>$N$ atoms (C51) or quantiles (QR-DQN / IQN)</td></tr>
+      <tr><td>Loss</td><td>squared TD error</td><td>cross-entropy (C51) / pinball loss (QR-DQN)</td></tr>
+      <tr><td>Backup</td><td>$Q\leftarrow r+\gamma\max_{a'}Q(s',a')$</td><td>$Z\overset{D}{\leftarrow} r+\gamma Z(s',a')$</td></tr>
+      <tr><td>Greedy action</td><td>$\arg\max_a Q(s,a)$</td><td>$\arg\max_a \rho[Z(s,a)]$</td></tr>
+      <tr><td>Risk</td><td>invisible — averaged away</td><td>exposed; controlled by the functional $\rho$</td></tr>
+      <tr><td>Stabilizers</td><td>replay + target network</td><td>same, plus atom projection / quantile levels</td></tr>
+      <tr><td>Variants</td><td>Double, Dueling, prioritized replay</td><td>C51, QR-DQN, IQN</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      L(\theta) &= \mathbb{E}_{\mathcal{D}}\Big[\big(r+\gamma\max_{a'}Q_{\theta^-}(s',a')-Q_\theta(s,a)\big)^2\Big]\\[2pt]
+      y^{\text{Double}} &= r+\gamma\,Q_{\theta^-}\big(s',\arg\max_{a'}Q_\theta(s',a')\big)\\[2pt]
+      Q_\theta(s,a) &= V_\eta(s)+A_\psi(s,a)-\tfrac{1}{|\mathcal{A}|}\sum_{a'}A_\psi(s,a')\\[2pt]
+      (\mathcal{T}Z)(s,a) &\overset{D}{=} r+\gamma Z(s',a')\\[2pt]
+      \mathrm{CVaR}_{\tau}(Z) &= \tfrac{1}{\tau}\int_0^{\tau}F^{-1}_{Z}(u)\,du
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream — REINFORCE, actor–critic, GAE, PPO — keeps this chapter's Bellman target but replaces the greedy $\max$ with a differentiable policy, optimizing $\log\pi_\theta(a\mid s)$ directly: the value network becomes a critic, and the $\max$ becomes a gradient.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="09-function-approximation.html"><span class="pg-k">Previous</span><span class="pg-t">Function Approximation</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="11-policy-gradient-methods.html"><span class="pg-k">Next</span><span class="pg-t">Policy Gradient Methods</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Press Train and watch it solve CartPole.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+/* =====================================================================
+   03 — Experience replay buffer
+   ===================================================================== */
+function initReplay() {
+  const svg = $('#rlBuf');
+  const infoEl = $('#rlInfo');
+  const eqEl = $('#rlEq');
+  const capS = $('#rlCap'), capV = $('#rlCapVal');
+  const batchS = $('#rlBatch'), batchV = $('#rlBatchVal');
+  const modeBtns = $$('#rlModeBtns button');
+  const COLS = 20, CW = 15, CH = 13;
+  const PALETTE = ['#111', '#2563eb', '#9ca3af', '#c2c9d4', '#1e3a8a'];
+
+  let cap = +capS.value, batch = +batchS.value;
+  let buf = [];              // [{ep}]
+  let episode = 0;
+  let mode = 'uniform';
+  let sample = [];           // indices currently highlighted
+  let timer = null, streaming = false;
+
+  function buildGrid() {
+    svg.innerHTML = '';
+    const rows = Math.ceil(cap / COLS);
+    svg.setAttribute('viewBox', `0 0 ${COLS * CW} ${rows * CH}`);
+    draw();
+  }
+
+  function draw() {
+    svg.innerHTML = '';
+    const sel = new Set(sample);
+    for (let i = 0; i < cap; i++) {
+      const r = Math.floor(i / COLS), c = i % COLS;
+      const has = i < buf.length;
+      const fill = has ? PALETTE[buf[i].ep % PALETTE.length] : '#f4f4f5';
+      el('rect', {
+        x: c * CW, y: r * CH, width: CW - 2, height: CH - 2, rx: 2.5,
+        fill,
+        stroke: sel.has(i) ? '#111' : 'none',
+        'stroke-width': sel.has(i) ? 1.8 : 0
+      }, svg);
+      if (sel.has(i)) el('rect', {
+        x: c * CW - 1, y: r * CH - 1, width: CW, height: CH, rx: 3.5, fill: 'none',
+        stroke: '#111', 'stroke-width': 1.4
+      }, svg);
+    }
+  }
+
+  function addTransitions(n) {
+    for (let k = 0; k < n; k++) {
+      if (buf.length >= cap) buf.shift();
+      buf.push({ ep: episode });
+      if (Math.random() < 0.12) episode++;
+    }
+    if (buf.length >= cap) { buf = buf.slice(buf.length - cap); }
+    draw();
+    renderInfo();
+  }
+
+  function sampleBatch() {
+    if (!buf.length) return;
+    const B = Math.min(batch, buf.length);
+    sample = [];
+    if (mode === 'uniform') {
+      const pool = Array.from({ length: buf.length }, (_, i) => i);
+      for (let k = 0; k < B; k++) sample.push(pool[(Math.random() * pool.length) | 0]);
+    } else {
+      for (let k = 0; k < B; k++) sample.push(buf.length - 1 - (k % buf.length));
+    }
+    const eps = new Set(sample.map(i => buf[i].ep));
+    draw();
+    renderInfo(eps.size);
+    T(eqEl, `\\begin{aligned}
+      P(i) &= \\tfrac{1}{|\\mathcal{D}|}\\ \\text{(uniform)} & |\\mathcal{D}| &= ${buf.length} & \\text{batch} &= ${B}\\\\[2pt]
+      & & \\text{distinct episodes in batch} &= \\mathbf{${eps.size}} & \\text{of } ${episode + 1}
+    \\end{aligned}`, true);
+  }
+
+  function renderInfo(distinct) {
+    infoEl.textContent =
+      `buffer ${buf.length} / ${cap} · ${episode + 1} episodes` +
+      (distinct !== undefined ? ` · sample spans ${distinct} episodes` : '');
+  }
+
+  function stopStream() {
+    streaming = false;
+    if (timer) { clearInterval(timer); timer = null; }
+    $('#rlStream').textContent = 'Stream ▶';
+    $('#rlStream').classList.add('primary');
+  }
+
+  $('#rlStream').addEventListener('click', () => {
+    if (streaming) { stopStream(); return; }
+    streaming = true;
+    $('#rlStream').textContent = 'Pause ❚❚';
+    timer = setInterval(() => addTransitions(6), 110);
+  });
+  $('#rlSample').addEventListener('click', sampleBatch);
+  $('#rlReset').addEventListener('click', () => {
+    stopStream(); buf = []; episode = 0; sample = [];
+    draw(); renderInfo();
+    T(eqEl, `\\text{Stream transitions, then sample a minibatch.}`, true);
+  });
+  capS.addEventListener('input', () => {
+    cap = +capS.value; capV.textContent = cap;
+    if (buf.length > cap) buf = buf.slice(buf.length - cap);
+    sample = []; buildGrid(); renderInfo();
+  });
+  batchS.addEventListener('input', () => { batch = +batchS.value; batchV.textContent = batch; });
+  modeBtns.forEach(b => b.addEventListener('click', () => {
+    modeBtns.forEach(x => x.classList.remove('active'));
+    b.classList.add('active'); mode = b.dataset.mode; sample = [];
+    draw(); renderInfo();
+  }));
+
+  buildGrid(); renderInfo();
+  T(eqEl, `\\text{Stream transitions, then sample a minibatch.}`, true);
+}
+
+/* =====================================================================
+   06 — Dueling decomposition
+   ===================================================================== */
+function initDueling() {
+  const barsEl = $('#duBars'), eqEl = $('#duEq');
+  const V = $('#duV'), A0 = $('#duA0'), A1 = $('#duA1'), A2 = $('#duA2');
+  const Vv = $('#duVVal'), A0v = $('#duA0Val'), A1v = $('#duA1Val'), A2v = $('#duA2Val');
+
+  function barRow(label, val, maxAbs) {
+    const frac = Math.abs(val) / maxAbs * 50;
+    const pos = val >= 0;
+    return `<div class="vrow"><span class="vlabel" style="width:30px">${label}</span>`
+      + `<div class="vtrack"><div class="vzero"></div>`
+      + `<div class="vbar ${pos ? 'pos' : 'neg'}" style="width:${frac}%;left:50%;transform:${pos ? 'none' : 'translateX(-100%)'}"></div></div>`
+      + `<span class="vval">${val.toFixed(3)}</span></div>`;
+  }
+
+  function render() {
+    const v = +V.value;
+    const A = [+A0.value, +A1.value, +A2.value];
+    const Abar = (A[0] + A[1] + A[2]) / 3;
+    const Ac = A.map(a => a - Abar);
+    const Q = A.map(a => v + a - Abar);
+    Vv.textContent = v.toFixed(1);
+    A0v.textContent = A[0].toFixed(1);
+    A1v.textContent = A[1].toFixed(1);
+    A2v.textContent = A[2].toFixed(1);
+
+    const maxAbs = Math.max(0.2, ...Ac.map(Math.abs), ...Q.map(Math.abs));
+    let html = '<h4>Centred advantage  A(s,·) − Ā</h4>';
+    Ac.forEach((a, i) => html += barRow('a' + (i + 1), a, maxAbs));
+    html += '<h4 style="margin-top:16px">Action value  Q(s,·)</h4>';
+    Q.forEach((q, i) => html += barRow('a' + (i + 1), q, maxAbs));
+    barsEl.innerHTML = html;
+
+    T(eqEl, `\\begin{aligned}
+      \\bar A &= \\tfrac{1}{3}(${A[0].toFixed(1)}${A[1] < 0 ? '-' : '+'}${Math.abs(A[1]).toFixed(1)}${A[2] < 0 ? '-' : '+'}${Math.abs(A[2]).toFixed(1)}) = ${Abar.toFixed(3)}\\\\[2pt]
+      Q(s,a_1) &= ${v.toFixed(1)} + ${A[0].toFixed(1)} - ${Abar.toFixed(3)} = \\mathbf{${Q[0].toFixed(3)}}\\\\
+      Q(s,a_2) &= ${v.toFixed(1)} + ${A[1].toFixed(1)} - ${Abar.toFixed(3)} = \\mathbf{${Q[1].toFixed(3)}}\\\\
+      Q(s,a_3) &= ${v.toFixed(1)} + ${A[2].toFixed(1)} - ${Abar.toFixed(3)} = \\mathbf{${Q[2].toFixed(3)}}
+    \\end{aligned}`, true);
+  }
+
+  [V, A0, A1, A2].forEach(s => s.addEventListener('input', render));
+  render();
+}
+
+/* =====================================================================
+   07 — Distributional risk
+   ===================================================================== */
+function initDist() {
+  const svg = $('#distSvg'), eqEl = $('#distEq'), readEl = $('#distRead');
+  const pS = $('#distP'), pV = $('#distPVal'), tS = $('#distTau'), tV = $('#distTauVal');
+  const modeBtns = $$('#distModeBtns button');
+  const N = 200, LOSS = -2, GAIN = 2, SAFE = 0.6;
+  let mode = 'neutral';
+
+  function riskyQuantiles(p) {
+    const q = [];
+    for (let i = 0; i < N; i++) { const u = (i + 0.5) / N; q.push(u < p ? LOSS : GAIN); }
+    return q; // already ascending
+  }
+  const safeQuantiles = () => new Array(N).fill(SAFE);
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  function cvar(a, tau) { const k = Math.max(1, Math.round(tau * a.length)); let s = 0; for (let i = 0; i < k; i++) s += a[i]; return s / k; }
+  function utail(a, tau) { const k = Math.max(1, Math.round(tau * a.length)); let s = 0; for (let i = a.length - k; i < a.length; i++) s += a[i]; return s / k; }
+
+  function render() {
+    const p = +pS.value; pV.textContent = p.toFixed(2);
+    const tau = +tS.value; tV.textContent = tau.toFixed(2);
+    const qr = riskyQuantiles(p), qs = safeQuantiles();
+    const stat = a => mode === 'neutral' ? mean(a) : mode === 'averse' ? cvar(a, tau) : utail(a, tau);
+    const sR = stat(qr), sS = stat(qs);
+    const pickR = sR >= sS;
+
+    /* ---- draw the two lotteries ---- */
+    svg.innerHTML = '';
+    const X = v => 24 + (v + 2.6) / 5.2 * 300;
+    const zeroX = X(0);
+    el('line', { x1: zeroX, y1: 12, x2: zeroX, y2: 198, stroke: '#e5e5e5' }, svg);
+    el('text', { x: zeroX, y: 208, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, svg).textContent = '0';
+
+    const rows = [
+      { base: 96, atoms: [{ v: LOSS, w: p }, { v: GAIN, w: 1 - p }], label: 'risky' },
+      { base: 196, atoms: [{ v: SAFE, w: 1 }], label: 'safe' }
+    ];
+    rows.forEach(row => {
+      const hMax = 62;
+      el('text', { x: 6, y: row.base - 6, 'font-size': 11, fill: '#6b7280', 'font-family': 'ui-monospace,monospace' }, svg).textContent = row.label;
+      row.atoms.forEach(at => {
+        const h = Math.max(2, at.w * hMax);
+        const x = X(at.v);
+        const fill = at.v >= 0 ? '#2563eb' : '#dc2626';
+        el('rect', { x: x - 11, y: row.base - h - 12, width: 22, height: h, rx: 4, fill }, svg);
+        el('text', { x, y: row.base - h - 16, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280', 'font-family': 'ui-monospace,monospace' }, svg).textContent = at.w.toFixed(2);
+        el('text', { x, y: row.base - 2, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#111', 'font-family': 'ui-monospace,monospace' }, svg).textContent = at.v.toFixed(1);
+      });
+      /* criterion marker */
+      const sc = row.label === 'risky' ? sR : sS;
+      el('path', { d: `M ${X(sc)} ${row.base + 4} l -5 -9 l 10 0 z`, fill: '#111' }, svg);
+    });
+
+    /* ---- readouts ---- */
+    const crit = mode === 'neutral' ? 'the mean E[Z]' : mode === 'averse' ? 'the tail CVaR' : 'the upper tail';
+    readEl.innerHTML =
+      `<div class="vrow"><span class="vlabel" style="width:40px">risky</span>`
+      + `<div class="vtrack"><div class="vzero"></div><div class="vbar ${sR >= 0 ? 'pos' : 'neg'}" style="width:${Math.min(50, Math.abs(sR) / 2.6 * 50)}%;left:50%;transform:${sR >= 0 ? 'none' : 'translateX(-100%)'}"></div></div>`
+      + `<span class="vval">${sR.toFixed(3)}</span></div>`
+      + `<div class="vrow"><span class="vlabel" style="width:40px">safe</span>`
+      + `<div class="vtrack"><div class="vzero"></div><div class="vbar ${sS >= 0 ? 'pos' : 'neg'}" style="width:${Math.min(50, Math.abs(sS) / 2.6 * 50)}%;left:50%;transform:${sS >= 0 ? 'none' : 'translateX(-100%)'}"></div></div>`
+      + `<span class="vval">${sS.toFixed(3)}</span></div>`;
+    const verdict = document.createElement('p');
+    verdict.className = 'small muted';
+    verdict.style.margin = '10px 0 0';
+    verdict.innerHTML = `Under ${crit}, the agent prefers <b>${pickR ? 'risky' : 'safe'}</b>.`;
+    readEl.appendChild(verdict);
+
+    T(eqEl, `\\begin{aligned}
+      \\text{mean} &\\quad \\mathbb{E}[Z_{\\text{risky}}]=${mean(qr).toFixed(3)},\\ \\ \\mathbb{E}[Z_{\\text{safe}}]=${SAFE.toFixed(3)}\\\\[2pt]
+      \\text{tail} &\\quad \\mathrm{CVaR}_{${tau.toFixed(2)}}(Z_{\\text{risky}})=${cvar(qr, tau).toFixed(3)},\\ \\ \\mathrm{CVaR}_{${tau.toFixed(2)}}(Z_{\\text{safe}})=${SAFE.toFixed(3)}
+    \\end{aligned}`, true);
+  }
+
+  pS.addEventListener('input', render);
+  tS.addEventListener('input', render);
+  modeBtns.forEach(b => b.addEventListener('click', () => {
+    modeBtns.forEach(x => x.classList.remove('active'));
+    b.classList.add('active'); mode = b.dataset.mode; render();
+  }));
+  render();
+}
+
+/* =====================================================================
+   05 — DQN training dashboard (CartPole, hand-written MLP)
+   ===================================================================== */
+function initDQN() {
+  /* ---- CartPole dynamics ---- */
+  const Gc = 9.8, MC = 1.0, MP = 0.1, TM = MC + MP, Lp = 0.5, PML = MP * Lp;
+  const FORCE = 10.0, TAU = 0.02, XT = 2.4, TT = 12 * 2 * Math.PI / 360;
+  function resetEnv() { const s = []; for (let i = 0; i < 4; i++) s.push((Math.random() - 0.5) * 0.1); return s; }
+  function stepEnv(s, a) {
+    const x = s[0], xd = s[1], th = s[2], thd = s[3];
+    const force = a === 1 ? FORCE : -FORCE;
+    const c = Math.cos(th), sn = Math.sin(th);
+    const temp = (force + PML * thd * thd * sn) / TM;
+    const thacc = (Gc * sn - c * temp) / (Lp * (4 / 3 - MP * c * c / TM));
+    const xacc = temp - PML * thacc * c / TM;
+    const nx = x + TAU * xd, nxd = xd + TAU * xacc, nth = th + TAU * thd, nthd = thd + TAU * thacc;
+    const done = nx < -XT || nx > XT || nth < -TT || nth > TT;
+    return { s: [nx, nxd, nth, nthd], done, r: 1.0 };
+  }
+  const norm = s => [s[0] / XT, s[1] / 2, s[2] / TT, s[3] / 2];
+
+  /* ---- a tiny MLP: 4-32-32-2, ReLU ---- */
+  function randn() { let u = 0, v = 0; while (u === 0) u = Math.random(); while (v === 0) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  function makeLayer(nin, nout) {
+    const W = [], b = [], sc = Math.sqrt(2 / nin);
+    for (let o = 0; o < nout; o++) { const r = []; for (let i = 0; i < nin; i++) r.push(randn() * sc); W.push(r); b.push(0); }
+    return { nin, nout, W, b };
+  }
+  const makeNet = () => [makeLayer(4, 32), makeLayer(32, 32), makeLayer(32, 2)];
+  function forward(net, x) {
+    const acts = [x]; let a = x;
+    for (let l = 0; l < net.length; l++) {
+      const { W, b, nout, nin } = net[l];
+      const out = new Array(nout);
+      for (let o = 0; o < nout; o++) { let z = b[o]; const Wo = W[o]; for (let i = 0; i < nin; i++) z += Wo[i] * a[i]; out[o] = z; }
+      if (l < net.length - 1) for (let o = 0; o < nout; o++) out[o] = Math.max(0, out[o]);
+      acts.push(out); a = out;
+    }
+    return acts;
+  }
+  function evalQ(net, s) { const a = forward(net, norm(s)); return a[a.length - 1]; }
+  function makeAdam(net, lr) {
+    const m = net.map(L => L.W.map(r => r.map(() => 0)));
+    const v = net.map(L => L.W.map(r => r.map(() => 0)));
+    const mb = net.map(L => L.b.map(() => 0)), vb = net.map(L => L.b.map(() => 0));
+    let t = 0;
+    return (gW, gb) => {
+      t++; const b1 = 0.9, b2 = 0.999, eps = 1e-8;
+      const c1 = 1 - Math.pow(b1, t), c2 = 1 - Math.pow(b2, t);
+      net.forEach((L, l) => {
+        for (let o = 0; o < L.nout; o++) {
+          for (let i = 0; i < L.nin; i++) {
+            m[l][o][i] = b1 * m[l][o][i] + (1 - b1) * gW[l][o][i];
+            v[l][o][i] = b2 * v[l][o][i] + (1 - b2) * gW[l][o][i] * gW[l][o][i];
+            L.W[o][i] -= lr * (m[l][o][i] / c1) / (Math.sqrt(v[l][o][i] / c2) + eps);
+          }
+          mb[l][o] = b1 * mb[l][o] + (1 - b1) * gb[l][o];
+          vb[l][o] = b2 * vb[l][o] + (1 - b2) * gb[l][o] * gb[l][o];
+          L.b[o] -= lr * (mb[l][o] / c1) / (Math.sqrt(vb[l][o] / c2) + eps);
+        }
+      });
+    };
+  }
+  const copyNet = net => net.map(L => ({ nin: L.nin, nout: L.nout, W: L.W.map(r => r.slice()), b: L.b.slice() }));
+
+  let lastSample = null;
+  function trainBatch(net, tnet, opt, batch, gamma) {
+    const L = net.length;
+    const gW = net.map(l => l.W.map(r => r.map(() => 0)));
+    const gb = net.map(l => l.b.map(() => 0));
+    let loss = 0;
+    for (let bi = 0; bi < batch.length; bi++) {
+      const tr = batch[bi];
+      const acts = forward(net, norm(tr.s));
+      const out = acts[L];
+      const a = tr.a;
+      const qnext = tr.done ? 0 : Math.max(...evalQ(tnet, tr.s2));
+      const target = tr.r + gamma * qnext;
+      const err = out[a] - target;
+      loss += err * err;
+      if (bi === 0) lastSample = { r: tr.r, qnext, target, qsa: out[a], delta: err };
+      const dout = new Array(out.length).fill(0);
+      dout[a] = 2 * err;
+      let delta = dout;
+      for (let l = L - 1; l >= 0; l--) {
+        const { W, nout, nin } = net[l], inp = acts[l];
+        for (let o = 0; o < nout; o++) {
+          const dl = delta[o]; if (dl === 0) continue;
+          const Wo = W[o], gWo = gW[l][o];
+          for (let i = 0; i < nin; i++) gWo[i] += dl * inp[i];
+          gb[l][o] += dl;
+        }
+        if (l > 0) {
+          const din = new Array(nin).fill(0);
+          for (let o = 0; o < nout; o++) { const dl = delta[o]; if (dl === 0) continue; const Wo = W[o]; for (let i = 0; i < nin; i++) din[i] += Wo[i] * dl; }
+          for (let i = 0; i < nin; i++) if (inp[i] <= 0) din[i] = 0;
+          delta = din;
+        }
+      }
+    }
+    const B = batch.length;
+    for (let l = 0; l < L; l++) { for (let o = 0; o < net[l].nout; o++) { gb[l][o] /= B; for (let i = 0; i < net[l].nin; i++) gW[l][o][i] /= B; } }
+    opt(gW, gb);
+    return loss / B;
+  }
+
+  /* ---- hyper-parameters (validated to solve CartPole in ~230 episodes) ---- */
+  const GAMMA = 0.99, LR = 1e-3, BATCH = 32, CAP = 20000, SYNC = 500, NSTEP = 3, EPS_DECAY = 5000, MAXSTEPS = 40000, EP_CAP = 500;
+
+  const envSvg = $('#dqnEnv'), heatSvg = $('#dqnHeat'), curveSvg = $('#dqnCurve'), lagSvg = $('#dqnLag');
+  const eqEl = $('#dqnEq'), infoEl = $('#dqnInfo'), runBtn = $('#dqnRun');
+  const speedS = $('#dqnSpeed'), speedV = $('#dqnSpeedVal');
+
+  let net, tnet, opt, buf, bufIdx, steps, episodes, epReturn, returns, eps, s, pend, running, raf, solved, frameCount;
+  let lagHist;
+
+  function hardReset() {
+    net = makeNet(); tnet = copyNet(net); opt = makeAdam(net, LR);
+    buf = []; bufIdx = 0; steps = 0; episodes = 0; epReturn = 0; returns = []; eps = 1.0;
+    s = resetEnv(); pend = []; lastSample = null; running = false; solved = false; frameCount = 0; lagHist = [];
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    runBtn.textContent = 'Train ▶'; runBtn.disabled = false; runBtn.classList.add('primary');
+    drawEnv(); drawHeat(); drawCurve(); drawLag(); renderInfo(); updateEq();
+  }
+
+  const pushBuf = t => { if (buf.length < CAP) buf.push(t); else { buf[bufIdx] = t; bufIdx = (bufIdx + 1) % CAP; } };
+  function sampleBuf(n) { const o = []; for (let k = 0; k < n; k++) o.push(buf[(Math.random() * buf.length) | 0]); return o; }
+
+  function simStep() {
+    if (steps >= MAXSTEPS) return;
+    const q = evalQ(net, s);
+    const a = (Math.random() < eps) ? (Math.random() < 0.5 ? 0 : 1) : (q[0] >= q[1] ? 0 : 1);
+    const { s: s2, done, r } = stepEnv(s, a);
+    epReturn += r;
+    pend.push({ s, a, r, s2, done });
+    if (done || pend.length >= NSTEP) {
+      const head = pend[0];
+      let R = 0, disc = 1, st = head.s2, dn = head.done;
+      for (let k = 0; k < pend.length; k++) { R += disc * pend[k].r; disc *= GAMMA; st = pend[k].s2; if (pend[k].done) { dn = true; break; } }
+      pushBuf({ s: head.s, a: head.a, r: R, s2: st, done: dn });
+      pend.shift();
+    }
+    s = s2;
+    if (done || epReturn >= EP_CAP) { returns.push(epReturn); episodes++; epReturn = 0; s = resetEnv(); pend.length = 0; }
+    if (buf.length >= 1000) trainBatch(net, tnet, opt, sampleBuf(BATCH), GAMMA);
+    eps = Math.max(0.05, 1 - (1 - 0.05) * steps / EPS_DECAY);
+    if (steps > 0 && steps % SYNC === 0) tnet = copyNet(net);
+    steps++;
+  }
+
+  function rollingAvg(a, w) {
+    if (!a.length) return 0;
+    const seg = a.slice(-w);
+    return seg.reduce((x, y) => x + y, 0) / seg.length;
+  }
+
+  function drawEnv() {
+    envSvg.innerHTML = '';
+    const px = 34 + (s[0] + XT) / (2 * XT) * 272;
+    const th = s[2];
+    el('line', { x1: 14, y1: 118, x2: 326, y2: 118, stroke: '#e5e5e5', 'stroke-width': 2 }, envSvg);
+    el('rect', { x: px - 22, y: 96, width: 44, height: 20, rx: 5, fill: '#111' }, envSvg);
+    const ex = px + 54 * Math.sin(th), ey = 96 - 54 * Math.cos(th);
+    el('line', { x1: px, y1: 96, x2: ex, y2: ey, stroke: '#111', 'stroke-width': 4, 'stroke-linecap': 'round' }, envSvg);
+    el('circle', { cx: ex, cy: ey, r: 4, fill: '#2563eb' }, envSvg);
+  }
+
+  function drawHeat() {
+    heatSvg.innerHTML = '';
+    const COLS = 16, ROWS = 12, CW = 18, CH = 18;
+    const vals = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const x = -XT + (c + 0.5) / COLS * 2 * XT;
+      const th = TT - (r + 0.5) / ROWS * 2 * TT;
+      vals.push(Math.max(...evalQ(net, [x, 0, th, 0])));
+    }
+    const maxAbs = Math.max(0.5, ...vals.map(Math.abs));
+    let i = 0;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const q = vals[i++], al = Math.min(0.9, Math.abs(q) / maxAbs * 0.9);
+      const fill = q >= 0 ? `rgba(37,99,235,${al.toFixed(3)})` : `rgba(220,38,38,${al.toFixed(3)})`;
+      el('rect', { x: c * CW, y: r * CH, width: CW - 1.5, height: CH - 1.5, rx: 3, fill }, heatSvg);
+    }
+    const px = (s[0] + XT) / (2 * XT) * COLS * CW;
+    const py = (TT - s[2]) / (2 * TT) * ROWS * CH;
+    if (px >= 0 && px <= COLS * CW && py >= 0 && py <= ROWS * CH)
+      el('circle', { cx: px, cy: py, r: 4, fill: '#111', stroke: '#fff', 'stroke-width': 2 }, heatSvg);
+  }
+
+  function drawCurve() {
+    curveSvg.innerHTML = '';
+    const H = 96, pad = 8, W = 332;
+    el('line', { x1: pad, y1: H - pad, x2: W, y2: H - pad, stroke: '#e5e5e5' }, curveSvg);
+    el('line', { x1: pad, y1: pad, x2: W, y2: pad, stroke: '#f4f4f5' }, curveSvg);
+    el('text', { x: W - 4, y: pad + 3, 'text-anchor': 'end', 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, curveSvg).textContent = '500';
+    const roll = []; let sum = 0;
+    for (let k = 0; k < returns.length; k++) { sum += returns[k]; if (k >= 20) sum -= returns[k - 20]; roll.push(sum / Math.min(k + 1, 20)); }
+    const win = 140, seg = roll.slice(-win);
+    if (seg.length > 1) {
+      let d = '';
+      seg.forEach((v, idx) => {
+        const x = pad + idx / (win - 1) * (W - pad);
+        const y = (H - pad) - Math.min(v, 500) / 500 * (H - 2 * pad);
+        d += (idx ? ' L ' : 'M ') + x + ' ' + y;
+      });
+      el('path', { d, fill: 'none', stroke: '#111', 'stroke-width': 2 }, curveSvg);
+    }
+  }
+
+  function drawLag() {
+    const on = Math.max(...evalQ(net, [0, 0, 0, 0]));
+    const tg = Math.max(...evalQ(tnet, [0, 0, 0, 0]));
+    lagHist.push({ on, tg });
+    if (lagHist.length > 140) lagHist.shift();
+    lagSvg.innerHTML = '';
+    const H = 74, pad = 8, W = 332;
+    let mx = 1;
+    lagHist.forEach(p => { mx = Math.max(mx, Math.abs(p.on), Math.abs(p.tg)); });
+    const plot = (key, color) => {
+      let d = '';
+      lagHist.forEach((p, idx) => {
+        const x = pad + idx / 139 * (W - pad);
+        const y = (H - pad) - (p[key] / mx) * (H - 2 * pad);
+        d += (idx ? ' L ' : 'M ') + x + ' ' + y;
+      });
+      el('path', { d, fill: 'none', stroke: color, 'stroke-width': 2 }, lagSvg);
+    };
+    plot('on', '#111'); plot('tg', '#2563eb');
+  }
+
+  function renderInfo() {
+    const roll = rollingAvg(returns, 20);
+    const syncIn = steps % SYNC === 0 ? SYNC : SYNC - (steps % SYNC);
+    infoEl.textContent =
+      `step ${steps} · episode ${episodes} · ε ${eps.toFixed(2)} · buffer ${Math.round(buf.length / CAP * 100)}%`
+      + ` · sync in ${syncIn} · return ${returns.length ? roll.toFixed(0) : '—'}`;
+  }
+
+  function updateEq() {
+    if (!lastSample) { T(eqEl, `\\text{collecting warm-up transitions…}`, true); return; }
+    const g3 = Math.pow(GAMMA, NSTEP);
+    T(eqEl, `\\begin{aligned}
+      y &= R^{(3)} + \\gamma^{3}\\max_{a'}Q_{\\theta^-}(s',a')\\\\
+        &= ${lastSample.r.toFixed(2)} + ${g3.toFixed(4)}\\cdot ${lastSample.qnext.toFixed(3)} = \\mathbf{${lastSample.target.toFixed(3)}}\\\\[2pt]
+      \\delta &= y - Q_\\theta(s,a) = ${lastSample.target.toFixed(3)} - ${lastSample.qsa.toFixed(3)} = ${lastSample.delta.toFixed(3)}
+    \\end{aligned}`, true);
+  }
+
+  function render(force) {
+    drawEnv(); renderInfo();
+    if (force || frameCount % 5 === 0) { drawHeat(); drawCurve(); drawLag(); updateEq(); }
+    frameCount++;
+  }
+
+  function frame() {
+    if (!running) return;
+    const spf = +speedS.value;
+    for (let i = 0; i < spf && steps < MAXSTEPS; i++) simStep();
+    render(false);
+    if (steps >= MAXSTEPS) { running = false; runBtn.textContent = 'Done'; runBtn.disabled = true; return; }
+    if (episodes > 25 && rollingAvg(returns, 20) >= 480) {
+      solved = true; running = false; runBtn.textContent = 'Solved ✓'; runBtn.disabled = true; render(true); return;
+    }
+    raf = requestAnimationFrame(frame);
+  }
+
+  runBtn.addEventListener('click', () => {
+    if (solved) return;
+    running = !running;
+    if (running) { runBtn.textContent = 'Pause ❚❚'; raf = requestAnimationFrame(frame); }
+    else { runBtn.textContent = 'Train ▶'; if (raf) { cancelAnimationFrame(raf); raf = null; } }
+  });
+  $('#dqnReset').addEventListener('click', hardReset);
+  speedS.addEventListener('input', () => { speedV.textContent = speedS.value; });
+
+  hardReset();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initReplay();
+  initDQN();
+  initDueling();
+  initDist();
+  initScroll();
+});
+</script>
+</body>
+</html>

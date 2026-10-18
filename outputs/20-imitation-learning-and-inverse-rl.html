@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<!--
+  Assumptions (per prompt.md):
+  - The brief lists a quiz; prompt.md skips quizzes. The MaxEnt IRL objective and
+    the BC distribution-shift explanation are therefore written out in full prose,
+    and the second interactive (behavioral cloning vs. DAgger) performs the
+    experiment the quiz question asks about.
+  - The brief's required visualizer is "Reward Recovery" (MaxEnt IRL). A second,
+    smaller interactive (compounding error in a corridor) is added to match the
+    reference's interactive density and to show O(eps T^2) -> O(eps T) directly.
+  - MaxEnt IRL identifies reward only up to an additive constant and potential
+    shaping. The recovered map is displayed centered and the correlation is
+    computed on centered arrays; this is stated in the prose.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imitation Learning &amp; Inverse Reinforcement Learning</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- grid ---------------- */
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Imitation &amp; Inverse RL</a>
+    <nav class="nav">
+      <a href="#bc">Cloning</a>
+      <a href="#error">Error</a>
+      <a href="#dagger">DAgger</a>
+      <a href="#irl">Inverse RL</a>
+      <a href="#recovery">Recovery</a>
+      <a href="#adversarial">Adversarial</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Learning from Demonstrations</p>
+    <h1>Imitation Learning &amp;<br>Inverse Reinforcement Learning</h1>
+    <p class="lede">Copy the expert's actions, or recover the reward that makes the expert optimal — and then re-solve.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="bc">
+  <div class="wrap">
+    <h2><span class="num">01</span>Behavioral cloning</h2>
+    <p>The simplest way to learn from demonstrations is to treat them as labels. <b>Behavioral cloning</b> (BC) fits a policy to expert state–action pairs by ordinary supervised learning:</p>
+    <div class="eqbox">
+      $$\min_{\theta}\;\mathbb{E}_{(s,a)\sim\mathcal{D}}\big[-\log \pi_\theta(a\mid s)\big]$$
+    </div>
+    <p>No reward, no Bellman backup, no exploration — just classification on the expert's data $\mathcal{D}=\{(s_i,a_i)\}$. When the demonstrations are rich and the horizon is short this is remarkably strong, and it is the workhorse behind a lot of applied imitation today.</p>
+    <div class="note">
+      <b>What cloning buys, and what it costs.</b> The loss above assumes the pairs are i.i.d. and that the learner will be evaluated on the same distribution it was trained on. At deployment the second assumption is false: the learner's own actions decide which states it sees next. That single broken assumption is the entire difficulty of imitation.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="error">
+  <div class="wrap">
+    <h2><span class="num">02</span>The compounding-error problem</h2>
+    <p>Train on the expert's states, then act in your own. A state the expert never visits carries no training signal, so the policy there is arbitrary — and its mistakes push the agent into still more unseen states. Errors do not stay put; they change the distribution of future inputs.</p>
+    <p>Make that quantitative. Suppose the learner errs with probability $\varepsilon$ per step on average, and that any deviation from the expert's trajectory is costly. By step $t$ the learner may already have drifted, so the probability of being off-distribution at $t$ grows roughly linearly. Sum that over the horizon:</p>
+    <div class="eqbox">
+      $$
+      \begin{aligned}
+      \mathbb{E}[\text{cost}] &= \sum_{t=1}^{T}\mathbb{P}\big(\text{off-distribution at step } t\big) \\[2pt]
+        &\;\le\; \sum_{t=1}^{T}\varepsilon\, t
+         \;=\; \varepsilon\,\frac{T(T+1)}{2}
+         \;=\; O\!\left(\varepsilon T^{2}\right).
+      \end{aligned}
+      $$
+    </div>
+    <p>The second line is exactly where the i.i.d. assumption is spent: a single-step error rate $\varepsilon$ becomes a <em>probability of having already left the expert's states</em>, and summing it over the horizon squares the dependence on $T$.</p>
+    <p class="small muted">Read that last line back: the cost is $\varepsilon$ per step, but each step inherits all the drift accumulated before it, so the total grows with the horizon <em>quadratically</em>.</p>
+    <div class="note">
+      <b>The feedback loop is the whole story.</b> BC does not fail because the classifier is bad — it can be near-perfect in-distribution. It fails because the learner's mistakes are fed back as inputs, and the training set never contained the states those mistakes produce.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="dagger">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>DAgger: fixing the distribution</h2>
+      <p><b>DAgger</b> (Dataset Aggregation) repairs the distribution by construction. Roll out the <em>current</em> policy, ask the expert to label the states the learner actually visits, add those pairs to the dataset, and retrain. Repeat. The learner is supervised on its own mistakes, so each error is corrected where it happens instead of accumulating.</p>
+      <div class="eqbox">
+        $$\min_\theta\;\sum_{i=1}^{N}\;\mathbb{E}_{s\sim d_{\pi_i}}\big[-\log \pi_\theta\big(a^{*}(s)\mid s\big)\big]$$
+      </div>
+      <p>Here $d_{\pi_i}$ is the state distribution induced by the policy at round $i$, and $a^{*}(s)$ is the expert's action queried at that state. Training on $\bigcup_i d_{\pi_i}$ instead of only the expert's own $d_{\pi^*}$ removes the compounding term:</p>
+      <div class="eqbox">
+        $$\text{cost}_{\text{BC}}=O\!\left(\varepsilon T^{2}\right)\qquad\Longrightarrow\qquad \text{cost}_{\text{DAgger}}=O\!\left(\varepsilon T\right).$$
+      </div>
+      <p>The same per-step error $\varepsilon$, one fewer factor of $T$: trained on the distribution it will actually face, the learner's error stays bounded.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · behavioral cloning vs. DAgger</span>
+        <div class="btnrow">
+          <button id="bcRun" class="primary">Run BC ▶</button>
+          <button id="bcDagger">DAgger round</button>
+          <button id="bcReset">Reset</button>
+        </div>
+      </div>
+
+      <svg id="bcSvg" viewBox="0 0 840 84" role="img" aria-label="A 15-cell corridor with a learner token; shaded cells are covered by demonstrations"
+        style="width:100%;max-width:840px;margin:0 auto;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed"></svg>
+
+      <div class="row" style="margin-top:14px">
+        <div class="col" style="flex:1 1 220px">
+          <div class="slider-row">
+            <span class="small muted">demos cover</span>
+            <input type="range" id="bcCoverage" min="0" max="1" step="0.05" value="0.2" aria-label="fraction of the corridor covered by expert demonstrations">
+            <span class="val" id="bcCoverageVal">0.20</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 220px">
+          <div class="slider-row">
+            <span class="small muted">$\varepsilon$</span>
+            <input type="range" id="bcEps" min="0" max="0.4" step="0.02" value="0.10" aria-label="learner per-step error rate">
+            <span class="val" id="bcEpsVal">0.10</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="eqbox" id="bcEq"></div>
+      <p class="small muted" id="bcInfo" style="text-align:center;margin:6px 0 0;font-family:ui-monospace,monospace"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="irl">
+  <div class="wrap">
+    <h2><span class="num">04</span>Inverse reinforcement learning</h2>
+    <p>BC copies behavior but never asks <em>why</em>. <b>Inverse reinforcement learning</b> (IRL) asks a deeper question: what reward is the expert optimizing? Recover it and you can re-solve the MDP — reusing the same objective under new dynamics, new start states, and planner-grade generalization the demonstrations never showed.</p>
+    <p>The problem is under-determined. Many rewards explain one optimal policy, so IRL is only ever identified up to a family:</p>
+    <div class="eqbox">
+      $$R'(s,a)=R(s,a)+\gamma\,\Phi(s')-\Phi(s)\quad\text{for any potential }\Phi
+      \;\Longrightarrow\; \text{same optimal policy}.$$
+    </div>
+    <div class="note">
+      <b>Reward is only identifiable up to transformation.</b> Adding a constant leaves every optimal action unchanged, and any <b>potential-based</b> shaping $\gamma\Phi(s')-\Phi(s)$ does too (Ng, Harada &amp; Russell). Every honest IRL method returns a reward <em>class</em>, not a unique function — which is why the panel below compares the recovered map to the truth after centering both.
+    </div>
+    <p>The canonical method is <b>Maximum Entropy IRL</b>. Instead of demanding that the expert be exactly optimal, it assumes the expert is <em>Boltzmann-rational</em>: among trajectories, higher reward is exponentially more likely.</p>
+    <div class="eqbox">
+      $$P(\tau\mid\theta)=\frac{\exp\big(R_\theta(\tau)\big)}{Z(\theta)},\qquad
+        Z(\theta)=\sum_{\tau}\exp\big(R_\theta(\tau)\big).$$
+    </div>
+    <p>Maximize the log-likelihood of the expert's trajectories and differentiate. The partition function is the only hard part, and its log-derivative is a familiar expectation:</p>
+    <div class="eqbox">
+      $$
+      \begin{aligned}
+      \nabla_\theta\log P(\tau\mid\theta)
+        &= \nabla_\theta R_\theta(\tau)-\nabla_\theta\log Z(\theta)\\[2pt]
+        &= \nabla_\theta R_\theta(\tau)-\mathbb{E}_{\tau'\sim P(\cdot\mid\theta)}\big[\nabla_\theta R_\theta(\tau')\big].
+      \end{aligned}
+      $$
+    </div>
+    <p>The second line is exactly where the partition function is spent: $\nabla_\theta\log Z=\mathbb{E}[\nabla_\theta R_\theta]$ under the model's own distribution. Take a linear reward over one-hot state features, $R_\theta(\tau)=\sum_{s}\theta_s\,\phi(s)$, so $\nabla_\theta R_\theta(\tau)$ is just the state-visitation count $\phi(\tau)$. Averaging over the dataset gives the update rule IRL actually runs:</p>
+    <div class="eqbox">
+      $$\nabla_\theta\mathcal{L}
+        =\mathbb{E}_{\tau_E}\big[\phi(\tau)\big]-\mathbb{E}_{\tau\sim\pi_\theta}\big[\phi(\tau)\big]
+        =\mu_{\text{expert}}-\mu_\theta .$$
+    </div>
+    <p>Read it back: the gradient raises the reward of states the expert dwells in more than the learner does, and lowers it wherever the learner lingers. Push until the two visitation distributions match — <em>feature matching</em> — and the recovered reward is one the expert's behavior is optimal for.</p>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="recovery">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Reward recovery in a gridworld</h2>
+      <p>The gradient above is a complete algorithm. Hold a reward table $\theta$, solve for the Boltzmann-optimal policy and its discounted visitation $\mu_\theta$, then nudge $\theta$ toward the expert counts: $\theta\leftarrow\theta+\alpha(\mu_{\text{expert}}-\mu_\theta)$. The grid below hides its true reward — $+1$ on the two goal cells, $-0.04$ per step everywhere else — from the solver; only sampled expert trajectories are visible. Run it and watch the recovered map sharpen onto the truth, then drag <em>demos</em> and watch a noisier expert give a noisier reward.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · MaxEnt IRL reward recovery</span>
+        <div class="btnrow">
+          <button id="irlStep">Step</button>
+          <button id="irlRun" class="primary">Run ▶</button>
+          <button id="irlReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <p class="small muted" style="margin-top:0;text-align:center">Ground truth $R^{*}$ &nbsp;·&nbsp; sampled expert trajectories</p>
+          <svg id="irlTrueSvg" viewBox="0 0 300 300" role="img" aria-label="Ground-truth reward grid with expert trajectories"
+            style="width:100%;max-width:300px;margin:0 auto;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed"></svg>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <p class="small muted" style="margin-top:0;text-align:center">Recovered $R_\theta$ &nbsp;·&nbsp; shown centered</p>
+          <svg id="irlRecSvg" viewBox="0 0 300 300" role="img" aria-label="Recovered reward grid"
+            style="width:100%;max-width:300px;margin:0 auto;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed"></svg>
+          <div class="legend"><span>$-1$</span><span class="grad"></span><span>$+1$</span></div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:18px">
+        <div class="col" style="flex:1 1 220px">
+          <div class="slider-row">
+            <span class="small muted">$\alpha$</span>
+            <input type="range" id="irlAlpha" min="0.05" max="0.8" step="0.05" value="0.4" aria-label="IRL step size">
+            <span class="val" id="irlAlphaVal">0.40</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 220px">
+          <div class="slider-row">
+            <span class="small muted">demos</span>
+            <input type="range" id="irlDemos" min="20" max="400" step="20" value="200" aria-label="number of expert demonstrations">
+            <span class="val" id="irlDemosVal">200</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="eqbox" id="irlEq"></div>
+      <p class="small muted" id="irlInfo" style="text-align:center;margin:6px 0 0;font-family:ui-monospace,monospace"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="adversarial">
+  <div class="wrap">
+    <h2><span class="num">06</span>Adversarial imitation and IQ-Learn</h2>
+    <p>Feature matching needs the model's visitation $\mu_\theta$, which for a deep policy means solving an inner RL problem. <b>GAIL</b> (Generative Adversarial Imitation Learning) sidesteps the reward model entirely: train a discriminator to tell expert state–action pairs from the learner's, then hand the discriminator's score to the policy as its reward.</p>
+    <div class="eqbox">
+      $$\min_\pi\max_D\;\mathbb{E}_{\tau_E}\big[\log D(s,a)\big]
+        +\mathbb{E}_{\tau_\pi}\big[\log\big(1-D(s,a)\big)\big]-\lambda\,H(\pi),
+        \qquad r(s,a)=\log D(s,a).$$
+    </div>
+    <p>The discriminator is never told the true reward; it only ever sees demonstrations. Imitating the expert is equivalent to matching its occupancy measure, and the adversarial game is a direct way to do that. The inner RL loop remains — that is the cost of drop-in adversarial training.</p>
+    <div class="note">
+      <b>IQ-Learn removes the adversary.</b> It keeps one function, a $Q$, and defines the reward implicitly from the soft Bellman equality, so training is a single stable objective instead of a min–max game:
+      $$r(s,a)=Q(s,a)-\gamma\,\mathbb{E}_{s'\sim P(\cdot\mid s,a)}\big[V(s')\big].$$
+      Maximizing $Q$ on expert transitions — regularized so the implied reward does not run away — recovers a reward-consistent $Q$ without any discriminator and without on-policy rollouts of the learned policy.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">07</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Behavioral cloning</th><th>Inverse RL</th></tr>
+      <tr><td>What it learns</td><td>The policy $\pi_\theta(a\mid s)$ directly</td><td>The reward $R_\theta$ — then re-solve for $\pi$</td></tr>
+      <tr><td>Signal used</td><td>Expert actions as labels</td><td>Expert trajectories (reward is recovered, not given)</td></tr>
+      <tr><td>Crucial assumption</td><td>Learner stays on the expert's state distribution</td><td>The expert is near-optimal for <em>some</em> reward</td></tr>
+      <tr><td>Failure mode</td><td>Compounding error, $O(\varepsilon T^{2})$</td><td>Reward ambiguity: constants and potential shaping</td></tr>
+      <tr><td>Cost</td><td>One supervised fit — cheap</td><td>RL inside the loop — expensive</td></tr>
+      <tr><td>Representative</td><td>Regression, CNNs on pixels, DAgger fixes shift</td><td>MaxEnt IRL, GAIL, IQ-Learn</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      &\text{BC:}\quad \min_\theta\;\mathbb{E}_{(s,a)\sim\mathcal{D}}\big[-\log\pi_\theta(a\mid s)\big]\\[3pt]
+      &\text{compounding:}\quad \text{cost}_{\text{BC}}=O\!\left(\varepsilon T^{2}\right)\;\xrightarrow{\text{DAgger}}\;O\!\left(\varepsilon T\right)\\[3pt]
+      &\text{MaxEnt gradient:}\quad \nabla_\theta\mathcal{L}=\mu_{\text{expert}}-\mu_\theta\\[3pt]
+      &\text{GAIL:}\quad \min_\pi\max_D\;\mathbb{E}_{\tau_E}[\log D]+\mathbb{E}_{\tau_\pi}[\log(1-D)]-\lambda H(\pi)\\[3pt]
+      &\text{IQ-Learn:}\quad r(s,a)=Q(s,a)-\gamma\,\mathbb{E}_{s'}\big[V(s')\big]
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream — constrained MDPs and safe RL, and the RLHF pipeline that turns human preferences into a reward — is a way of writing down, or learning, the reward that imitation only implies.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="19-distributional-and-risk-sensitive-rl.html"><span class="pg-k">Previous</span><span class="pg-t">Distributional &amp; Risk-Sensitive RL</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="21-safe-and-constrained-rl.html"><span class="pg-k">Next</span><span class="pg-t">Safe &amp; Constrained RL</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Hidden rewards are still rewards — recover one.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+function colorFor(v, scale = 1) {
+  const t = Math.max(-1, Math.min(1, v / scale));
+  const a = Math.min(0.88, Math.abs(t) * 0.92);
+  return t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
+}
+function textColorFor(v, scale = 1) {
+  return Math.abs(v / scale) > 0.5 ? '#fff' : '#111';
+}
+function mean(a) { return a.reduce((s, x) => s + x, 0) / a.length; }
+function centered(a) { const m = mean(a); return a.map(x => x - m); }
+function pearson(a, b) {
+  const A = centered(a), B = centered(b);
+  let num = 0, da = 0, db = 0;
+  for (let i = 0; i < A.length; i++) { num += A[i] * B[i]; da += A[i] * A[i]; db += B[i] * B[i]; }
+  return num / (Math.sqrt(da * db) || 1);
+}
+
+/* =====================================================================
+   03 — behavioral cloning vs. DAgger in a corridor
+   ===================================================================== */
+function initBC() {
+  const N = 15, GOAL = N - 1, PIT = 0, START = 7, CW = 56;
+  const svg = $('#bcSvg');
+  const infoEl = $('#bcInfo');
+  const eqEl = $('#bcEq');
+  const covSlider = $('#bcCoverage'), covVal = $('#bcCoverageVal');
+  const epsSlider = $('#bcEps'), epsVal = $('#bcEpsVal');
+
+  let coverage = 0.2, eps = 0.10;
+  let labeledBC = new Set(), labeledAgg = new Set();
+  let rounds = 0, tokenPos = START, trail = [];
+  let lastSteps = 0, lastReached = false, animating = null, hasRun = false;
+  let _s = 0x2545f491;
+  const CRN = 0x9e3779b9;
+  function rnd() { _s ^= _s << 13; _s ^= _s >>> 17; _s ^= _s << 5; _s >>>= 0; return _s / 4294967296; }
+
+  function buildCovered() {
+    const sMin = Math.round((1 - coverage) * (N - 1));
+    const s = new Set();
+    for (let i = sMin; i < N; i++) s.add(i);
+    return s;
+  }
+
+  function rollout(labeled) {
+    let pos = START, steps = 0;
+    const trace = [pos];
+    while (pos !== GOAL && pos !== PIT && steps < 300) {
+      let a;
+      if (rnd() < eps) a = rnd() < 0.5 ? 0 : 1;
+      else if (labeled.has(pos)) a = 1;
+      else a = rnd() < 0.5 ? 0 : 1;
+      pos = a === 1 ? Math.min(N - 1, pos + 1) : Math.max(0, pos - 1);
+      steps++; trace.push(pos);
+    }
+    return { steps, trace, reached: pos === GOAL };
+  }
+
+  function meanSteps(labeled, K = 60) {
+    _s = CRN >>> 0;
+    let s = 0;
+    for (let i = 0; i < K; i++) s += rollout(labeled).steps;
+    return s / K;
+  }
+
+  function renderCorridor() {
+    svg.innerHTML = '';
+    for (let i = 0; i < N; i++) {
+      const x = i * CW;
+      const lab = labeledAgg.has(i);
+      el('rect', { x: x + 3, y: 16, width: CW - 6, height: 38, rx: 7,
+        fill: lab ? '#eef2ff' : '#f7f7f8', stroke: '#ededed', 'stroke-width': 1 }, svg);
+      el('text', { x: x + CW / 2, y: 74, 'text-anchor': 'middle', 'font-size': 10.5,
+        fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, svg).textContent = i;
+    }
+    el('text', { x: CW / 2, y: 11, 'text-anchor': 'middle', 'font-size': 10,
+      fill: '#dc2626', 'font-weight': 650 }, svg).textContent = 'pit';
+    el('text', { x: (N - 0.5) * CW, y: 11, 'text-anchor': 'middle', 'font-size': 10,
+      fill: '#2563eb', 'font-weight': 650 }, svg).textContent = 'goal';
+    trail.forEach(s => el('circle', { cx: s * CW + CW / 2, cy: 35, r: 3, fill: '#c2c9d4' }, svg));
+    el('circle', { cx: tokenPos * CW + CW / 2, cy: 35, r: 11, fill: '#111' }, svg);
+  }
+
+  function refresh() {
+    const mBC = meanSteps(labeledBC);
+    const mAgg = meanSteps(labeledAgg);
+    renderCorridor();
+    T(eqEl,
+      `\\begin{aligned}
+        \\overline{\\text{steps}}_{\\,\\text{BC}} &= ${mBC.toFixed(1)} &&\\approx O(\\varepsilon T^{2})\\\\[3pt]
+        \\overline{\\text{steps}}_{\\,\\text{DAgger}} &= ${mAgg.toFixed(1)} &&\\approx O(\\varepsilon T)
+      \\end{aligned}`, true);
+    infoEl.textContent =
+      `labeled ${labeledAgg.size}/${N}   ·   ` +
+      (hasRun ? `last BC rollout: ${lastSteps} steps   ·   ${lastReached ? 'reached goal' : 'fell in pit'}   ·   ` : '') +
+      `DAgger rounds: ${rounds}`;
+  }
+
+  function resetState() {
+    if (animating) { clearInterval(animating); animating = null; }
+    labeledBC = buildCovered();
+    labeledAgg = new Set(labeledBC);
+    rounds = 0; tokenPos = START; trail = []; lastSteps = 0; lastReached = false; hasRun = false;
+    refresh();
+  }
+
+  function runBC() {
+    if (animating) { clearInterval(animating); animating = null; }
+    _s = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+    const { trace, steps, reached } = rollout(labeledBC);
+    let i = 0;
+    tokenPos = trace[0]; trail = []; renderCorridor();
+    animating = setInterval(() => {
+      i++;
+      if (i >= trace.length - 1) {
+        clearInterval(animating); animating = null;
+        lastSteps = steps; lastReached = reached; hasRun = true;
+        trail = trace.slice(1, trace.length - 1);
+        tokenPos = trace[trace.length - 1];
+        refresh();
+        return;
+      }
+      tokenPos = trace[i];
+      trail = trace.slice(1, i);
+      renderCorridor();
+    }, 110);
+  }
+
+  $('#bcRun').addEventListener('click', runBC);
+  $('#bcDagger').addEventListener('click', () => {
+    if (animating) { clearInterval(animating); animating = null; }
+    _s = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+    for (let i = 0; i < 20; i++) {
+      const { trace } = rollout(labeledAgg);
+      trace.forEach(s => labeledAgg.add(s));
+    }
+    rounds++;
+    refresh();
+  });
+  $('#bcReset').addEventListener('click', resetState);
+  covSlider.addEventListener('input', () => {
+    coverage = parseFloat(covSlider.value);
+    covVal.textContent = coverage.toFixed(2);
+    resetState();
+  });
+  epsSlider.addEventListener('input', () => {
+    eps = parseFloat(epsSlider.value);
+    epsVal.textContent = eps.toFixed(2);
+    refresh();
+  });
+
+  resetState();
+}
+
+/* =====================================================================
+   05 — MaxEnt IRL reward recovery
+   ===================================================================== */
+function initIRL() {
+  const N = 5, CELL = 60, GOALS = [4, 20];
+  const nS = N * N, gamma = 0.9, TEMP = 1.0, MAXIT = 150;
+  const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+  const isTerm = i => GOALS.indexOf(i) >= 0;
+  const Rtrue = new Array(nS).fill(-0.04);
+  GOALS.forEach(g => Rtrue[g] = 1);
+
+  const trueSvg = $('#irlTrueSvg');
+  const recSvg = $('#irlRecSvg');
+  const eqEl = $('#irlEq');
+  const infoEl = $('#irlInfo');
+  const alphaSlider = $('#irlAlpha'), alphaVal = $('#irlAlphaVal');
+  const demosSlider = $('#irlDemos'), demosVal = $('#irlDemosVal');
+
+  let alpha = 0.4, M = 200;
+  let theta = new Array(nS).fill(0);
+  let iter = 0, gradNorm = 0, corr = 0, running = null, converged = false;
+  let muE = new Array(nS).fill(0), paths = [], trueDirty = true;
+
+  const move = (i, a) => {
+    const r = Math.floor(i / N), c = i % N;
+    let nr = r + DIRS[a][0], nc = c + DIRS[a][1];
+    if (nr < 0 || nr >= N || nc < 0 || nc >= N) { nr = r; nc = c; }
+    return nr * N + nc;
+  };
+
+  function softVI(rew) {
+    const V = new Array(nS).fill(0);
+    for (let i = 0; i < nS; i++) if (isTerm(i)) V[i] = rew[i] / (1 - gamma);
+    for (let it = 0; it < 800; it++) {
+      let delta = 0;
+      const nV = V.slice();
+      for (let i = 0; i < nS; i++) {
+        if (isTerm(i)) continue;
+        const qs = [0, 1, 2, 3].map(a => rew[i] + gamma * V[move(i, a)]);
+        const m = Math.max(...qs);
+        const lse = m + Math.log(qs.reduce((s, q) => s + Math.exp((q - m) / TEMP), 0)) * TEMP;
+        nV[i] = lse;
+        delta = Math.max(delta, Math.abs(lse - V[i]));
+      }
+      V.splice(0, nS, ...nV);
+      if (delta < 1e-12) break;
+    }
+    return V;
+  }
+
+  function policyOf(V, rew) {
+    const pi = [];
+    for (let i = 0; i < nS; i++) {
+      if (isTerm(i)) { pi.push(null); continue; }
+      const qs = [0, 1, 2, 3].map(a => rew[i] + gamma * V[move(i, a)]);
+      const m = Math.max(...qs);
+      const ex = qs.map(q => Math.exp((q - m) / TEMP));
+      const Z = ex.reduce((s, e) => s + e, 0);
+      pi.push(ex.map(e => e / Z));
+    }
+    return pi;
+  }
+
+  function visitation(pi) {
+    const n = nS;
+    const A = [];
+    for (let i = 0; i < n; i++) { const row = new Array(n).fill(0); row[i] = 1; A.push(row); }
+    for (let s = 0; s < n; s++) {
+      if (isTerm(s)) { A[s][s] -= gamma; continue; }
+      for (let a = 0; a < 4; a++) {
+        const p = pi[s][a];
+        if (p > 0) A[move(s, a)][s] -= gamma * p;
+      }
+    }
+    const Ai = inv(A);
+    const starts = [];
+    for (let i = 0; i < n; i++) if (!isTerm(i)) starts.push(i);
+    const p0 = 1 / starts.length;
+    const mu0 = new Array(n).fill(0);
+    starts.forEach(i => mu0[i] = p0);
+    const mu = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) { let acc = 0; for (let j = 0; j < n; j++) acc += Ai[i][j] * mu0[j]; mu[i] = acc; }
+    return mu;
+  }
+
+  function sample(probs) {
+    const r = Math.random();
+    let acc = 0;
+    for (let i = 0; i < probs.length; i++) { acc += probs[i]; if (r <= acc + 1e-12) return i; }
+    return probs.length - 1;
+  }
+
+  const Vexp = softVI(Rtrue);
+  const piExp = policyOf(Vexp, Rtrue);
+
+  function sampleExpert() {
+    const starts = [];
+    for (let i = 0; i < nS; i++) if (!isTerm(i)) starts.push(i);
+    const counts = new Array(nS).fill(0);
+    const newPaths = [];
+    for (let m = 0; m < M; m++) {
+      let s = starts[Math.floor(Math.random() * starts.length)];
+      const path = [s];
+      let disc = 1;
+      for (let t = 0; t < 40; t++) {
+        if (isTerm(s)) break;
+        counts[s] += disc;
+        s = move(s, sample(piExp[s]));
+        disc *= gamma;
+        path.push(s);
+      }
+      if (isTerm(s)) counts[s] += disc;
+      newPaths.push(path);
+    }
+    muE = counts.map(c => c / M);
+    paths = newPaths;
+    trueDirty = true;
+  }
+
+  function drawGrid(svg, rewards, scale, showPaths) {
+    svg.innerHTML = '';
+    for (let i = 0; i < nS; i++) {
+      const r = Math.floor(i / N), c = i % N;
+      el('rect', { x: c * CELL + 2, y: r * CELL + 2, width: CELL - 4, height: CELL - 4, rx: 7,
+        fill: colorFor(rewards[i], scale) }, svg);
+      if (isTerm(i)) {
+        el('rect', { x: c * CELL + 2, y: r * CELL + 2, width: CELL - 4, height: CELL - 4, rx: 7,
+          fill: 'rgba(30,64,175,.82)' }, svg);
+      }
+    }
+    if (showPaths) {
+      const g = el('g', { opacity: 0.16 }, svg);
+      paths.forEach(p => {
+        const d = p.map((s, i) => `${i ? 'L' : 'M'} ${(s % N) * CELL + CELL / 2} ${Math.floor(s / N) * CELL + CELL / 2}`).join(' ');
+        el('path', { d, fill: 'none', stroke: '#111', 'stroke-width': 3,
+          'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, g);
+      });
+    }
+    for (let i = 0; i < nS; i++) {
+      const r = Math.floor(i / N), c = i % N;
+      const term = isTerm(i);
+      const t = el('text', {
+        x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 5, 'text-anchor': 'middle',
+        'font-size': 13, 'font-family': 'ui-monospace,monospace', 'font-weight': 600,
+        fill: term ? '#fff' : textColorFor(rewards[i], scale)
+      }, svg);
+      t.textContent = rewards[i].toFixed(2);
+    }
+  }
+
+  function render() {
+    if (trueDirty) { drawGrid(trueSvg, Rtrue, 1, true); trueDirty = false; }
+    const thc = centered(theta);
+    const scale = Math.max(0.05, Math.max(...thc.map(Math.abs)));
+    drawGrid(recSvg, thc, scale, false);
+    corr = pearson(Rtrue, theta);
+    T(eqEl,
+      `\\begin{aligned}
+        \\nabla_\\theta\\mathcal{L} &= \\mu_{\\text{expert}} - \\mu_\\theta\\\\[3pt]
+        \\|\\mu_{\\text{expert}}-\\mu_\\theta\\|_2 &= ${gradNorm.toFixed(3)}\\\\[3pt]
+        \\rho\\big(R^{*},\\,R_\\theta\\big) &= ${corr.toFixed(3)}
+      \\end{aligned}`, true);
+    infoEl.textContent =
+      `iteration ${iter} / ${MAXIT}   ·   step ${alpha.toFixed(2)}   ·   demos ${M}` +
+      (iter >= MAXIT ? '   ·   ✓ done' : '');
+  }
+
+  function irlStep() {
+    const V = softVI(theta);
+    const pi = policyOf(V, theta);
+    const muLe = visitation(pi);
+    const grad = muE.map((v, i) => v - muLe[i]);
+    gradNorm = Math.sqrt(grad.reduce((s, g) => s + g * g, 0));
+    for (let i = 0; i < nS; i++) theta[i] += alpha * grad[i];
+    const tm = mean(theta);
+    for (let i = 0; i < nS; i++) theta[i] -= tm;
+    iter++;
+    if (iter >= MAXIT) { converged = true; return false; }
+    return true;
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  $('#irlStep').addEventListener('click', () => { stop(); converged = false; irlStep(); render(); });
+  $('#irlRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(() => {
+      const advanced = irlStep();
+      render();
+      if (!advanced) stop();
+    }, 70);
+  });
+  $('#irlReset').addEventListener('click', () => {
+    stop();
+    theta = new Array(nS).fill(0);
+    iter = 0; gradNorm = 0; corr = 0; converged = false;
+    sampleExpert();
+    render();
+  });
+  alphaSlider.addEventListener('input', () => {
+    alpha = parseFloat(alphaSlider.value);
+    alphaVal.textContent = alpha.toFixed(2);
+  });
+  demosSlider.addEventListener('input', () => {
+    M = parseInt(demosSlider.value, 10);
+    demosVal.textContent = M;
+    stop(); sampleExpert();
+    theta = new Array(nS).fill(0); iter = 0; gradNorm = 0; converged = false;
+    render();
+  });
+
+  sampleExpert();
+  render();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initBC();
+  initIRL();
+  initScroll();
+});
+</script>
+
+
+</body>
+</html>

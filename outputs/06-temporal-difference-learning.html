@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Temporal-Difference Learning</title>
+
+<!--
+  Assumptions / notes (self-contained per prompt.md):
+  - Chapter 6 of the RL curriculum. Follows the RL.html skeleton and tokens verbatim.
+  - Quiz from the brief is intentionally omitted (prompt.md forbids quizzes); its
+    content is folded into the prose and the two-state bias visualizer.
+  - Three visualizers: TD(0) on a 5-state random walk, maximization bias on the
+    two-state MDP (Sutton & Barto Example 6.7), and Sarsa vs. Q-learning on cliff walking.
+  - New CSS classes are minimal extensions reusing existing tokens: .stat (label/value row)
+    and .vghost (true-value tick) plus a JS-only line chart drawn with the reference SVG helpers.
+-->
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- chain diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+/* ---------------- TD chapter additions (reuse existing tokens) ---------------- */
+.vghost{position:absolute;top:2px;bottom:2px;width:2px;background:#c2c9d4;border-radius:1px}
+.stat{display:flex;justify-content:space-between;gap:12px;font-family:ui-monospace,monospace;font-size:12.5px;margin:5px 0}
+.stat .k{color:#6b7280}
+.stat .v{font-weight:650}
+.chartwrap{margin-top:6px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .disc-col{max-width:44px}
+  .disc-cap,.disc-val{font-size:10px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Temporal-Difference</a>
+    <nav class="nav">
+      <a href="#td">The TD idea</a>
+      <a href="#prediction">TD(0)</a>
+      <a href="#control">Sarsa &amp; Q-learning</a>
+      <a href="#bias">Max bias</a>
+      <a href="#cliff">Cliff walk</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Sample-Based Control</p>
+    <h1>Temporal-Difference<br>Learning</h1>
+    <p class="lede">Learn a value estimate from the very next reward — before the episode is over — then let a single $\max$ decide whether the agent plays it safe or plays it best.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="td">
+  <div class="wrap">
+    <h2><span class="num">01</span>Learning from a guess</h2>
+    <p>A <b>temporal-difference</b> method learns a guess from another guess. Monte Carlo waits for the episode to end and averages the <b>return</b> $G_t$ it actually saw; dynamic programming needs the full model to back up. TD does neither — it takes the one reward it did observe and replaces the unknown rest with its own running estimate:</p>
+    <div class="eqbox">
+      $$V(S_t)\;\leftarrow\;V(S_t)+\alpha\big[R_{t+1}+\gamma\,V(S_{t+1})-V(S_t)\big]$$
+    </div>
+    <p>The bracketed quantity is the <b>TD error</b> $\delta_t$ — the gap between what the estimate predicted and the one-step target it just received:</p>
+    <div class="eqbox">
+      $$\delta_t \;=\; R_{t+1}+\gamma\,V(S_{t+1})-V(S_t),\qquad V(S_t)\leftarrow V(S_t)+\alpha\,\delta_t .$$
+    </div>
+    <p>Read the target back: $R_{t+1}+\gamma V(S_{t+1})$ keeps the sampled reward and pins everything after it on $V$'s own opinion. At $\gamma=0$ the target is just $R_{t+1}$; replace $V(S_{t+1})$ by the true return and it becomes Monte Carlo. TD is the whole interval in between.</p>
+    <div class="note">
+      <b>The bias–variance trade, in one target.</b> $R_{t+1}+\gamma V(S_{t+1})$ is biased — it trusts $V$, which is wrong early — but its variance is tiny, because only one random reward enters. Monte Carlo's target $G_t$ is unbiased but high-variance. TD usually needs far less experience to reach the same accuracy.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="prediction">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>TD(0) prediction</h2>
+      <p>Prediction is the warm-up: fix the policy, learn its <b>state-value function</b> online. The testbed is the smallest interesting one — a five-state <b>random walk</b>. From the middle the agent steps left or right with equal probability; the left terminal pays $0$, the right terminal pays $+1$.</p>
+      <div class="eqbox">
+        $$\mathbb{P}(S_{t+1}=s\pm 1\mid S_t=s)=\tfrac12,\qquad R_{t+1}=\mathbf{1}\{S_{t+1}=\text{right terminal}\}$$
+      </div>
+      <p>Every episode applies the rule of Section 01 to the state it just left. Run it and the estimates crawl toward the true values $V_\pi$.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · TD(0) on a 5-state random walk</span>
+        <div class="btnrow">
+          <button id="rwRun" class="primary">Run ▶</button>
+          <button id="rwReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="rwSvg" viewBox="0 0 420 140" role="img" aria-label="Five-state random walk with learned state values"></svg>
+          <p class="small muted" style="margin:8px 0 0">Steps of the most recent episode</p>
+          <div class="traj" id="rwTraj"></div>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row">
+            <span class="small muted">$\alpha$</span>
+            <input type="range" id="rwAlpha" min="0.01" max="0.5" step="0.01" value="0.1" aria-label="learning rate alpha">
+            <span class="val" id="rwAlphaVal">0.10</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$\gamma$</span>
+            <input type="range" id="rwGamma" min="0.5" max="1" step="0.01" value="1" aria-label="discount factor gamma">
+            <span class="val" id="rwGammaVal">1.00</span>
+          </div>
+          <div id="rwBars" style="margin:16px 0 4px"></div>
+          <p class="small muted" style="margin:0;font-size:11.5px">Gray tick = true $V_\pi$ (recomputed for the current $\gamma$)</p>
+          <h4 style="margin-bottom:4px">Last update</h4>
+          <div class="eqbox" id="rwEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="control">
+  <div class="wrap">
+    <h2><span class="num">03</span>Control: Sarsa and Q-learning</h2>
+    <p>Now let values drive actions. The bootstrapped target splits in two, depending on what the agent backs up from the next state. Both algorithms update</p>
+    <div class="eqbox">
+      $$Q(S_t,A_t)\;\leftarrow\;Q(S_t,A_t)+\alpha\big[R_{t+1}+\gamma\,\square - Q(S_t,A_t)\big]$$
+    </div>
+    <p>where the blank is either the value of the action the policy will actually take, or the value of the best action available.</p>
+
+    <h3>Sarsa — on-policy</h3>
+    <p><b>Sarsa</b> plugs in the next action $A_{t+1}$ that the behaviour policy — here $\varepsilon$-greedy — really selects. The update consumes the quintuple $(S_t,A_t,R_{t+1},S_{t+1},A_{t+1})$ whose initials give the algorithm its name:</p>
+    <div class="eqbox">
+      $$Q(S_t,A_t)\;\leftarrow\;Q(S_t,A_t)+\alpha\big[R_{t+1}+\gamma\,Q(S_{t+1},A_{t+1})-Q(S_t,A_t)\big]$$
+    </div>
+    <p>It evaluates the policy it is running, exploration and all.</p>
+
+    <h3>Q-learning — off-policy</h3>
+    <p><b>Q-learning</b> ignores what the behaviour policy does next and plugs in the greedy action instead:</p>
+    <div class="eqbox">
+      $$Q(S_t,A_t)\;\leftarrow\;Q(S_t,A_t)+\alpha\big[R_{t+1}+\gamma\max_a Q(S_{t+1},a)-Q(S_t,A_t)\big]$$
+    </div>
+    <p>It evaluates the greedy policy directly, no matter how the data was generated.</p>
+
+    <div class="note">
+      <b>The only difference is one symbol: $Q(S_{t+1},A_{t+1})$ versus $\max_a Q(S_{t+1},a)$.</b> Sarsa's target is the value of the policy that is acting, so it prices in the cost of its own $\varepsilon$-exploration. Q-learning's target is the value of the greedy policy, learned from an exploring one. That is exactly what <b>on-policy</b> and <b>off-policy</b> mean.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="bias">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Maximization bias and Double Q-learning</h2>
+      <p>The $\max$ in Q-learning is not a neutral operation. Over noisy estimates it is optimistic:</p>
+      <div class="eqbox">
+        $$\mathbb{E}\Big[\max_a Q(s,a)\Big]\;\ge\;\max_a \mathbb{E}\big[Q(s,a)\big]$$
+      </div>
+      <p>with strict inequality the moment the estimates are random. A $\max$ over several errors keeps the most optimistic one, so the bootstrapped target is <b>biased high</b> — and the bias, fed back through the update, can make the agent prefer a genuinely worse action. This is <b>maximization bias</b>.</p>
+      <p>The canonical trap has two states. From the start $A$ you choose <em>right</em> — the episode ends at once with reward $0$ — or <em>left</em>, which also pays $0$ but moves you to $B$. From $B$ run $k$ actions, every one terminating with a noisy reward $r\sim\mathcal{N}(-0.1,1)$.</p>
+      <div class="eqbox">
+        $$Q_*(A,\text{right})=0,\qquad Q_*(B,\cdot)=-0.1 \quad\Longrightarrow\quad \text{always take right}$$
+      </div>
+      <p>Every action from $B$ is negative on average, so $B$ is worth $-0.1$ and <em>right</em> is optimal. But $\max_a Q(B,a)$ is a maximum over $k$ noisy estimates and therefore biased upward — often above $0$ — so Q-learning keeps believing <em>left</em> is worth taking. Drag $\alpha$, $\varepsilon$, and $k$ and watch how often each learner goes wrong.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the optimistic $\max$</span>
+        <div class="btnrow">
+          <button id="biasRun" class="primary">Resample</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 300px">
+          <svg id="biasSvg" viewBox="0 0 360 150" role="img" aria-label="Two-state maximization-bias MDP: from A, right ends with 0 and left leads to B, where k actions pay N(-0.1,1)"></svg>
+          <div class="row" style="margin-top:6px">
+            <div class="col" style="flex:1 1 90px">
+              <div class="slider-row"><span class="small muted">$\alpha$</span>
+                <input type="range" id="biasAlpha" min="0.02" max="0.4" step="0.02" value="0.1" aria-label="learning rate alpha">
+                <span class="val" id="biasAlphaVal">0.10</span></div>
+            </div>
+            <div class="col" style="flex:1 1 90px">
+              <div class="slider-row"><span class="small muted">$\varepsilon$</span>
+                <input type="range" id="biasEps" min="0.01" max="0.3" step="0.01" value="0.1" aria-label="exploration epsilon">
+                <span class="val" id="biasEpsVal">0.10</span></div>
+            </div>
+            <div class="col" style="flex:1 1 90px">
+              <div class="slider-row"><span class="small muted">$k$</span>
+                <input type="range" id="biasK" min="2" max="12" step="1" value="10" aria-label="number k of risky actions from state B">
+                <span class="val" id="biasKVal">10</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <svg id="biasCurve" viewBox="0 0 640 200" style="width:100%;height:auto" role="img" aria-label="Percentage of episodes where each learner takes the wrong left action from A"></svg>
+          <div class="legend" style="justify-content:flex-start;margin-top:4px">
+            <span style="width:16px;height:3px;background:#dc2626;border-radius:2px;display:inline-block"></span><span>Q-learning</span>
+            <span style="width:16px;height:3px;background:#2563eb;border-radius:2px;display:inline-block;margin-left:10px"></span><span>Double Q</span>
+            <span style="margin-left:10px">· dashed = 5% floor</span>
+          </div>
+          <div id="biasRes" style="margin-top:12px">
+            <div class="stat"><span class="k">Q-learning · left actions from A</span><span class="v" id="bQlL">—</span></div>
+            <div class="stat"><span class="k">Double Q · left actions from A</span><span class="v" id="bDqL">—</span></div>
+          </div>
+          <div class="eqbox" id="biasEq" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <h3>Double Q-learning</h3>
+      <p><b>Double Q-learning</b> removes the bias by keeping two independent estimates, $Q_1$ and $Q_2$, and splitting the roles: one <em>chooses</em> the maximizing action, the other <em>scores</em> it. With probability $\tfrac12$,</p>
+      <div class="eqbox">
+        $$Q_1(S_t,A_t)\;\leftarrow\;Q_1(S_t,A_t)+\alpha\Big[R_{t+1}+\gamma\,Q_2\!\big(S_{t+1},\arg\max_a Q_1(S_{t+1},a)\big)-Q_1(S_t,A_t)\Big]$$
+      </div>
+      <p>and with probability $\tfrac12$ the same update with $Q_1\leftrightarrow Q_2$; the behaviour policy is $\varepsilon$-greedy on the sum $Q_1+Q_2$. Because the selection is made by one estimate and the value read from the other, a single lucky sample no longer inflates its own target.</p>
+      <div class="note">
+        <b>Selection and evaluation must be decoupled.</b> This is not a tabular curiosity: the same fix turns DQN into <b>Double DQN</b>, replacing $\max_{a'}Q_{\theta^-}(s',a')$ with $Q_{\theta^-}\!\big(s',\arg\max_{a'}Q_\theta(s',a')\big)$.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="cliff">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Cliff walking</h2>
+      <p>A $4\times 12$ grid. Start bottom-left, goal bottom-right, and a cliff running along the bottom edge between them. Every step costs $-1$; stepping into the cliff costs $-100$ and teleports the agent back to the start. The task was built to separate on-policy from off-policy learning.</p>
+      <div class="eqbox">
+        $$r=\begin{cases}-100 & \text{enter cliff (reset to start)}\\ -1 & \text{otherwise}\end{cases}\qquad \varepsilon\text{-greedy},\quad \gamma=1$$
+      </div>
+      <p>The optimal path hugs the cliff edge: up one row, straight across, down. But that edge is exactly where $\varepsilon$-exploration occasionally shoves the agent into the pit. Drag the sliders and run both learners side by side.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · Sarsa vs. Q-learning on the cliff</span>
+        <div class="btnrow">
+          <button id="cliffRun" class="primary">Run ▶</button>
+          <button id="cliffReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <div class="panel-title" style="margin-bottom:8px">Sarsa · greedy path</div>
+          <svg id="cliffSvgS" viewBox="0 0 552 184" role="img" aria-label="Cliff-walking greedy path learned by Sarsa"></svg>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <div class="panel-title" style="margin-bottom:8px">Q-learning · greedy path</div>
+          <svg id="cliffSvgQ" viewBox="0 0 552 184" role="img" aria-label="Cliff-walking greedy path learned by Q-learning"></svg>
+        </div>
+      </div>
+      <svg id="cliffCurve" viewBox="0 0 640 200" style="width:100%;height:auto;margin-top:20px" role="img" aria-label="Online return per episode for Sarsa and Q-learning"></svg>
+      <div class="legend" style="justify-content:flex-start;margin-top:4px">
+        <span style="width:16px;height:3px;background:#2563eb;border-radius:2px;display:inline-block"></span><span>Sarsa</span>
+        <span style="width:16px;height:3px;background:#dc2626;border-radius:2px;display:inline-block;margin-left:10px"></span><span>Q-learning</span>
+        <span style="margin-left:10px">· return per episode, moving average</span>
+      </div>
+      <div class="row" style="margin-top:16px">
+        <div class="col" style="flex:1 1 240px">
+          <div class="slider-row">
+            <span class="small muted">$\alpha$</span>
+            <input type="range" id="cliffAlpha" min="0.1" max="0.9" step="0.05" value="0.5" aria-label="learning rate alpha">
+            <span class="val" id="cliffAlphaVal">0.50</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 240px">
+          <div class="slider-row">
+            <span class="small muted">$\varepsilon$</span>
+            <input type="range" id="cliffEps" min="0.01" max="0.3" step="0.01" value="0.1" aria-label="exploration epsilon">
+            <span class="val" id="cliffEpsVal">0.10</span>
+          </div>
+        </div>
+      </div>
+      <p class="small muted" id="cliffInfo" style="margin:12px 0 0;font-family:ui-monospace, monospace">episodes = 0</p>
+      <div class="eqbox" id="cliffEq" style="margin-top:12px"></div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <div class="note">
+        <b>The two learners converge to different answers on purpose.</b> Q-learning learns the optimal path along the cliff edge and, while exploring, keeps falling off it. Sarsa learns a longer path that stays a row away from the edge, because its target prices in the $\varepsilon$-greedy mistakes it will actually make. Sarsa is the better policy to <em>run while learning</em>; Q-learning is the better policy to <em>converge to</em>.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">06</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Sarsa</th><th>Q-learning</th></tr>
+      <tr><td>Target</td><td>$R_{t+1}+\gamma Q(S_{t+1},A_{t+1})$</td><td>$R_{t+1}+\gamma\max_a Q(S_{t+1},a)$</td></tr>
+      <tr><td>Backs up from</td><td>The action the policy actually takes</td><td>The best action available</td></tr>
+      <tr><td>What is evaluated</td><td>The $\varepsilon$-greedy behaviour policy</td><td>The greedy policy</td></tr>
+      <tr><td>Policy type</td><td>On-policy</td><td>Off-policy</td></tr>
+      <tr><td>Maximization bias</td><td>Absent — no $\max$ over estimates</td><td>Present; removed by Double Q-learning</td></tr>
+      <tr><td>Cliff-walk path</td><td>Safe, a row from the edge</td><td>Optimal, along the edge</td></tr>
+      <tr><td>Online return while learning</td><td>Higher — few cliff falls</td><td>Lower — explores into the cliff</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      \delta_t &= R_{t+1}+\gamma\,V(S_{t+1})-V(S_t)\\[2pt]
+      V(S_t) &\leftarrow V(S_t)+\alpha\,\delta_t\\[2pt]
+      Q(S_t,A_t) &\leftarrow Q(S_t,A_t)+\alpha\big[R_{t+1}+\gamma\,Q(S_{t+1},A_{t+1})-Q(S_t,A_t)\big]\\[2pt]
+      Q(S_t,A_t) &\leftarrow Q(S_t,A_t)+\alpha\big[R_{t+1}+\gamma\max_a Q(S_{t+1},a)-Q(S_t,A_t)\big]\\[2pt]
+      Q_1(S_t,A_t) &\leftarrow Q_1(S_t,A_t)+\alpha\big[R_{t+1}+\gamma\,Q_2\big(S_{t+1},\arg\max_a Q_1(S_{t+1},a)\big)-Q_1(S_t,A_t)\big]
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Next: $n$-step returns and eligibility traces slide smoothly between the one-step target above and the Monte Carlo return, and these same bootstrapped targets — Q-learning's especially — reappear under function approximation in DQN, Double DQN, and every value-based deep-RL agent after them.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="05-monte-carlo-methods.html"><span class="pg-k">Previous</span><span class="pg-t">Monte Carlo Methods</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="07-n-step-bootstrapping-and-eligibility-traces.html"><span class="pg-k">Next</span><span class="pg-t">n-Step Bootstrapping</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+function gauss(mu, sd) {
+  let u = 0, v = 0;
+  while (!u) u = Math.random();
+  while (!v) v = Math.random();
+  return mu + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/* Draws one or more smoothed line series into an <svg>. */
+function drawSeries(svg, series, opt = {}) {
+  svg.innerHTML = '';
+  const W = opt.w || 640, H = opt.h || 200, pad = opt.pad || 36;
+  const all = [];
+  series.forEach(s => s.values.forEach(v => all.push(v)));
+  if (all.length < 2) {
+    const t = el('text', {
+      x: W / 2, y: H / 2, 'text-anchor': 'middle',
+      fill: '#9ca3af', 'font-size': 12, 'font-family': 'ui-monospace, monospace'
+    }, svg);
+    t.textContent = opt.empty || 'press Run to plot';
+    return;
+  }
+  let min = (opt.min !== undefined) ? opt.min : Math.min(...all);
+  let max = (opt.max !== undefined) ? opt.max : Math.max(...all);
+  if (max - min < 1e-9) { max += 1; min -= 1; }
+  const n = Math.max(...series.map(s => s.values.length));
+  const X = i => pad + (n <= 1 ? 0 : (i / (n - 1)) * (W - 2 * pad));
+  const Y = v => H - pad - ((v - min) / (max - min)) * (H - 2 * pad);
+
+  el('line', { x1: pad, y1: H - pad, x2: W - pad, y2: H - pad, stroke: '#e5e5e5' }, svg);
+  el('line', { x1: pad, y1: pad, x2: pad, y2: H - pad, stroke: '#e5e5e5' }, svg);
+
+  if (opt.baseline !== undefined && opt.baseline >= min && opt.baseline <= max) {
+    el('line', {
+      x1: pad, y1: Y(opt.baseline), x2: W - pad, y2: Y(opt.baseline),
+      stroke: '#c2c9d4', 'stroke-dasharray': '4 4'
+    }, svg);
+  }
+  series.forEach(s => {
+    if (s.values.length < 2) return;
+    el('polyline', {
+      points: s.values.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' '),
+      fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round'
+    }, svg);
+  });
+  const lapse = { fill: '#9ca3af', 'font-size': 10, 'font-family': 'ui-monospace, monospace' };
+  const dec = opt.dec === undefined ? 0 : opt.dec;
+  el('text', { x: pad - 6, y: Y(max) + 3, 'text-anchor': 'end', ...lapse }, svg).textContent = max.toFixed(dec);
+  el('text', { x: pad - 6, y: Y(min) + 3, 'text-anchor': 'end', ...lapse }, svg).textContent = min.toFixed(dec);
+  if (opt.xlabel) {
+    el('text', { x: W - pad, y: H - pad + 18, 'text-anchor': 'end', ...lapse }, svg).textContent = opt.xlabel;
+  }
+}
+
+function smooth(arr, w) {
+  const out = [];
+  let sum = 0;
+  for (let i = 0; i < arr.length; i++) {
+    sum += arr[i];
+    if (i >= w) sum -= arr[i - w];
+    out.push(sum / Math.min(i + 1, w));
+  }
+  return out;
+}
+
+/* =====================================================================
+   02 — TD(0) on a 5-state random walk
+   ===================================================================== */
+function initRandomWalk() {
+  const svg = $('#rwSvg');
+  const barsEl = $('#rwBars');
+  const eqEl = $('#rwEq');
+  const trajEl = $('#rwTraj');
+  const alphaS = $('#rwAlpha'), alphaV = $('#rwAlphaVal');
+  const gammaS = $('#rwGamma'), gammaV = $('#rwGammaVal');
+  const NW = 5;
+  const xOf = k => 40 + k * 56;
+  const yC = 56, R = 18;
+  const yV = 96;
+
+  let alpha = 0.1, gamma = 1.0;
+  let V = new Array(NW).fill(0);
+  let episodes = 0, running = null, rmse = 1;
+  let last = null;
+  let traj = [3];
+
+  /* static geometry */
+  svg.innerHTML = '';
+  const defs = el('defs', {}, svg);
+  const mkAr = (id, color, reverse) => {
+    const m = el('marker', {
+      id, viewBox: '0 0 10 10', refX: reverse ? 0 : 10, refY: 5,
+      markerWidth: 7, markerHeight: 7, orient: reverse ? 'auto-start-reverse' : 'auto',
+      markerUnits: 'userSpaceOnUse'
+    }, defs);
+    el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: color }, m);
+    return `url(#${id})`;
+  };
+  const ARe = mkAr('rwe', '#c2c9d4', false);
+  const ARs = mkAr('rws', '#c2c9d4', true);
+
+  const gE = el('g', {}, svg);
+  const gN = el('g', {}, svg);
+  for (let k = 0; k < 6; k++) {
+    const x1 = xOf(k) + R, x2 = xOf(k + 1) - R;
+    el('path', {
+      d: `M ${x1} ${yC} L ${x2} ${yC}`, fill: 'none', stroke: '#c2c9d4',
+      'stroke-width': 1.4, 'marker-end': ARe, 'marker-start': ARs
+    }, gE);
+  }
+  const nodeEls = [];
+  for (let k = 0; k < 7; k++) {
+    const g = el('g', {}, gN);
+    const terminal = (k === 0 || k === 6);
+    const circ = el('circle', {
+      cx: xOf(k), cy: yC, r: R, fill: terminal ? '#111' : '#fff',
+      stroke: '#111', 'stroke-width': 1.6
+    }, g);
+    const t = el('text', {
+      x: xOf(k), y: yC + 5, 'text-anchor': 'middle', 'font-size': 13,
+      'font-weight': 650, fill: terminal ? '#fff' : '#111'
+    }, g);
+    t.textContent = terminal ? (k === 0 ? '0' : '+1') : String(k);
+    let vtxt = null;
+    if (!terminal) {
+      vtxt = el('text', {
+        x: xOf(k), y: yV, 'text-anchor': 'middle', 'font-size': 11,
+        'font-family': 'ui-monospace, monospace', fill: '#2563eb', 'font-weight': 600
+      }, g);
+      vtxt.textContent = '0.00';
+    }
+    nodeEls.push({ g, circ, vtxt, terminal });
+  }
+
+  /* bars */
+  barsEl.innerHTML = Array.from({ length: NW }, (_, i) => `
+    <div class="vrow" data-s="${i + 1}">
+      <span class="vlabel">${i + 1}</span>
+      <div class="vtrack"><div class="vzero"></div><div class="vghost"></div><div class="vbar pos" style="width:0%"></div></div>
+      <span class="vval">0.000</span>
+    </div>`).join('');
+
+  function trueValues(g) {
+    const A = Array.from({ length: NW }, () => new Array(NW).fill(0));
+    const b = new Array(NW).fill(0);
+    for (let i = 0; i < NW; i++) {
+      A[i][i] = 1;
+      if (i - 1 >= 0) A[i][i - 1] -= 0.5 * g;
+      if (i + 1 < NW) A[i][i + 1] -= 0.5 * g;
+      else b[i] += 0.5;
+    }
+    const Ai = inv(A);
+    return Ai.map(row => row.reduce((s, v, j) => s + v * b[j], 0));
+  }
+
+  function render() {
+    const tv = trueValues(gamma);
+    const maxAbs = Math.max(0.5, ...tv.map(Math.abs), ...V.map(Math.abs));
+    V.forEach((v, i) => {
+      const row = barsEl.querySelector(`.vrow[data-s="${i + 1}"]`);
+      const bar = row.querySelector('.vbar');
+      const ghost = row.querySelector('.vghost');
+      const frac = (Math.abs(v) / maxAbs) * 50;
+      bar.style.width = frac + '%';
+      bar.style.left = '50%';
+      bar.style.transform = v < 0 ? 'translateX(-100%)' : 'none';
+      bar.className = 'vbar ' + (v < 0 ? 'neg' : 'pos');
+      row.querySelector('.vval').textContent = v.toFixed(3);
+      ghost.style.left = (50 + (tv[i] / maxAbs) * 50) + '%';
+      nodeEls[i + 1].vtxt.textContent = v.toFixed(2);
+    });
+  }
+
+  function renderTraj() {
+    trajEl.innerHTML = traj.slice(-26).map((s, i, arr) =>
+      `<span class="chip ${i === arr.length - 1 ? 'now' : ''}">${s === 0 ? 'L' : s === 6 ? 'R' : s}</span>`
+    ).join('<span class="arw">→</span>');
+  }
+
+  function renderEq() {
+    if (!last) { T(eqEl, `V(S_t)\\leftarrow V(S_t)+\\alpha\\,\\delta_t`, true); return; }
+    const { s, s2, r, delta, vBefore } = last;
+    const v2 = (s2 === 0 || s2 === 6) ? 0 : V[s2 - 1];
+    T(eqEl,
+      `\\begin{aligned}
+        \\delta_t &= ${r.toFixed(0)} + ${gamma.toFixed(2)}\\cdot ${v2.toFixed(3)} - ${vBefore.toFixed(3)} = \\mathbf{${delta.toFixed(3)}}\\\\[3pt]
+        V(${s}) &\\leftarrow ${vBefore.toFixed(3)} + ${alpha.toFixed(2)}\\,(${delta.toFixed(3)}) = \\mathbf{${(vBefore + alpha * delta).toFixed(3)}}
+      \\end{aligned}`, true);
+  }
+
+  function runEpisodes(n) {
+    for (let e = 0; e < n; e++) {
+      let s = 3;
+      const ep = [s];
+      let guard = 0;
+      while (guard++ < 200) {
+        const s2 = s + (Math.random() < 0.5 ? 1 : -1);
+        const r = (s2 === 6) ? 1 : 0;
+        const v2 = (s2 === 0 || s2 === 6) ? 0 : V[s2 - 1];
+        const v = V[s - 1];
+        const delta = r + gamma * v2 - v;
+        V[s - 1] = v + alpha * delta;
+        last = { s, s2, r, delta, vBefore: v };
+        ep.push(s2);
+        if (s2 === 0 || s2 === 6) break;
+        s = s2;
+      }
+      traj = ep;
+      episodes++;
+    }
+    const tv = trueValues(gamma);
+    rmse = Math.sqrt(V.reduce((a, v, i) => a + (v - tv[i]) * (v - tv[i]), 0) / NW);
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; $('#rwRun').textContent = 'Run ▶'; } }
+  function tick() {
+    runEpisodes(3);
+    render(); renderTraj(); renderEq();
+    if (episodes > 80 && rmse < 0.03) stop();
+  }
+
+  $('#rwRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(tick, 110);
+    $('#rwRun').textContent = 'Pause';
+  });
+  $('#rwReset').addEventListener('click', () => {
+    stop(); V = new Array(NW).fill(0); episodes = 0; traj = [3]; last = null; rmse = 1;
+    render(); renderTraj(); renderEq();
+  });
+  alphaS.addEventListener('input', () => { alpha = parseFloat(alphaS.value); alphaV.textContent = alpha.toFixed(2); });
+  gammaS.addEventListener('input', () => {
+    gamma = parseFloat(gammaS.value); gammaV.textContent = gamma.toFixed(2);
+    render(); renderEq();
+  });
+
+  render(); renderTraj(); renderEq();
+}
+
+/* =====================================================================
+   04 — Maximization bias / Double Q-learning
+   ===================================================================== */
+function initBias() {
+  const diagSvg = $('#biasSvg');
+  const curveSvg = $('#biasCurve');
+  const eqEl = $('#biasEq');
+  const alphaS = $('#biasAlpha'), alphaV = $('#biasAlphaVal');
+  const epsS = $('#biasEps'), epsV = $('#biasEpsVal');
+  const kS = $('#biasK'), kV = $('#biasKVal');
+  let alpha = 0.1, eps = 0.1, K = 10;
+  const RUNS = 200, EP = 300, GAMMA = 1;
+
+  /* static MDP diagram */
+  (function drawDiagram() {
+    diagSvg.innerHTML = '';
+    const defs = el('defs', {}, diagSvg);
+    const mk = (id, color) => {
+      const m = el('marker', {
+        id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7,
+        orient: 'auto', markerUnits: 'userSpaceOnUse'
+      }, defs);
+      el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: color }, m);
+      return `url(#${id})`;
+    };
+    const ar = mk('barrow', '#c2c9d4');
+    const gE = el('g', {}, diagSvg), gN = el('g', {}, diagSvg);
+    const mkNode = (x, y, label, fill, stroke) => {
+      el('circle', { cx: x, cy: y, r: 16, fill, stroke: stroke || '#111', 'stroke-width': 1.6 }, gN);
+      el('text', { x, y: y + 5, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 650, fill: fill === '#111' ? '#fff' : '#111' }, gN).textContent = label;
+    };
+    const lbl = (x, y, text, fill) => el('text', {
+      x, y, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 600, fill: fill || '#4b5563',
+      style: 'paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round'
+    }, gE).textContent = text;
+    /* nodes */
+    mkNode(60, 26, '0', '#fff', '#111');
+    mkNode(60, 96, 'A', '#fff');
+    mkNode(188, 96, 'B', '#fff');
+    mkNode(316, 96, '0', '#fff', '#111');
+    /* edges */
+    el('path', { d: 'M 60 78 L 60 46', fill: 'none', stroke: '#c2c9d4', 'stroke-width': 1.6, 'marker-end': ar }, gE);
+    lbl(96, 56, 'right  (0)');
+    el('path', { d: 'M 78 96 L 168 96', fill: 'none', stroke: '#c2c9d4', 'stroke-width': 1.6, 'marker-end': ar }, gE);
+    lbl(123, 88, 'left  (0)');
+    el('path', { d: 'M 206 96 L 296 96', fill: 'none', stroke: '#c2c9d4', 'stroke-width': 1.6, 'marker-end': ar }, gE);
+    lbl(251, 88, 'k acts');
+    lbl(251, 122, 'N(−0.1, 1)', '#dc2626');
+  })();
+
+  function argmax(arr) { let b = 0; for (let i = 1; i < arr.length; i++) if (arr[i] > arr[b]) b = i; return b; }
+
+  function simulate() {
+    const curveQL = new Array(EP).fill(0);
+    const curveDQ = new Array(EP).fill(0);
+    for (let run = 0; run < RUNS; run++) {
+      /* Q-learning: state 0 = A (2 actions), state 1 = B (K actions) */
+      const Q = [[0, 0], new Array(K).fill(0)];
+      /* Double Q */
+      const Q1 = [[0, 0], new Array(K).fill(0)];
+      const Q2 = [[0, 0], new Array(K).fill(0)];
+
+      const dqUpdate = (st, act, r, nextS, terminal) => {
+        if (Math.random() < 0.5) {
+          const aStar = terminal ? 0 : argmax(Q1[nextS]);
+          const tgt = r + (terminal ? 0 : GAMMA * Q2[nextS][aStar]);
+          Q1[st][act] += alpha * (tgt - Q1[st][act]);
+        } else {
+          const aStar = terminal ? 0 : argmax(Q2[nextS]);
+          const tgt = r + (terminal ? 0 : GAMMA * Q1[nextS][aStar]);
+          Q2[st][act] += alpha * (tgt - Q2[st][act]);
+        }
+      };
+
+      for (let e = 0; e < EP; e++) {
+        /* --- Q-learning episode --- */
+        let left = 0;
+        const a = Math.random() < eps ? (Math.random() < 0.5 ? 0 : 1) : (Q[0][1] > Q[0][0] ? 1 : 0);
+        if (a === 1) left = 1;
+        if (a === 0) {
+          Q[0][0] += alpha * (0 - Q[0][0]);
+        } else {
+          Q[0][1] += alpha * (0 + GAMMA * Math.max(...Q[1]) - Q[0][1]);
+          const b = Math.random() < eps ? Math.floor(Math.random() * K) : argmax(Q[1]);
+          Q[1][b] += alpha * (gauss(-0.1, 1) - Q[1][b]);
+        }
+        curveQL[e] += left;
+
+        /* --- Double Q episode --- */
+        let left2 = 0;
+        const sum = [Q1[0][0] + Q2[0][0], Q1[0][1] + Q2[0][1]];
+        const a2 = Math.random() < eps ? (Math.random() < 0.5 ? 0 : 1) : (sum[1] > sum[0] ? 1 : 0);
+        if (a2 === 1) left2 = 1;
+        if (a2 === 0) {
+          dqUpdate(0, 0, 0, 0, true);
+        } else {
+          dqUpdate(0, 1, 0, 1, false);
+          const sumB = [];
+          for (let i = 0; i < K; i++) sumB.push(Q1[1][i] + Q2[1][i]);
+          const b2 = Math.random() < eps ? Math.floor(Math.random() * K) : argmax(sumB);
+          dqUpdate(1, b2, gauss(-0.1, 1), 0, true);
+        }
+        curveDQ[e] += left2;
+      }
+    }
+    for (let e = 0; e < EP; e++) { curveQL[e] /= RUNS; curveDQ[e] /= RUNS; }
+    return { curveQL, curveDQ };
+  }
+
+  function render() {
+    const { curveQL, curveDQ } = simulate();
+    drawSeries(curveSvg, [
+      { color: '#dc2626', values: smooth(curveQL, 12) },
+      { color: '#2563eb', values: smooth(curveDQ, 12) }
+    ], { min: 0, max: Math.max(0.3, Math.max(...curveQL)), baseline: 0.05, dec: 2, empty: 'run to plot' });
+
+    const tail = arr => {
+      let s = 0;
+      for (let i = arr.length - 60; i < arr.length; i++) s += arr[i];
+      return s / 60;
+    };
+    $('#bQlL').textContent = (tail(curveQL) * 100).toFixed(1) + '%';
+    $('#bDqL').textContent = (tail(curveDQ) * 100).toFixed(1) + '%';
+
+    T(eqEl,
+      `\\begin{aligned}
+        \\text{Q-learning:}\\quad &Q(A,\\text{left})\\leftarrow Q(A,\\text{left})+\\alpha\\big[\\gamma\\max_a Q(B,a)\\big]\\\\[2pt]
+        \\text{Double Q:}\\quad &Q_1(A,\\text{left})\\leftarrow Q_1(A,\\text{left})+\\alpha\\big[\\gamma\\,Q_2(B,\\arg\\max_a Q_1(B,a))\\big]
+      \\end{aligned}
+      \\quad \\alpha=${alpha.toFixed(2)},\\ \\varepsilon=${eps.toFixed(2)},\\ k=${K}`, true);
+  }
+
+  alphaS.addEventListener('input', () => { alpha = parseFloat(alphaS.value); alphaV.textContent = alpha.toFixed(2); render(); });
+  epsS.addEventListener('input', () => { eps = parseFloat(epsS.value); epsV.textContent = eps.toFixed(2); render(); });
+  kS.addEventListener('input', () => { K = parseInt(kS.value, 10); kV.textContent = K; render(); });
+  $('#biasRun').addEventListener('click', render);
+
+  render();
+}
+
+/* =====================================================================
+   05 — Cliff walking: Sarsa vs. Q-learning
+   ===================================================================== */
+function initCliff() {
+  const ROWS = 4, COLS = 12, CELL = 46;
+  const START = [3, 0], GOAL = [3, 11];
+  const DR = [-1, 0, 1, 0], DC = [0, 1, 0, -1];
+  const isCliff = (r, c) => r === 3 && c >= 1 && c <= 10;
+  const isGoal = (r, c) => r === 3 && c === 11;
+
+  const svgS = $('#cliffSvgS'), svgQ = $('#cliffSvgQ'), curve = $('#cliffCurve');
+  const eqEl = $('#cliffEq'), info = $('#cliffInfo');
+  const alphaS = $('#cliffAlpha'), alphaV = $('#cliffAlphaVal');
+  const epsS = $('#cliffEps'), epsV = $('#cliffEpsVal');
+
+  let alpha = 0.5, eps = 0.1;
+  const GAMMA = 1.0, MAXEP = 3000, BATCH = 25;
+  let QS = null, QQ = null, retS = [], retQ = [], episodes = 0, running = null, hS = null, hQ = null;
+
+  const newQ = () => Array.from({ length: ROWS }, () =>
+    Array.from({ length: COLS }, () => [0, 0, 0, 0]));
+
+  function egreedy(Q, s) {
+    if (Math.random() < eps) return Math.floor(Math.random() * 4);
+    const q = Q[s[0]][s[1]];
+    let best = [], bv = -Infinity;
+    for (let a = 0; a < 4; a++) {
+      if (q[a] > bv + 1e-12) { bv = q[a]; best = [a]; }
+      else if (Math.abs(q[a] - bv) < 1e-12) best.push(a);
+    }
+    return best[Math.floor(Math.random() * best.length)];
+  }
+  function stepEnv(s, a) {
+    let nr = s[0] + DR[a], nc = s[1] + DC[a];
+    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { nr = s[0]; nc = s[1]; }
+    if (isCliff(nr, nc)) return { s2: [3, 0], r: -100, done: false };
+    if (isGoal(nr, nc)) return { s2: [3, 11], r: -1, done: true };
+    return { s2: [nr, nc], r: -1, done: false };
+  }
+  function episode(Q, sarsa) {
+    let s = START.slice(), ret = 0, guard = 0, a = egreedy(Q, s);
+    while (guard++ < 300) {
+      const { s2, r, done } = stepEnv(s, a);
+      ret += r;
+      const cur = Q[s[0]][s[1]];
+      if (sarsa) {
+        const a2 = egreedy(Q, s2);
+        const tgt = done ? r : r + GAMMA * Q[s2[0]][s2[1]][a2];
+        cur[a] += alpha * (tgt - cur[a]);
+        if (done) break;
+        s = s2; a = a2;
+      } else {
+        const q2 = Q[s2[0]][s2[1]];
+        const tgt = done ? r : r + GAMMA * Math.max(q2[0], q2[1], q2[2], q2[3]);
+        cur[a] += alpha * (tgt - cur[a]);
+        if (done) break;
+        s = s2; a = egreedy(Q, s);
+      }
+    }
+    return ret;
+  }
+  function greedyPath(Q) {
+    let s = START.slice(), path = [s.slice()], seen = new Set();
+    for (let i = 0; i < 80; i++) {
+      const key = s[0] * COLS + s[1];
+      if (seen.has(key)) break;
+      seen.add(key);
+      if (isGoal(s[0], s[1])) break;
+      const q = Q[s[0]][s[1]];
+      let best = 0;
+      for (let a = 1; a < 4; a++) if (q[a] > q[best]) best = a;
+      const { s2 } = stepEnv(s, best);
+      path.push(s2.slice());
+      s = s2;
+      if (isGoal(s[0], s[1])) break;
+    }
+    return path;
+  }
+
+  function buildGrid(svg) {
+    svg.innerHTML = '';
+    const g = el('g', {}, svg);
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const fill = isCliff(r, c) ? '#fee2e2' : isGoal(r, c) ? '#1e40af' : (r === 3 && c === 0) ? '#f4f4f5' : '#fff';
+        el('rect', {
+          x: c * CELL + 1.5, y: r * CELL + 1.5, width: CELL - 3, height: CELL - 3,
+          rx: 5, fill, stroke: '#ededed'
+        }, g);
+      }
+    }
+    const lab = (x, y, text, fill) => el('text', {
+      x, y, 'text-anchor': 'middle', 'font-size': 10.5, fill
+    }, g).textContent = text;
+    lab(CELL / 2, 3 * CELL + CELL / 2 + 4, 'start', '#6b7280');
+    lab(11 * CELL + CELL / 2, 3 * CELL + CELL / 2 + 4, 'goal', '#fff');
+    lab(5.5 * CELL, 3 * CELL + CELL / 2 + 4, 'cliff  −100', '#991b1b');
+    const path = el('polyline', {
+      points: '', fill: 'none', stroke: '#2563eb', 'stroke-width': 3,
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round'
+    }, g);
+    const dot = el('circle', { r: 4, cx: -99, cy: -99, fill: '#2563eb' }, g);
+    return { path, dot };
+  }
+  function drawPath(h, Q, color) {
+    const p = greedyPath(Q);
+    h.path.setAttribute('points', p.map(([r, c]) => `${c * CELL + CELL / 2},${r * CELL + CELL / 2}`).join(' '));
+    h.path.setAttribute('stroke', color);
+    const last = p[p.length - 1];
+    h.dot.setAttribute('fill', color);
+    h.dot.setAttribute('cx', last[1] * CELL + CELL / 2);
+    h.dot.setAttribute('cy', last[0] * CELL + CELL / 2);
+  }
+
+  function renderCurve() {
+    drawSeries(curve, [
+      { color: '#2563eb', values: smooth(retS, 50) },
+      { color: '#dc2626', values: smooth(retQ, 50) }
+    ], { dec: 0, xlabel: 'episode', empty: 'press Run' });
+  }
+
+  function renderEq() {
+    T(eqEl,
+      `\\begin{aligned}
+        \\text{Sarsa:}\\quad &Q(S_t,A_t)\\leftarrow Q(S_t,A_t)+\\alpha\\big[R_{t+1}+\\gamma\\,Q(S_{t+1},A_{t+1})-Q(S_t,A_t)\\big]\\\\[2pt]
+        \\text{Q-learning:}\\quad &Q(S_t,A_t)\\leftarrow Q(S_t,A_t)+\\alpha\\big[R_{t+1}+\\gamma\\max_a Q(S_{t+1},a)-Q(S_t,A_t)\\big]
+      \\end{aligned}
+      \\quad \\alpha=${alpha.toFixed(2)},\\ \\varepsilon=${eps.toFixed(2)},\\ \\gamma=${GAMMA.toFixed(1)}`, true);
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; $('#cliffRun').textContent = 'Run ▶'; } }
+  function tick() {
+    for (let i = 0; i < BATCH && episodes < MAXEP; i++) {
+      retS.push(episode(QS, true));
+      retQ.push(episode(QQ, false));
+      episodes++;
+    }
+    drawPath(hS, QS, '#2563eb');
+    drawPath(hQ, QQ, '#dc2626');
+    renderCurve();
+    info.textContent = `episodes = ${episodes}` + (episodes >= MAXEP ? '   ✓ done' : '');
+    if (episodes >= MAXEP) stop();
+  }
+
+  function reset() {
+    stop();
+    QS = newQ(); QQ = newQ(); retS = []; retQ = []; episodes = 0;
+    drawPath(hS, QS, '#2563eb');
+    drawPath(hQ, QQ, '#dc2626');
+    renderCurve();
+    info.textContent = 'episodes = 0';
+    renderEq();
+  }
+
+  hS = buildGrid(svgS);
+  hQ = buildGrid(svgQ);
+
+  $('#cliffRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    if (episodes >= MAXEP) reset();
+    running = setInterval(tick, 90);
+    $('#cliffRun').textContent = 'Pause';
+  });
+  $('#cliffReset').addEventListener('click', reset);
+  alphaS.addEventListener('input', () => { alpha = parseFloat(alphaS.value); alphaV.textContent = alpha.toFixed(2); reset(); });
+  epsS.addEventListener('input', () => { eps = parseFloat(epsS.value); epsV.textContent = eps.toFixed(2); reset(); });
+
+  reset();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initRandomWalk();
+  initBias();
+  initCliff();
+  initScroll();
+});
+</script>
+</body>
+</html>

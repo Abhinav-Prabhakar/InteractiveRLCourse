@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi-Armed Bandits</title>
+
+<!--
+  Assumptions (per prompt.md, since no questions may be asked):
+  - The brief lists a quiz; prompt.md forbids quizzes, so the two quiz prompts
+    (derive UCB from Hoeffding; why optimism drives exploration) are deepened
+    into full prose derivations in sections 05 and 04 instead.
+  - The chapter carries FOUR visualizers (the allowed maximum) because bandits
+    are intrinsically a comparison of exploration strategies: a single testbed
+    (incremental update), optimistic initialization, gradient/softmax, and the
+    required Bandit Arena. Size stays near the reference; the extra length is
+    interactive density, not prose.
+  - Section skeleton follows the reference; the section count is larger than the
+    reference's six because the brief enumerates more distinct methods.
+-->
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- svg ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- legend / swatch ---------------- */
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:26%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .slider-row .val{min-width:38px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Multi-Armed Bandits</a>
+    <nav class="nav">
+      <a href="#bandit">Problem</a>
+      <a href="#updates">Estimates</a>
+      <a href="#egreedy">&epsilon;-greedy</a>
+      <a href="#optimistic">Optimistic</a>
+      <a href="#ucb">UCB</a>
+      <a href="#gradient">Softmax</a>
+      <a href="#contextual">Context</a>
+      <a href="#arena">Arena</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning &middot; Foundations</p>
+    <h1>Multi-Armed Bandits</h1>
+    <p class="lede">The explore&ndash;exploit dilemma stripped to one decision repeated &mdash; no state, no consequences, and every strategy you can run against another.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="bandit">
+  <div class="wrap">
+    <h2><span class="num">01</span>The k-armed bandit problem</h2>
+    <p>You face $k$ levers. Pull one, receive a reward drawn from a distribution fixed for that lever, repeat. There is no state and no consequence beyond the reward &mdash; just a decision you make again and again. This is the <b>k-armed bandit problem</b>, and it is where the central tension of reinforcement learning first appears.</p>
+    <p>Each action $a$ has an unknown expected reward</p>
+    <div class="eqbox">
+      $$q_*(a)=\mathbb{E}\!\left[R_t\mid A_t=a\right].$$
+    </div>
+    <p>If you knew $q_*(a)$ for every arm you would pull $\arg\max_a q_*(a)$ forever and be done. You do not, so you can only <b>estimate</b> values from sampled rewards &mdash; and that forces a choice at every step: exploit the arm that looks best, or explore to find out whether a better one exists. The estimate after $t$ steps is $Q_t(a)\approx q_*(a)$, and the <b>greedy</b> action is</p>
+    <div class="eqbox">
+      $$A_t=\arg\max_a Q_t(a).$$
+    </div>
+    <div class="note">
+      <b>Exploration is not a detail you can skip.</b> A greedy rule acting on noisy estimates is fragile: one lucky early pull can lock it onto a bad arm for the rest of the run. Almost everything clever in this chapter is a way to convert a little certain reward into information that is worth more later.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="updates">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>Sample averages and the incremental update</h2>
+      <p>The simplest estimate of an arm's value is the mean of the rewards you have actually seen from it. Let $N_t(a)$ be the number of times $a$ was pulled before step $t$. The <b>sample-average</b> estimate is</p>
+      <div class="eqbox">
+        $$Q_t(a)=\frac{1}{N_t(a)}\sum_{i=1}^{t-1}R_i\,\mathbf{1}\!\left(A_i=a\right).$$
+      </div>
+      <p>By the law of large numbers $Q_t(a)\to q_*(a)$ as $N_t(a)\to\infty$, so the estimate is eventually exact. But recomputing the whole sum on every pull is wasteful. There is a one-line recurrence. Write $Q_{n+1}$ for the average of the first $n$ rewards:</p>
+      <div class="eqbox">
+        $$
+        \begin{aligned}
+        Q_{n+1} &= \frac{1}{n}\sum_{i=1}^{n}R_i \\[2pt]
+                &= \frac{1}{n}\Big(R_n+\sum_{i=1}^{n-1}R_i\Big) \\[2pt]
+                &= \frac{1}{n}\Big(R_n+(n-1)Q_n\Big) \\[2pt]
+                &= Q_n+\frac{1}{n}\Big[R_n-Q_n\Big].
+        \end{aligned}
+        $$
+      </div>
+      <p>The third line is exactly where the induction is spent: the entire past $\sum_{i=1}^{n-1}R_i$ is compressed into the single remembered quantity $(n-1)Q_n$.</p>
+      <p>Read that last line back: every new observation nudges the estimate by the <b>prediction error</b> $R_n-Q_n$, scaled by a step size $1/n$ that shrinks as evidence accumulates. Replace $1/n$ with a constant $\alpha$ and you get the form that survives all the way to deep RL:</p>
+      <div class="eqbox">
+        $$Q_{n+1}=Q_n+\alpha\Big[R_n-Q_n\Big].$$
+      </div>
+      <p>Unrolled, a constant step size makes $Q$ an exponential recency-weighted average of the rewards,</p>
+      <div class="eqbox">
+        $$Q_{n+1}=(1-\alpha)^{n}Q_1+\sum_{i=1}^{n}\alpha(1-\alpha)^{n-i}R_i,$$
+      </div>
+      <p>which never fully forgets and never fully commits &mdash; exactly what you want when an arm's true value drifts over time.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive &middot; a 5-armed testbed</span>
+        <div class="btnrow">
+          <button id="bdNew">New testbed</button>
+          <button id="bdReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="bdSvg" viewBox="0 0 420 300" role="img" aria-label="Five bandit arms with running value estimates"></svg>
+          <p class="small muted" style="margin-top:4px;text-align:center">Click an arm to pull it. Colored bar = running estimate $Q_t(a)$; black tick = true value $q_*(a)$.</p>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="btnrow" id="bdModeBtns">
+            <button data-mode="avg" class="active">Sample average</button>
+            <button data-mode="const">Constant $\alpha$</button>
+          </div>
+          <div class="slider-row" id="bdAlphaRow" style="display:none;margin-top:12px">
+            <span class="small muted">$\alpha$</span>
+            <input type="range" id="bdAlpha" min="0.01" max="1" step="0.01" value="0.20" aria-label="constant step size alpha">
+            <span class="val" id="bdAlphaVal">0.20</span>
+          </div>
+          <h4>Last incremental update</h4>
+          <div class="eqbox" id="bdEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="egreedy">
+  <div class="wrap">
+    <h2><span class="num">03</span>&epsilon;-greedy action selection</h2>
+    <p>Estimates in hand, the cheapest cure for over-commitment is to be occasionally random. With probability $\varepsilon$ take a uniformly random arm; otherwise take the greedy one:</p>
+    <div class="eqbox">
+      $$
+      A_t=\begin{cases}
+      \arg\max_a Q_t(a) & \text{with probability } 1-\varepsilon\\[3pt]
+      \text{a uniformly random arm} & \text{with probability } \varepsilon.
+      \end{cases}
+      $$
+    </div>
+    <p>This is <b>&epsilon;-greedy</b>. Because every arm is selected with probability at least $\varepsilon/k$ it is pulled infinitely often, so every sample average converges; meanwhile the remaining $1-\varepsilon$ of pulls go to the current best guess. Set $\varepsilon=0$ and the method is pure exploitation; set $\varepsilon=1$ and it ignores everything it has learned.</p>
+    <div class="note">
+      <b>The price of exploration is explicit and small.</b> Even a purely greedy method pulls suboptimal arms some of the time &mdash; it just does so by accident. &epsilon;-greedy agrees to cap that cost at $\varepsilon$, and in practice $\varepsilon\approx 0.1$ is a robust default. Decaying $\varepsilon\to 0$ recovers optimal behaviour in the limit.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="optimistic">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Optimistic initial values</h2>
+      <p>You can manufacture exploration for free by lying about where you start. Set every $Q_1(a)$ high &mdash; say $+5$ when the true values sit around $0$. The first greedy choice is arbitrary, but the moment you pull an arm its estimate falls toward reality, while the untouched arms keep their optimism and keep winning the $\arg\max$:</p>
+      <div class="eqbox">
+        $$Q_1(a)=+5\ \text{for all }a \quad\Longrightarrow\quad \text{greedy selection sweeps every arm before it settles.}$$
+      </div>
+      <p>This is <b>optimistic initialization</b>, and it drives exploration through greed alone &mdash; no $\varepsilon$, no randomness. The whole mechanism is the mismatch between the initial estimate and reality: an arm is worth pulling precisely because its estimate has not yet been disappointed.</p>
+      <div class="note">
+        <b>Optimism is a temporary subsidy on the unknown.</b> It lasts only until each arm has been tried once, after which the estimates are honest and exploration stops. That makes it a poor fit for non-stationary problems, where arms you have already sampled must keep being re-checked.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive &middot; greedy with optimism vs. &epsilon;-greedy</span>
+        <div class="btnrow">
+          <button id="opRun" class="primary">Run &#9654;</button>
+          <button id="opNew">Resample</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 420px">
+          <svg id="opSvg" viewBox="0 0 470 220" role="img" aria-label="Average reward curves for optimistic greedy and epsilon-greedy"></svg>
+          <p class="small muted" style="text-align:center;margin-bottom:0">Average reward over 1000 steps, averaged over independent runs on a fresh 10-armed testbed each run.</p>
+        </div>
+        <div class="col" style="flex:1 1 260px">
+          <div class="slider-row">
+            <span class="small muted">$Q_1$</span>
+            <input type="range" id="opQ1" min="0" max="5" step="0.5" value="5" aria-label="optimistic initial value">
+            <span class="val" id="opQ1Val">5.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">runs</span>
+            <input type="range" id="opRuns" min="20" max="200" step="20" value="100" aria-label="number of averaged runs">
+            <span class="val" id="opRunsVal">100</span>
+          </div>
+          <div class="legend" style="justify-content:flex-start;flex-wrap:wrap">
+            <span><span class="swatch" style="background:#2563eb"></span>greedy, $Q_1=+5$</span>
+            <span><span class="swatch" style="background:#dc2626"></span>&epsilon;-greedy, $Q_1=0$</span>
+          </div>
+          <div class="eqbox" id="opEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="ucb">
+  <div class="wrap">
+    <h2><span class="num">05</span>Upper-Confidence-Bound action selection</h2>
+    <p>Random exploration wastes pulls on arms you already know are bad. A better idea is to explore <em>where the estimate is uncertain</em>. Put an upper confidence bound on each arm's value and be greedy with respect to the bound:</p>
+    <div class="eqbox">
+      $$A_t=\arg\max_a\left[Q_t(a)+c\sqrt{\frac{\ln t}{N_t(a)}}\right].$$
+    </div>
+    <p>The bracket is the <b>upper-confidence-bound</b> estimate: the sample mean plus a bonus that grows with how long you have been choosing and shrinks with how often $a$ has been sampled. An unpulled arm has an unbounded bonus and goes first; a much-pulled arm is trusted. The constant $c$ sets how many standard deviations of optimism you are willing to extend.</p>
+    <p>The square root is not a heuristic. It falls straight out of Hoeffding's inequality. For rewards in $[0,1]$, the sample mean $\bar X_n$ of $n$ i.i.d. draws obeys</p>
+    <div class="eqbox">
+      $$\mathbb{P}\!\left[\bar X_n-\mathbb{E}[X]\ge u\right]\le e^{-2nu^2}.$$
+    </div>
+    <p>Ask that the right-hand side be no larger than a failure probability $\delta$, and solve for $u$:</p>
+    <div class="eqbox">
+      $$u=\sqrt{\frac{\ln(1/\delta)}{2n}} \quad\Longrightarrow\quad q_*(a)\le Q_t(a)+\sqrt{\frac{\ln(1/\delta)}{2N_t(a)}}\quad\text{with probability }1-\delta.$$
+    </div>
+    <p>Let the failure probability shrink with time, $\delta=1/t^{4}$, so each arm is optimistic with probability at least $1-t^{-4}$; a union bound over the $k$ arms then keeps the whole testbed honest. Since $\ln(1/\delta)=4\ln t$,</p>
+    <div class="eqbox">
+      $$q_*(a)\le Q_t(a)+\sqrt{\frac{2\ln t}{N_t(a)}},$$
+    </div>
+    <p>which is exactly the UCB bonus with $c=\sqrt{2}$. The whole derivation is spent in the step from Hoeffding to $u$: the $\sqrt{\ln t/N}$ shape is a statistical confidence width, not a tuned formula.</p>
+    <div class="note">
+      <b>Uncertainty, not chance, is the whole story.</b> &epsilon;-greedy explores arms at random and pays for it. UCB explores the arms it is least sure about, so its regret grows like $\sqrt{kt\ln t}$ rather than linearly &mdash; while still acting greedily on the only quantity that deserves it, the bound.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="gradient">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>Gradient bandits and softmax policies</h2>
+      <p>Every method so far chooses actions from value estimates. The alternative is to learn a <b>policy</b> directly, through a numerical <b>preference</b> $H_t(a)$ per arm and a softmax over those preferences:</p>
+      <div class="eqbox">
+        $$\pi_t(a)=\frac{e^{H_t(a)}}{\sum_{b=1}^{k}e^{H_t(b)}}.$$
+      </div>
+      <p>Preferences are never observed &mdash; only the actions they imply. After sampling $A_t\sim\pi_t$ and receiving $R_t$, take a stochastic-gradient step on the expected reward:</p>
+      <div class="eqbox">
+        $$H_{t+1}(a)=H_t(a)+\alpha\Big(R_t-\bar{R}_t\Big)\Big(\mathbf{1}\!\left(a=A_t\right)-\pi_t(a)\Big),$$
+      </div>
+      <p>where $\bar{R}_t$ is the average of the rewards seen so far, with $\bar{R}_1=R_1$. The factor $\mathbf{1}(a=A_t)-\pi_t(a)$ is what makes this a policy gradient: it raises the preference of the arm actually taken and lowers every other arm in proportion to how likely it already was.</p>
+      <p>The baseline $\bar{R}_t$ is safe because the softmax derivatives sum to zero. For any two arms $a$ and $b$,</p>
+      <div class="eqbox">
+        $$\frac{\partial \pi_t(b)}{\partial H_t(a)}=\pi_t(b)\Big(\mathbf{1}\!\left(a=b\right)-\pi_t(a)\Big),$$
+      </div>
+      <p>and since $\sum_b \pi_t(b)=1$, every constant baseline cancels: $\sum_b \pi_t(b)\,\partial_{H_t(a)}\pi_t(b)=0$. Subtracting $\bar{R}_t$ therefore changes the variance of the update, not its direction &mdash; the same baseline trick that returns as the critic's value function in Chapter 11.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive &middot; softmax preferences learn by pulling</span>
+        <div class="btnrow">
+          <button id="gbStep" class="primary">Pull &#9654;</button>
+          <button id="gbReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 360px">
+          <svg id="gbSvg" viewBox="0 0 460 300" role="img" aria-label="Preferences and softmax probabilities per arm"></svg>
+          <p class="small muted" style="text-align:center;margin-bottom:0">Top: preference bars $H_t(a)$. Bottom: the implied policy $\pi_t(a)$. Click Pull to sample an arm and update every preference.</p>
+        </div>
+        <div class="col" style="flex:1 1 280px">
+          <div class="slider-row">
+            <span class="small muted">$\alpha$</span>
+            <input type="range" id="gbAlpha" min="0.01" max="0.5" step="0.01" value="0.10" aria-label="gradient bandit step size alpha">
+            <span class="val" id="gbAlphaVal">0.10</span>
+          </div>
+          <p class="small muted" style="margin:10px 0 0">Sampled arms</p>
+          <div class="traj" id="gbTraj"></div>
+          <h4>Policy and update</h4>
+          <div class="eqbox" id="gbEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="contextual">
+  <div class="wrap">
+    <h2><span class="num">07</span>Contextual bandits</h2>
+    <p>Real decisions usually arrive with a context: which ad to show depends on the user, which treatment to give depends on the patient. A <b>contextual bandit</b> hands the agent a feature vector $x_t$ before it acts, and the value becomes a function of the pair:</p>
+    <div class="eqbox">
+      $$q_*(x,a)=\mathbb{E}\!\left[R_t\mid X_t=x,\,A_t=a\right],\qquad A_t=\arg\max_a Q_t(x_t,a).$$
+    </div>
+    <p>Nothing about the exploration machinery changes: &epsilon;-greedy, UCB, and Thompson sampling all carry over once $Q_t(a)$ becomes $Q_t(x_t,a)$. What changes is that the estimate is now a function you must <em>generalize</em> across contexts, so function approximation enters (Chapter 9) and the problem stops being a table.</p>
+    <div class="note">
+      <b>This is the bridge.</b> A contextual bandit is a Markov decision process with exactly one step: observe, act once, collect a reward, done. Remove the context and you are back to plain bandits; let the context persist and respond to your action and you are in Chapter 3. The horizon &mdash; not the state &mdash; is what makes full reinforcement learning hard.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="arena">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">08</span>Bandit Arena</h2>
+      <p>One testbed, three strategies, measured the same way. Each arm's true value is drawn from $\mathcal{N}(0,1)$ and its rewards from $\mathcal{N}(q_*(a),1)$. Run all three side by side and ask which one accumulates the most reward &mdash; and the least <b>regret</b>:</p>
+      <div class="eqbox">
+        $$\text{Regret}_T=\sum_{t=1}^{T}\Big(\max_a q_*(a)-q_*(A_t)\Big).$$
+      </div>
+      <p>Regret is the value left on the table by not pulling the best arm every step. A method that explores well produces a regret curve that bends down; one that explores badly keeps paying for the same mistake.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive &middot; Bandit Arena &mdash; 10 arms, 3 strategies</span>
+        <div class="btnrow">
+          <button id="arRun" class="primary">Run &#9654;</button>
+          <button id="arResample">Resample</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 470px">
+          <div class="legend" style="justify-content:flex-start;gap:16px;margin:0 0 6px">
+            <span><span class="swatch" style="background:#111"></span>&epsilon;-greedy</span>
+            <span><span class="swatch" style="background:#2563eb"></span>UCB</span>
+            <span><span class="swatch" style="background:#dc2626"></span>Thompson</span>
+          </div>
+          <svg id="arReward" viewBox="0 0 470 210" role="img" aria-label="Average reward per step curves"></svg>
+          <svg id="arRegret" viewBox="0 0 470 210" role="img" aria-label="Cumulative regret curves" style="margin-top:10px"></svg>
+        </div>
+        <div class="col" style="flex:1 1 280px">
+          <div class="slider-row">
+            <span class="small muted">$\varepsilon$</span>
+            <input type="range" id="arEps" min="0" max="0.5" step="0.01" value="0.10" aria-label="epsilon for greedy exploration">
+            <span class="val" id="arEpsVal">0.10</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$c$</span>
+            <input type="range" id="arC" min="0" max="4" step="0.1" value="2" aria-label="UCB exploration constant">
+            <span class="val" id="arCVal">2.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">runs</span>
+            <input type="range" id="arRuns" min="10" max="200" step="10" value="100" aria-label="number of averaged runs">
+            <span class="val" id="arRunsVal">100</span>
+          </div>
+          <h4>Strategies in play</h4>
+          <div class="eqbox" id="arEq"></div>
+          <p class="small muted" id="arInfo" style="font-family:ui-monospace,monospace;margin:10px 0 0"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p class="small muted">The &epsilon;-greedy curve flattens at a floor set by $\varepsilon$; UCB and Thompson keep bending down as they stop feeding bad arms. Raise $\varepsilon$ and watch that floor rise; raise $c$ and watch UCB over-explore before it settles.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">09</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Action-value methods</th><th>Gradient (policy) methods</th></tr>
+      <tr><td>What is learned</td><td>$Q_t(a)\approx q_*(a)$, per arm</td><td>$H_t(a)$, a preference per arm</td></tr>
+      <tr><td>Action rule</td><td>$\arg\max_a Q_t(a)$, with $\varepsilon$ or a bonus</td><td>$A_t\sim\pi_t$, softmax over $H_t$</td></tr>
+      <tr><td>Source of exploration</td><td>Random pulls ($\varepsilon$), optimism, or an uncertainty bonus</td><td>The policy is stochastic by construction</td></tr>
+      <tr><td>Update</td><td>$Q\leftarrow Q+\alpha[R-Q]$</td><td>$H\leftarrow H+\alpha(R-\bar{R})(\mathbf{1}-\pi)$</td></tr>
+      <tr><td>Non-stationarity</td><td>Handled by a constant $\alpha$</td><td>Preferences drift with the rewards</td></tr>
+      <tr><td>Leads to</td><td>Q-learning, DQN</td><td>Policy gradients, PPO</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      Q_{n+1} &= Q_n+\tfrac{1}{n}\big[R_n-Q_n\big] \quad\text{(or } Q_n+\alpha[R_n-Q_n]\text{)}\\[2pt]
+      A_t &= \begin{cases}\arg\max_a Q_t(a) & 1-\varepsilon\\ \text{random} & \varepsilon\end{cases}\\[2pt]
+      A_t &= \arg\max_a\Big[Q_t(a)+c\sqrt{\ln t\,/\,N_t(a)}\Big]\\[2pt]
+      \pi_t(a) &= \frac{e^{H_t(a)}}{\sum_b e^{H_t(b)}},\qquad H_{t+1}(a)=H_t(a)+\alpha\big(R_t-\bar{R}_t\big)\big(\mathbf{1}(a=A_t)-\pi_t(a)\big)
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream &mdash; Q-learning, DQN, policy gradients, PPO &mdash; is this same explore&ndash;exploit bargain, now played against a state that keeps moving underneath you.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="01-what-reinforcement-learning-really-is.html"><span class="pg-k">Previous</span><span class="pg-t">What RL Really Is</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="03-markov-decision-processes.html"><span class="pg-k">Next</span><span class="pg-t">Markov Decision Processes</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Pull every arm.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+function randn() {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function argmax(arr) {
+  let b = 0;
+  for (let i = 1; i < arr.length; i++) if (arr[i] > arr[b]) b = i;
+  return b;
+}
+function softmax(H) {
+  const m = Math.max(...H);
+  const ex = H.map(h => Math.exp(h - m));
+  const s = ex.reduce((a, b) => a + b, 0);
+  return ex.map(v => v / s);
+}
+
+/* Generic multi-series line chart drawn into an <svg>. */
+function lineChart(svg, o) {
+  svg.innerHTML = "";
+  const W = 470, H = 210, mm = { l: 56, r: 14, t: 14, b: 30 };
+  const pw = W - mm.l - mm.r, ph = H - mm.t - mm.b;
+  const xMax = o.xMax;
+  const X = i => mm.l + (i / (xMax - 1)) * pw;
+  const Y = v => mm.t + (1 - (v - o.yMin) / (o.yMax - o.yMin)) * ph;
+
+  el("rect", { x: mm.l, y: mm.t, width: pw, height: ph, fill: "#fafafa", stroke: "#f0f0f0", rx: 6 }, svg);
+  for (let g = 0; g <= 4; g++) {
+    const v = o.yMin + (o.yMax - o.yMin) * g / 4;
+    const y = Y(v);
+    el("line", { x1: mm.l, x2: mm.l + pw, y1: y, y2: y, stroke: "#ececec", "stroke-width": 1 }, svg);
+    el("text", { x: mm.l - 8, y: y + 4, "text-anchor": "end", "font-size": 10, fill: "#9ca3af", "font-family": "ui-monospace, monospace" }, svg).textContent = v.toFixed(2);
+  }
+  for (let g = 0; g <= 4; g++) {
+    const i = Math.round((xMax - 1) * g / 4);
+    el("text", { x: X(i), y: H - mm.b + 16, "text-anchor": "middle", "font-size": 10, fill: "#9ca3af", "font-family": "ui-monospace, monospace" }, svg).textContent = i;
+  }
+  o.series.forEach(s => {
+    if (o.t < 1) return;
+    const last = Math.min(o.t, s.ys.length - 1);
+    const pts = [];
+    for (let i = 0; i <= last; i++) pts.push(`${X(i)},${Y(s.ys[i])}`);
+    el("polyline", { points: pts.join(" "), fill: "none", stroke: s.color, "stroke-width": 1.8, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+    el("circle", { cx: X(last), cy: Y(s.ys[last]), r: 2.6, fill: s.color }, svg);
+  });
+  el("text", { x: mm.l + pw / 2, y: H - 2, "text-anchor": "middle", "font-size": 10.5, fill: "#6b7280" }, svg).textContent = o.xLabel;
+  const yl = el("text", { x: 13, y: mm.t + ph / 2, "text-anchor": "middle", "font-size": 10.5, fill: "#6b7280", transform: `rotate(-90 13 ${mm.t + ph / 2})` }, svg);
+  yl.textContent = o.yLabel;
+}
+
+/* =====================================================================
+   02 — single 5-armed testbed (incremental update)
+   ===================================================================== */
+function initBandit() {
+  const K = 5;
+  const svg = $('#bdSvg'), eqEl = $('#bdEq');
+  const alphaSlider = $('#bdAlpha'), alphaVal = $('#bdAlphaVal'), alphaRow = $('#bdAlphaRow');
+  let qstar = [], Q = [], N = [], mode = 'avg', alpha = 0.2, last = null;
+
+  function reset() { Q = new Array(K).fill(0); N = new Array(K).fill(0); last = null; render(); }
+  function newBed() { qstar = Array.from({ length: K }, () => randn()); reset(); }
+
+  function pull(a) {
+    const r = randn() + qstar[a];
+    const step = mode === 'avg' ? 1 / (N[a] + 1) : alpha;
+    const old = Q[a];
+    Q[a] = old + step * (r - old);
+    N[a]++;
+    last = { a, r, old, step, newq: Q[a] };
+    render();
+  }
+
+  function render() {
+    svg.innerHTML = '';
+    const W = 420, y0 = 150, maxAbs = Math.max(1, ...qstar.map(Math.abs), ...Q.map(Math.abs), ...(last ? [last.newq] : [0]));
+    const sc = 95 / maxAbs;
+    el('line', { x1: 20, x2: W - 20, y1: y0, y2: y0, stroke: '#d4d4d8', 'stroke-width': 1 }, svg);
+    el('text', { x: 14, y: y0 + 4, 'text-anchor': 'end', 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, svg).textContent = '0';
+    const barW = 54, gap = 14, x0 = (W - (K * barW + (K - 1) * gap)) / 2;
+    const greedy = argmax(Q);
+    for (let a = 0; a < K; a++) {
+      const x = x0 + a * (barW + gap), cx = x + barW / 2;
+      const qv = Q[a] * sc, top = Math.min(y0, y0 - qv), hgt = Math.max(1.5, Math.abs(qv));
+      const g = el('g', { style: 'cursor:pointer' }, svg);
+      el('rect', { x, y: top, width: barW, height: hgt, rx: 5, fill: Q[a] >= 0 ? '#2563eb' : '#dc2626', opacity: 0.9 }, g);
+      const ty = y0 - qstar[a] * sc;
+      el('line', { x1: x - 4, x2: x + barW + 4, y1: ty, y2: ty, stroke: '#111', 'stroke-width': 2, 'stroke-linecap': 'round' }, g);
+      if (a === greedy) el('rect', { x, y: top, width: barW, height: hgt, rx: 5, fill: 'none', stroke: '#111', 'stroke-width': 2.4 }, g);
+      el('text', { x: cx, y: Q[a] >= 0 ? top - 7 : top + hgt + 14, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 600, fill: '#111', 'font-family': 'ui-monospace, monospace' }, g).textContent = Q[a].toFixed(2);
+      el('text', { x: cx, y: 274, 'text-anchor': 'middle', 'font-size': 12, fill: '#111', 'font-weight': 650 }, g).textContent = 'a' + (a + 1);
+      el('text', { x: cx, y: 289, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, g).textContent = 'n=' + N[a];
+      g.addEventListener('click', () => pull(a));
+    }
+    if (last) {
+      T(eqEl, `\\begin{aligned} Q(\\text{a${last.a + 1}}) &\\leftarrow Q + \\alpha\\big[R-Q\\big]\\\\[2pt] &= ${last.old.toFixed(2)} + ${last.step.toFixed(3)}\\big[${last.r.toFixed(2)} - ${last.old.toFixed(2)}\\big]\\\\[2pt] &= \\mathbf{${last.newq.toFixed(3)}} \\end{aligned}`, true);
+    } else {
+      T(eqEl, `Q_{n+1}(a)=Q_n(a)+\\alpha\\big[R_n-Q_n(a)\\big]`, true);
+    }
+  }
+
+  $$('#bdModeBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      $$('#bdModeBtns button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      mode = b.dataset.mode;
+      alphaRow.style.display = mode === 'const' ? 'flex' : 'none';
+      reset();
+    });
+  });
+  alphaSlider.addEventListener('input', () => { alpha = parseFloat(alphaSlider.value); alphaVal.textContent = alpha.toFixed(2); });
+  $('#bdNew').addEventListener('click', newBed);
+  $('#bdReset').addEventListener('click', reset);
+
+  newBed();
+}
+
+/* =====================================================================
+   04 — optimistic initial values
+   ===================================================================== */
+function initOptimistic() {
+  const K = 10, STEPS = 1000;
+  const svg = $('#opSvg'), eqEl = $('#opEq');
+  const q1S = $('#opQ1'), q1V = $('#opQ1Val'), runsS = $('#opRuns'), runsV = $('#opRunsVal');
+  let q1 = parseFloat(q1S.value), runs = parseInt(runsS.value, 10);
+  let opt = [], eg = [], t = STEPS - 1, timer = null;
+
+  function simulate() {
+    const o = new Float64Array(STEPS), e = new Float64Array(STEPS);
+    for (let run = 0; run < runs; run++) {
+      const q = Array.from({ length: K }, () => randn());
+      const Q1 = new Array(K).fill(q1), N1 = new Array(K).fill(0);
+      for (let s = 0; s < STEPS; s++) { const a = argmax(Q1); const r = randn() + q[a]; N1[a]++; Q1[a] += (r - Q1[a]) / N1[a]; o[s] += r; }
+      const Q2 = new Array(K).fill(0), N2 = new Array(K).fill(0);
+      for (let s = 0; s < STEPS; s++) { const a = Math.random() < 0.1 ? Math.floor(Math.random() * K) : argmax(Q2); const r = randn() + q[a]; N2[a]++; Q2[a] += (r - Q2[a]) / N2[a]; e[s] += r; }
+    }
+    opt = Array.from(o, v => v / runs); eg = Array.from(e, v => v / runs);
+  }
+
+  function draw() {
+    const maxY = Math.max(0.2, ...opt, ...eg) * 1.06;
+    lineChart(svg, { series: [{ ys: eg, color: '#dc2626' }, { ys: opt, color: '#2563eb' }], t, xMax: STEPS, yMin: 0, yMax: maxY, xLabel: 'steps', yLabel: 'avg reward' });
+    T(eqEl, `\\begin{aligned} \\text{optimistic } Q_1=+${q1.toFixed(1)},\\ \\text{greedy} &\\Rightarrow \\bar R_{1000}=${opt[STEPS - 1].toFixed(3)}\\\\[2pt] \\varepsilon\\text{-greedy }(Q_1=0,\\ \\varepsilon=0.1) &\\Rightarrow \\bar R_{1000}=${eg[STEPS - 1].toFixed(3)} \\end{aligned}`, true);
+  }
+
+  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+
+  $('#opRun').addEventListener('click', () => {
+    if (timer) { stop(); return; }
+    t = 0; draw();
+    timer = setInterval(() => { t += Math.ceil(STEPS / 40); if (t >= STEPS - 1) { t = STEPS - 1; stop(); } draw(); }, 110);
+  });
+  $('#opNew').addEventListener('click', () => { stop(); simulate(); t = STEPS - 1; draw(); });
+  q1S.addEventListener('input', () => { q1 = parseFloat(q1S.value); q1V.textContent = q1.toFixed(1); stop(); simulate(); t = STEPS - 1; draw(); });
+  runsS.addEventListener('input', () => { runs = parseInt(runsS.value, 10); runsV.textContent = runs; stop(); simulate(); t = STEPS - 1; draw(); });
+
+  simulate();
+  draw();
+}
+
+/* =====================================================================
+   06 — gradient bandit / softmax preferences
+   ===================================================================== */
+function initSoftmax() {
+  const K = 5;
+  const svg = $('#gbSvg'), eqEl = $('#gbEq'), trajEl = $('#gbTraj');
+  const alphaS = $('#gbAlpha'), alphaV = $('#gbAlphaVal');
+  let qstar = Array.from({ length: K }, () => randn());
+  let H = [], N = [], avg = 0, t = 0, traj = [], last = null;
+  let alpha = parseFloat(alphaS.value);
+
+  function reset() { H = new Array(K).fill(0); N = new Array(K).fill(0); avg = 0; t = 0; traj = []; last = null; render(); }
+
+  function pull() {
+    const pi = softmax(H);
+    let r = Math.random(), a = 0, acc = 0;
+    for (let i = 0; i < K; i++) { acc += pi[i]; if (r <= acc + 1e-12) { a = i; break; } }
+    const rew = randn() + qstar[a];
+    t++;
+    avg += (rew - avg) / t;
+    const before = H.slice();
+    for (let b = 0; b < K; b++) H[b] += alpha * (rew - avg) * ((b === a ? 1 : 0) - pi[b]);
+    N[a]++;
+    last = { a, rew, avg, pi, before };
+    traj.push('a' + (a + 1));
+    if (traj.length > 24) traj.shift();
+    render();
+  }
+
+  function render() {
+    const pi = softmax(H);
+    svg.innerHTML = '';
+    const W = 460, y0 = 120, maxH = Math.max(0.5, ...H.map(Math.abs)), sc = 70 / maxH;
+    el('line', { x1: 20, x2: W - 20, y1: y0, y2: y0, stroke: '#d4d4d8', 'stroke-width': 1 }, svg);
+    const barW = 46, gap = 24, x0 = (W - (K * barW + (K - 1) * gap)) / 2;
+    const py0 = 272, ph = 52;
+    for (let a = 0; a < K; a++) {
+      const x = x0 + a * (barW + gap), cx = x + barW / 2;
+      const hv = H[a] * sc, top = Math.min(y0, y0 - hv), hgt = Math.max(1.5, Math.abs(hv));
+      const g = el('g', {}, svg);
+      el('rect', { x, y: top, width: barW, height: hgt, rx: 5, fill: H[a] >= 0 ? '#2563eb' : '#dc2626', opacity: 0.9 }, g);
+      if (last && last.a === a) el('rect', { x, y: top, width: barW, height: hgt, rx: 5, fill: 'none', stroke: '#111', 'stroke-width': 2.4 }, g);
+      el('text', { x: cx, y: H[a] >= 0 ? top - 6 : top + hgt + 14, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 600, fill: '#111', 'font-family': 'ui-monospace, monospace' }, g).textContent = H[a].toFixed(2);
+      el('text', { x: cx, y: y0 + 22, 'text-anchor': 'middle', 'font-size': 12, fill: '#111', 'font-weight': 650 }, g).textContent = 'a' + (a + 1);
+      el('rect', { x, y: py0 - ph * pi[a], width: barW, height: Math.max(1, ph * pi[a]), rx: 3, fill: (last && last.a === a) ? '#111' : '#c2c9d4' }, g);
+      el('text', { x: cx, y: py0 + 14, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280', 'font-family': 'ui-monospace, monospace' }, g).textContent = pi[a].toFixed(2);
+    }
+    el('text', { x: 22, y: y0 - 84, 'font-size': 10.5, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, svg).textContent = 'H';
+    el('text', { x: 22, y: 224, 'font-size': 10.5, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, svg).textContent = '\u03C0';
+
+    trajEl.innerHTML = traj.map((s, i) => `<span class="chip ${i === traj.length - 1 ? 'now' : ''}">${s}</span>`).join('<span class="arw">\u2192</span>');
+
+    if (last) {
+      const piStr = pi.map(v => v.toFixed(2)).join(',\\ ');
+      T(eqEl, `\\begin{aligned} \\pi_t &= \\big(${piStr}\\big)\\\\[2pt] H(\\text{a${last.a + 1}}) &\\leftarrow H+\\alpha(R-\\bar R)\\big(1-\\pi\\big)\\\\[2pt] &= ${last.before[last.a].toFixed(2)}+${alpha.toFixed(2)}(${last.rew.toFixed(2)}-${last.avg.toFixed(2)})\\big(1-${last.pi[last.a].toFixed(2)}\\big)\\\\[2pt] &= \\mathbf{${H[last.a].toFixed(3)}} \\end{aligned}`, true);
+    } else {
+      T(eqEl, `\\pi_t(a)=\\frac{e^{H_t(a)}}{\\sum_b e^{H_t(b)}}`, true);
+    }
+  }
+
+  $('#gbStep').addEventListener('click', pull);
+  $('#gbReset').addEventListener('click', reset);
+  alphaS.addEventListener('input', () => { alpha = parseFloat(alphaS.value); alphaV.textContent = alpha.toFixed(2); });
+
+  reset();
+}
+
+/* =====================================================================
+   08 — Bandit Arena: eps-greedy vs UCB vs Thompson
+   ===================================================================== */
+function initArena() {
+  const ARMS = 10, STEPS = 500;
+  const rewardSvg = $('#arReward'), regretSvg = $('#arRegret'), eqEl = $('#arEq'), info = $('#arInfo');
+  const epsS = $('#arEps'), epsV = $('#arEpsVal'), cS = $('#arC'), cV = $('#arCVal'), runsS = $('#arRuns'), runsV = $('#arRunsVal');
+  let eps = parseFloat(epsS.value), c = parseFloat(cS.value), runs = parseInt(runsS.value, 10);
+  let avgR = null, cumReg = null, t = STEPS - 1, timer = null;
+
+  const SERIES = [
+    { key: 'eg', name: 'eps-greedy', color: '#111' },
+    { key: 'ucb', name: 'UCB', color: '#2563eb' },
+    { key: 'ts', name: 'Thompson', color: '#dc2626' }
+  ];
+
+  function simulate() {
+    avgR = { eg: new Float64Array(STEPS), ucb: new Float64Array(STEPS), ts: new Float64Array(STEPS) };
+    cumReg = { eg: new Float64Array(STEPS), ucb: new Float64Array(STEPS), ts: new Float64Array(STEPS) };
+    for (let run = 0; run < runs; run++) {
+      const q = Array.from({ length: ARMS }, () => randn());
+      const qmax = Math.max(...q);
+
+      // eps-greedy
+      {
+        const Q = new Array(ARMS).fill(0), N = new Array(ARMS).fill(0);
+        let cum = 0;
+        for (let s = 0; s < STEPS; s++) {
+          const a = Math.random() < eps ? Math.floor(Math.random() * ARMS) : argmax(Q);
+          const r = randn() + q[a]; N[a]++; Q[a] += (r - Q[a]) / N[a];
+          cum += qmax - q[a]; cumReg.eg[s] += cum; avgR.eg[s] += q[a];
+        }
+      }
+      // UCB
+      {
+        const Q = new Array(ARMS).fill(0), N = new Array(ARMS).fill(0);
+        let cum = 0;
+        for (let s = 0; s < STEPS; s++) {
+          const tt = s + 1;
+          let best = 0, bv = -Infinity;
+          for (let a = 0; a < ARMS; a++) {
+            const bonus = N[a] === 0 ? Infinity : c * Math.sqrt(Math.log(tt) / N[a]);
+            const v = Q[a] + bonus;
+            if (v > bv) { bv = v; best = a; }
+          }
+          const r = randn() + q[best]; N[best]++; Q[best] += (r - Q[best]) / N[best];
+          cum += qmax - q[best]; cumReg.ucb[s] += cum; avgR.ucb[s] += q[best];
+        }
+      }
+      // Thompson (Gaussian posterior)
+      {
+        const Q = new Array(ARMS).fill(0), N = new Array(ARMS).fill(0);
+        let cum = 0;
+        for (let s = 0; s < STEPS; s++) {
+          let best = 0, bv = -Infinity;
+          for (let a = 0; a < ARMS; a++) {
+            const th = Q[a] + (1 / Math.sqrt(N[a] + 1)) * randn();
+            if (th > bv) { bv = th; best = a; }
+          }
+          const r = randn() + q[best]; N[best]++; Q[best] += (r - Q[best]) / N[best];
+          cum += qmax - q[best]; cumReg.ts[s] += cum; avgR.ts[s] += q[best];
+        }
+      }
+    }
+    for (const k in avgR) for (let s = 0; s < STEPS; s++) { avgR[k][s] /= runs; cumReg[k][s] /= runs; }
+  }
+
+  function draw() {
+    const aMax = Math.max(0.2, ...SERIES.map(s => Math.max(...avgR[s.key]))) * 1.06;
+    lineChart(rewardSvg, { series: SERIES.map(s => ({ ys: avgR[s.key], color: s.color })), t, xMax: STEPS, yMin: 0, yMax: aMax, xLabel: 'steps', yLabel: 'avg reward' });
+    const rMax = Math.max(1, ...SERIES.map(s => cumReg[s.key][STEPS - 1])) * 1.05;
+    lineChart(regretSvg, { series: SERIES.map(s => ({ ys: cumReg[s.key], color: s.color })), t, xMax: STEPS, yMin: 0, yMax: rMax, xLabel: 'steps', yLabel: 'cum. regret' });
+
+    const lines = SERIES.map(s => `${s.name}: R\u0304=${avgR[s.key][STEPS - 1].toFixed(3)}, regret=${cumReg[s.key][STEPS - 1].toFixed(1)}`).join('   \u00b7   ');
+    T(eqEl, `\\begin{aligned} A_t^{\\varepsilon} &= \\begin{cases}\\arg\\max_a Q_t(a) & 1-\\varepsilon\\\\ \\text{random} & \\varepsilon\\end{cases},\\quad \\varepsilon=${eps.toFixed(2)}\\\\[2pt] A_t^{\\text{UCB}} &= \\arg\\max_a\\Big[Q_t(a)+c\\sqrt{\\ln t/N_t(a)}\\Big],\\quad c=${c.toFixed(1)} \\end{aligned}`, true);
+    info.textContent = 'final: ' + lines;
+  }
+
+  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+  function refresh() { stop(); simulate(); t = STEPS - 1; draw(); }
+
+  $('#arRun').addEventListener('click', () => {
+    if (timer) { stop(); return; }
+    t = 0; draw();
+    timer = setInterval(() => { t += Math.ceil(STEPS / 40); if (t >= STEPS - 1) { t = STEPS - 1; stop(); } draw(); }, 110);
+  });
+  $('#arResample').addEventListener('click', refresh);
+  epsS.addEventListener('input', () => { eps = parseFloat(epsS.value); epsV.textContent = eps.toFixed(2); refresh(); });
+  cS.addEventListener('input', () => { c = parseFloat(cS.value); cV.textContent = c.toFixed(1); refresh(); });
+  runsS.addEventListener('input', () => { runs = parseInt(runsS.value, 10); runsV.textContent = runs; refresh(); });
+
+  refresh();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initBandit();
+  initOptimistic();
+  initSoftmax();
+  initArena();
+  initScroll();
+});
+</script>
+</body>
+</html>

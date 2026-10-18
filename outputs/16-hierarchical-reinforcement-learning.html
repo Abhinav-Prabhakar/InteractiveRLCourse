@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<!--
+  Chapter 16 — Hierarchical Reinforcement Learning.
+  Assumptions (per prompt.md):
+   - The brief requests a quiz; per prompt.md quizzes are SKIPPED. The
+     "options accelerate learning over longer temporal scales" claim from the
+     quiz is instead shown live by the corridor visualizer in section 02.
+   - Two visualizers are used (the required Option-Composition gridworld plus a
+     tempo 1-D corridor backup for the option Bellman equation).
+   - Low-level options are taken as "already learned": their intra-option
+     policies are shortest-path (BFS) policies, exactly as the brief describes
+     ("low-level options are learned first, then a high-level policy composes
+     them"). The high-level policy over options is learned live with SMDP
+     Q-learning and is compared against a flat primitive Q-learner.
+   - No prev/next links: the reference chapter has none.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hierarchical Reinforcement Learning</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- chain diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+/* ---------------- chapter-specific: grids + charts ---------------- */
+#optSvg{width:100%;max-width:432px;margin:0 auto;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed}
+.optleg{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;font-size:11.5px;color:#6b7280;margin-top:10px;font-family:ui-monospace,monospace}
+.optleg span{display:inline-flex;align-items:center;gap:6px}
+.optleg i{display:inline-block;width:11px;height:11px;border-radius:3px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Hierarchical RL</a>
+    <nav class="nav">
+      <a href="#long">Horizons</a>
+      <a href="#options">Options</a>
+      <a href="#compose">Composition</a>
+      <a href="#critic">Option-critic</a>
+      <a href="#feudal">Feudal RL</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Advanced Topics</p>
+    <h1>Hierarchical<br>Reinforcement Learning</h1>
+    <p class="lede">Flat RL relearns every step of a long journey. Give the agent temporally extended actions and it learns the journey's stages once, then recombines them.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="long">
+  <div class="wrap">
+    <h2><span class="num">01</span>Why horizons break flat RL</h2>
+    <p>Every tabular method so far propagates information exactly one primitive step per backup. When a reward finally arrives, a single Bellman sweep nudges it one state closer to the start.</p>
+    <div class="eqbox">
+      $$V(s)\leftarrow\max_a\Big[R^a_s+\gamma\sum_{s'}P^a_{ss'}\,V(s')\Big]\qquad\text{— one step of lookahead}$$
+    </div>
+    <p>A goal $n$ primitive steps away therefore needs about $n$ sweeps before its value reaches the start, and the signal arrives attenuated by $\gamma^{\,n}$. Worse, the agent relearns the same sub-skill at every position: walking to the door from one room differs only cosmetically from walking to it from another.</p>
+    <div class="note">
+      <b>Long horizons — not large state spaces — are what make this hard.</b> The number of backups scales with the length of the solution, and the value signal decays as $\gamma^{\,n}$. Learning <em>at what timescale to act</em> is the escape: an action that spans many steps moves value many steps at once.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="options">
+  <div class="wrap">
+    <h2><span class="num">02</span>The options framework</h2>
+    <p>An <b>option</b> is a temporally extended action: a little policy that runs for several steps and then stops. Formally it is a triple $\omega=(I_\omega,\pi_\omega,\beta_\omega)$.</p>
+    <div class="eqbox">
+      $$\omega=(I_\omega,\ \pi_\omega,\ \beta_\omega),\qquad I_\omega\subseteq\mathcal{S},\qquad \pi_\omega(a\mid s),\qquad \beta_\omega:\mathcal{S}\to[0,1].$$
+    </div>
+    <p>$I_\omega$ is the <b>initiation set</b> — the states where the option may start. $\pi_\omega$ is the <b>intra-option policy</b> it follows while active. $\beta_\omega(s)=0$ while the option should keep running and rises as it should <b>terminate</b>. A primitive action is the degenerate option with $I_\omega=\mathcal{S}$, a point-mass policy, and $\beta_\omega\equiv 1$. A <b>policy over options</b> $\pi_\Omega(o\mid s)$ therefore chooses only among macros, not among steps.</p>
+
+    <h3>Option values</h3>
+    <p>Run option $o$ from $s$ and let $\tau$ be the (random) number of primitive steps until it terminates. The <b>option-value function</b> sums the rewards earned along the way, then bootstraps from wherever the option left the agent:</p>
+    <div class="eqbox">
+      $$Q_\Omega(s,o)=\mathbb{E}\!\left[\sum_{j=0}^{\tau-1}\gamma^{\,j}R_{t+j+1}+\gamma^{\,\tau}V_\Omega(S_{t+\tau})\ \middle|\ S_t=s,\ o_t=o\right],\qquad V_\Omega(s)=\sum_o\pi_\Omega(o\mid s)\,Q_\Omega(s,o).$$
+    </div>
+    <p>Optimizing over the high-level and the intra-option policies jointly gives the <b>option Bellman equation</b>:</p>
+    <div class="eqbox">
+      $$Q_*(s,o)=\mathbb{E}\!\left[r_1+\gamma r_2+\cdots+\gamma^{\,\tau-1}r_\tau+\gamma^{\,\tau}\max_{o'}Q_*(s_{t+\tau},o')\ \middle|\ s_t=s,\ o_t=o\right].$$
+    </div>
+    <p>Read that last line back: the flat backup's single-step lookahead is replaced by a $\tau$-step lookahead whose bootstrap is discounted by $\gamma^{\tau}$. <b>The exponent $\tau$ is the whole story.</b> One backup now carries value across an entire option instead of a single move.</p>
+  </div>
+
+  <div class="wide">
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · value propagation at option timescales</span>
+        <div class="slider-row" style="width:200px">
+          <span class="small muted">option length $k$</span>
+          <input type="range" id="corK" min="2" max="6" step="1" value="3" aria-label="option length k">
+          <span class="val" id="corKVal">3</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 420px">
+          <svg id="corSvg" viewBox="0 0 560 210" role="img" aria-label="Value propagation along a corridor for primitive actions versus options"></svg>
+          <div class="legend">
+            <span><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#111"></i> primitive, 1 cell/sweep</span>
+            <span><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#2563eb"></i> option, $k$ cells/sweep</span>
+          </div>
+          <p class="small muted" id="corInfo" style="text-align:center;font-family:ui-monospace,monospace;margin-bottom:0"></p>
+        </div>
+        <div class="col" style="flex:1 1 260px">
+          <p class="small muted" style="margin-top:0">A corridor of 12 cells, terminal reward $+1$ at the far end. Press <b>Sweep</b> and watch how far the value signal reaches in one backup.</p>
+          <div class="btnrow">
+            <button id="corStep">Sweep</button>
+            <button id="corRun" class="primary">Run ▶</button>
+            <button id="corReset">Reset</button>
+          </div>
+          <div class="eqbox" id="corEq" style="margin-top:16px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="compose">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Composing options in a two-room world</h2>
+      <p>A $9\times5$ grid split by a wall into two rooms, joined only by a locked door. A <b>key</b> sits in the left room, the <b>goal</b> in the right. An agent that walks step by step must first find the key, then the door, then the goal — and the flat backup pays for all three journeys one move at a time.</p>
+      <p>Assume three low-level options are already learned: <code>go-to-key</code>, <code>go-to-door</code> (which crosses into the right room once the key is held), and <code>go-to-goal</code>. Each carries its own shortest-path intra-option policy. The high-level agent then faces a tiny decision problem: in what order to call them?</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · option composition</span>
+        <div class="btnrow" id="optModeBtns">
+          <button data-mode="both" class="active">Compare</button>
+          <button data-mode="flat">Flat only</button>
+          <button data-mode="opt">Options only</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 360px">
+          <svg id="optSvg" viewBox="0 0 432 240" role="img" aria-label="Two-room gridworld with a locked door, key and goal"></svg>
+          <div class="optleg" id="optLegend"></div>
+          <p class="small muted" id="optInfo" style="text-align:center;font-family:ui-monospace,monospace;margin-bottom:0"></p>
+        </div>
+
+        <div class="col" style="flex:1 1 380px">
+          <div class="slider-row">
+            <span class="small muted">exploration $\varepsilon$</span>
+            <input type="range" id="optEps" min="0.02" max="0.40" step="0.01" value="0.15" aria-label="exploration epsilon">
+            <span class="val" id="optEpsVal">0.15</span>
+          </div>
+
+          <svg id="optChart" viewBox="0 0 520 220" role="img" aria-label="Learning curves: flat primitive learner versus options over episodes"></svg>
+
+          <div class="btnrow" style="margin-top:12px">
+            <button id="optRun" class="primary">Run ▶</button>
+            <button id="optReset">Reset</button>
+          </div>
+
+          <h4 style="margin-bottom:4px">High-level update</h4>
+          <div class="eqbox" id="optEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>Both learners face the same environment and the same exploration rate. The flat learner updates $Q(s,a)$ one primitive action at a time; the hierarchical learner updates $Q_\Omega(s,o)$ once per option, over a span of $\tau$ steps. Set <b>Compare</b>, press <b>Run</b>, and watch the two moving-average curves separate.</p>
+      <div class="note">
+        <b>The high-level problem is small on purpose.</b> With skills in hand, the agent chooses among three options instead of four moves at every cell, so each backup advances the value by $\tau$ steps. That is precisely where the sample-efficiency gap in the chart comes from — not from better exploration, but from coarser credit assignment.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="critic">
+  <div class="wrap">
+    <h2><span class="num">04</span>The option-critic architecture</h2>
+    <p>So far the options were given. The <b>option-critic</b> learns them: the intra-option policies $\pi_{\theta_\pi}$ and the termination functions $\beta_{\theta_\beta}$ are parameterized and differentiated alongside the policy over options. The signal that shapes termination is the <b>advantage</b> of continuing, $A_\Omega(s,o)=Q_\Omega(s,o)-V_\Omega(s)$.</p>
+    <div class="eqbox">
+      $$\frac{\partial\mathcal{L}}{\partial\theta_\beta}=-\mathbb{E}\!\left[\gamma^{\,\tau}A_\Omega(s_{t+\tau},o)\,\nabla_{\theta_\beta}\beta_{\theta_\beta}(s_{t+\tau})\right]\;+\;\text{(terms for terminations inside the option)}.$$
+    </div>
+    <p>The leading term is the load-bearing one: it raises termination probability exactly where continuing the current option has <em>negative</em> advantage, so a losing option is cut short and the agent re-plans. The intra-option policy is trained by the usual policy gradient, with the advantage of the option it belongs to:</p>
+    <div class="eqbox">
+      $$\frac{\partial\mathcal{L}}{\partial\theta_\pi}=\mathbb{E}\!\left[\sum_t \gamma^{\,t}\,\nabla_{\theta_\pi}\log\pi_{\theta_\pi}(a_t\mid s_t)\,A_\Omega(s_t,o_t)\right].$$
+    </div>
+    <p>Termination acts like a learned, state-dependent boundary of the option. Two limits make its role concrete: force $\beta\equiv 1$ and every option collapses to a primitive action; force $\beta\equiv 0$ and the agent commits to one option forever. Useful hierarchies live in between.</p>
+    <div class="note">
+      <b>Termination is the dial between flat and abstract.</b> Both objectives above are ordinary policy gradients — the only new ingredient is $\gamma^{\,\tau}$, the discount that travels <em>with</em> the option and makes each update aware of how long the option actually lasted.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="feudal">
+  <div class="wrap">
+    <h2><span class="num">05</span>Feudal RL and goal-conditioned hierarchies</h2>
+    <p>Feudal RL splits the agent in two. A <b>manager</b> sets a goal $g$ — a state to reach, in a low-dimensional space — and a <b>worker</b> is a <b>goal-conditioned</b> policy $\pi_W(a\mid s,g)$ that acts to achieve it. The manager never chooses primitive actions; it chooses subgoals, and is rewarded when the worker makes progress toward them.</p>
+    <div class="eqbox">
+      $$g\sim\pi_M(g\mid s),\qquad a\sim\pi_W(a\mid s,g),\qquad V(s,g)=\mathbb{E}\!\left[\sum_{k=0}^{\infty}\gamma^{\,k}R_{t+k+1}\ \middle|\ S_t=s,\ g\right].$$
+    </div>
+    <p>The worker's value $V(s,g)$ is exactly an option-value function whose option is "reach $g$". Because goals are just an extra input, one worker network can cover a whole family of subgoals — a <b>universal value function</b> approximately factorizes as $Q(s,a,g)\approx\phi(s,a)^{\top}\psi(g)$, sharing structure across every goal.</p>
+    <p>This is the same idea as options with the alarm clock moved inside the policy. Where options terminate on a learned $\beta_\omega$, a goal-conditioned worker terminates when $g$ is reached. Both replace a long primitive sequence with a single decision, and both are how a hierarchy composes an open-ended repertoire of skills.</p>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">06</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Flat policy</th><th>Options / hierarchy</th></tr>
+      <tr><td>Decision variable</td><td>A primitive action $a$ at every state</td><td>An option $o$ (a macro), then its intra-option action</td></tr>
+      <tr><td>Lookahead span</td><td>One step</td><td>$\tau$ steps — the option's duration</td></tr>
+      <tr><td>Bootstrap discount</td><td>$\gamma$</td><td>$\gamma^{\,\tau}$</td></tr>
+      <tr><td>Value learned</td><td>$Q(s,a)$</td><td>$Q_\Omega(s,o)$; $V_\Omega(s)=\sum_o\pi_\Omega(o\mid s)Q_\Omega(s,o)$</td></tr>
+      <tr><td>Credit assignment</td><td>One reward per backup</td><td>Summed over the option, then handed to the next option</td></tr>
+      <tr><td>Backups to solve</td><td>$\sim$ length of the solution</td><td>$\sim$ number of options in the solution</td></tr>
+      <tr><td>What must be learned</td><td>Every step from scratch</td><td>Reusable skills + a short composition policy</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      \omega &= (I_\omega,\ \pi_\omega,\ \beta_\omega),\qquad \pi_\Omega(o\mid s) \\[2pt]
+      Q_\Omega(s,o) &= \mathbb{E}\!\left[\textstyle\sum_{j=0}^{\tau-1}\gamma^{\,j}R_{t+j+1}+\gamma^{\,\tau}V_\Omega(S_{t+\tau})\right],\qquad V_\Omega(s)=\sum_o\pi_\Omega(o\mid s)Q_\Omega(s,o) \\[2pt]
+      Q_*(s,o) &= \mathbb{E}\!\left[r_1+\gamma r_2+\cdots+\gamma^{\,\tau-1}r_\tau+\gamma^{\,\tau}\max_{o'}Q_*(s_{t+\tau},o')\right] \\[2pt]
+      \frac{\partial\mathcal{L}}{\partial\theta_\beta} &= -\mathbb{E}\!\left[\gamma^{\,\tau}A_\Omega(s_{t+\tau},o)\,\nabla_{\theta_\beta}\beta_{\theta_\beta}(s_{t+\tau})\right] \\[2pt]
+      V(s,g) &= \mathbb{E}\!\left[\textstyle\sum_{k=0}^{\infty}\gamma^{\,k}R_{t+k+1}\ \middle|\ S_t=s,\ g\right],\qquad a\sim\pi_W(a\mid s,g)
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream — multi-agent games, meta-learning over task families, and the goal-conditioned policies that drive language-model agents — is a choice about which timescale a single Bellman backup should span.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="15-exploration-and-intrinsic-motivation.html"><span class="pg-k">Previous</span><span class="pg-t">Exploration &amp; Curiosity</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="17-multi-agent-reinforcement-learning.html"><span class="pg-k">Next</span><span class="pg-t">Multi-Agent RL</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Learn a skill once; reuse it everywhere.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+/* =====================================================================
+   02 — Option Bellman: value propagation at option timescales
+   ===================================================================== */
+function initCorridor() {
+  const N = 12, GOALI = N - 1, GAMMA = 0.9;
+  const svg = $('#corSvg');
+  const slider = $('#corK');
+  const valEl = $('#corKVal');
+  const info = $('#corInfo');
+  const eqEl = $('#corEq');
+
+  let k = 3;
+  let Vp, Vo, sweep, running = null;
+
+  function reset() {
+    Vp = new Array(N).fill(0); Vo = new Array(N).fill(0);
+    Vp[GOALI] = 1; Vo[GOALI] = 1;
+    sweep = 0;
+  }
+
+  function depth(V) {
+    for (let i = 0; i < N; i++) if (V[i] > 1e-9) return GOALI - i;
+    return 0;
+  }
+
+  function draw() {
+    svg.innerHTML = '';
+    const base = 168, H = 138;
+    const yOf = v => base - Math.max(0, Math.min(1, v)) * H;
+    el('line', { x1: 22, y1: base, x2: 540, y2: base, stroke: '#e5e5e5' }, svg);
+    el('text', { x: 22, y: 18, 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, svg).textContent = 'V(s)';
+    el('text', { x: 512, y: base + 30, 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, svg).textContent = 'goal →';
+    for (let i = 0; i < N; i++) {
+      const xi = 34 + i * 44;
+      const vp = Vp[i], vo = Vo[i];
+      el('rect', { x: xi - 16, y: yOf(vp), width: 15, height: Math.max(0, base - yOf(vp)), rx: 3, fill: '#111' }, svg);
+      el('rect', { x: xi + 1, y: yOf(vo), width: 15, height: Math.max(0, base - yOf(vo)), rx: 3, fill: '#2563eb' }, svg);
+      el('text', {
+        x: xi, y: base + 16, 'text-anchor': 'middle', 'font-size': 10.5,
+        fill: '#9ca3af', 'font-family': 'ui-monospace, monospace'
+      }, svg).textContent = i;
+    }
+  }
+
+  function infoLine() {
+    info.textContent =
+      `sweeps = ${sweep}   primitive span = ${depth(Vp)} cells   option span = ${depth(Vo)} cells`;
+  }
+
+  function eqLine() {
+    T(eqEl,
+      `\\begin{aligned}
+      \\text{primitive: } & V(s)\\leftarrow\\gamma\\,V(s{+}1),\\quad \\#\\text{sweeps to span 11} = 11\\\\
+      \\text{option }(k{=}${k}): & V(s)\\leftarrow\\gamma^{${k}}\\,V(s{+}${k}),\\quad \\#\\text{sweeps} = \\left\\lceil \\tfrac{11}{${k}}\\right\\rceil = ${Math.ceil(11 / k)}
+      \\end{aligned}`, true);
+  }
+
+  function step() {
+    const nVp = Vp.slice(), nVo = Vo.slice();
+    for (let i = 0; i < GOALI; i++) {
+      nVp[i] = GAMMA * Vp[i + 1];
+      const j = Math.min(i + k, GOALI);
+      nVo[i] = Math.pow(GAMMA, j - i) * Vo[j];
+    }
+    Vp = nVp; Vo = nVo; sweep++;
+    draw(); infoLine(); eqLine();
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  $('#corStep').addEventListener('click', () => { stop(); step(); });
+  $('#corRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(() => {
+      step();
+      if (depth(Vo) >= 11 && depth(Vp) >= 11) stop();
+    }, 110);
+  });
+  $('#corReset').addEventListener('click', () => { stop(); reset(); draw(); infoLine(); eqLine(); });
+
+  slider.addEventListener('input', () => {
+    k = parseInt(slider.value, 10);
+    valEl.textContent = k;
+    stop(); reset(); draw(); infoLine(); eqLine();
+  });
+
+  reset(); draw(); infoLine(); eqLine();
+}
+
+/* =====================================================================
+   03 — Option composition gridworld
+   ===================================================================== */
+function initOptions() {
+  const ROWS = 5, COLS = 9, CELL = 48;
+  const GRIDW = COLS * CELL, GRIDH = ROWS * CELL;
+  const DR = 2;
+  const KEYC = { r: 1, c: 1 }, START = { r: 3, c: 0 }, GOAL = { r: 2, c: 7 };
+  const DOORL = { r: 2, c: 4 };
+  const ACTS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; // up right down left
+  const STEPR = -0.02, KEYR = 0.5, GOALR = 1.0, GAMMA = 0.99;
+  const MAXSTEP = 180, MAXEP = 150, BATCH = 3, NO = 3;
+  const OCOL = ['#2563eb', '#111', '#6b7280'];
+  const ONAME = ['go-to-key', 'go-to-door', 'go-to-goal'];
+
+  const svg = $('#optSvg');
+  const chart = $('#optChart');
+  const eqEl = $('#optEq');
+  const info = $('#optInfo');
+  const epsSlider = $('#optEps');
+  const epsVal = $('#optEpsVal');
+  const legEl = $('#optLegend');
+
+  let eps = 0.15, running = null, ep = 0;
+  let mode = 'both';
+  let flatSteps = [], optSteps = [], flatAvg = [], optAvg = [];
+  let lastSegments = [], lastUpdate = null;
+  let lastFlat = 0, lastOpt = 0, lastOpts = 0;
+
+  /* ---------------- environment ---------------- */
+  function canMove(r, c, a, hasKey) {
+    const nr = r + ACTS[a][0], nc = c + ACTS[a][1];
+    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return null;
+    if ((c === 4 && nc === 5) || (c === 5 && nc === 4)) {
+      if (r !== DR) return null;
+      if (!hasKey) return null;
+    }
+    return [nr, nc];
+  }
+
+  function stepEnv(s, a) {
+    const outs = [];
+    const moves = [[a, 0.8], [(a + 1) % 4, 0.1], [(a + 3) % 4, 0.1]];
+    for (const [act, p] of moves) {
+      const m = canMove(s.r, s.c, act, s.key);
+      let nr = s.r, nc = s.c;
+      if (m) { nr = m[0]; nc = m[1]; }
+      let nk = s.key, rew = STEPR, term = false;
+      if (!nk && nr === KEYC.r && nc === KEYC.c) { nk = true; rew += KEYR; }
+      if (nr === GOAL.r && nc === GOAL.c) { rew += GOALR; term = true; }
+      const kk = (nr * COLS + nc) * 2 + (nk ? 1 : 0);
+      const ex = outs.find(o => o.kk === kk);
+      if (ex) ex.p += p;
+      else outs.push({ kk, p, state: { r: nr, c: nc, key: nk }, rew, term });
+    }
+    return outs;
+  }
+  function sample(outs) {
+    let rnd = Math.random(), acc = 0;
+    for (const o of outs) { acc += o.p; if (rnd <= acc + 1e-9) return o; }
+    return outs[outs.length - 1];
+  }
+  const sKey = s => (s.r * COLS + s.c) * 2 + (s.key ? 1 : 0);
+
+  /* ---------------- low-level options (given, shortest-path) ---------------- */
+  function bfs(region, target) {
+    const dist = Array.from({ length: ROWS }, () => Array(COLS).fill(Infinity));
+    const act = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    if (!region(target.r, target.c)) return { dist, act };
+    dist[target.r][target.c] = 0;
+    const q = [[target.r, target.c]];
+    while (q.length) {
+      const [r, c] = q.shift();
+      for (let a = 0; a < 4; a++) {
+        const pr = r - ACTS[a][0], pc = c - ACTS[a][1];
+        if (pr < 0 || pr >= ROWS || pc < 0 || pc >= COLS) continue;
+        if (!region(pr, pc)) continue;
+        if (dist[pr][pc] > dist[r][c] + 1) {
+          dist[pr][pc] = dist[r][c] + 1;
+          act[pr][pc] = a;
+          q.push([pr, pc]);
+        }
+      }
+    }
+    return { dist, act };
+  }
+  const leftRegion = (r, c) => c <= 4;
+  const rightRegion = (r, c) => c >= 5;
+  const bfsKey = bfs(leftRegion, KEYC);
+  const bfsDoor = bfs(leftRegion, DOORL);
+  const bfsGoal = bfs(rightRegion, GOAL);
+
+  function optionPolicy(o, s) {
+    if (o === 0) {
+      if (s.key) return null;
+      if (s.c > 4) return null;
+      return bfsKey.act[s.r][s.c];
+    }
+    if (o === 1) {
+      if (s.c >= 5) return null;
+      if (s.r === DOORL.r && s.c === DOORL.c) return s.key ? 1 : null;
+      return bfsDoor.act[s.r][s.c];
+    }
+    if (s.c < 5) return null;
+    return bfsGoal.act[s.r][s.c];
+  }
+
+  function runOption(o, s0) {
+    let s = s0, R = 0, disc = 1, tau = 0, term = false;
+    const path = [];
+    while (tau < 30) {
+      const a = optionPolicy(o, s);
+      if (a === null) break;
+      const chosen = sample(stepEnv(s, a));
+      R += disc * chosen.rew; disc *= GAMMA;
+      s = chosen.state; tau++;
+      path.push(s);
+      if (chosen.term) { term = true; break; }
+      if (o === 0 && s.key) break;
+      if (o === 1 && s.c >= 5) break;
+      if (o === 2 && s.r === GOAL.r && s.c === GOAL.c) break;
+    }
+    return { R, tau, s, term, path };
+  }
+
+  /* ---------------- learners ---------------- */
+  const NSZ = ROWS * COLS * 2;
+  let Qh = new Array(NSZ * NO).fill(0);
+  let Qf = new Array(NSZ * 4).fill(0);
+
+  function flatEpisode() {
+    let s = { ...START, key: false }, steps = 0;
+    while (steps < MAXSTEP) {
+      const sk = sKey(s);
+      let a;
+      if (Math.random() < eps) a = Math.floor(Math.random() * 4);
+      else {
+        let best = 0, bv = -Infinity;
+        for (let i = 0; i < 4; i++) { const v = Qf[sk * 4 + i]; if (v > bv) { bv = v; best = i; } }
+        a = best;
+      }
+      const chosen = sample(stepEnv(s, a));
+      const s2 = chosen.state, sk2 = sKey(s2);
+      let target = chosen.rew;
+      if (!chosen.term) {
+        let m = -Infinity;
+        for (let i = 0; i < 4; i++) m = Math.max(m, Qf[sk2 * 4 + i]);
+        target += GAMMA * m;
+      }
+      Qf[sk * 4 + a] += 0.15 * (target - Qf[sk * 4 + a]);
+      s = s2; steps++;
+      if (chosen.term) return steps;
+    }
+    return MAXSTEP;
+  }
+
+  function availOpts(s) {
+    const a = [];
+    if (!s.key && s.c <= 4) a.push(0);
+    if (s.c < 5) a.push(1);
+    if (s.c >= 5) a.push(2);
+    return a.length ? a : [0, 1, 2];
+  }
+
+  function hierEpisode() {
+    let s = { ...START, key: false }, steps = 0, nopt = 0;
+    const segments = [];
+    while (steps < MAXSTEP && nopt < 16) {
+      const sk = sKey(s);
+      const opts = availOpts(s);
+      let o;
+      if (Math.random() < eps) o = opts[Math.floor(Math.random() * opts.length)];
+      else {
+        let best = opts[0], bv = -Infinity;
+        for (const i of opts) { const v = Qh[sk * NO + i]; if (v > bv) { bv = v; best = i; } }
+        o = best;
+      }
+      const start = s;
+      const res = runOption(o, s);
+      const s2 = res.s, sk2 = sKey(s2);
+      let m = 0;
+      for (const i of availOpts(s2)) m = Math.max(m, Qh[sk2 * NO + i]);
+      let target = res.R;
+      if (!res.term) target += Math.pow(GAMMA, res.tau) * m;
+      const old = Qh[sk * NO + o];
+      const neu = old + 0.4 * (target - old);
+      Qh[sk * NO + o] = neu;
+      lastUpdate = { o, R: res.R, tau: res.tau, old, neu, term: res.term, m };
+      segments.push({ o, path: [start, ...res.path] });
+      s = s2; steps += res.tau; nopt++;
+      if (res.term) return { steps, opts: nopt, segments };
+    }
+    return { steps, opts: nopt, segments };
+  }
+
+  /* ---------------- rendering ---------------- */
+  function renderGrid() {
+    svg.innerHTML = '';
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        el('rect', {
+          x: c * CELL + 1, y: r * CELL + 1, width: CELL - 2, height: CELL - 2, rx: 5,
+          fill: '#fff', stroke: '#ededed'
+        }, svg);
+      }
+    }
+    for (let r = 0; r < ROWS; r++) {
+      if (r === DR) continue;
+      el('rect', { x: 4 * CELL - 1.5, y: r * CELL, width: 3, height: CELL, fill: '#111' }, svg);
+    }
+    el('rect', {
+      x: 4 * CELL - 2.5, y: DR * CELL + 4, width: 5, height: CELL - 8, rx: 2,
+      fill: 'none', stroke: '#c2c9d4', 'stroke-width': 1.5, 'stroke-dasharray': '3 3'
+    }, svg);
+    // labels
+    const lbl = (r, c, txt, fill, bg, op) => {
+      if (bg) el('rect', { x: c * CELL + 4, y: r * CELL + 4, width: CELL - 8, height: CELL - 8, rx: 5, fill: bg }, svg);
+      const t = el('text', {
+        x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 5, 'text-anchor': 'middle',
+        'font-size': 13, 'font-weight': 650, fill, 'font-family': 'ui-monospace, monospace'
+      }, svg);
+      t.textContent = txt;
+    };
+    lbl(KEYC.r, KEYC.c, 'K', '#1e3a8a', '#eef2ff');
+    lbl(GOAL.r, GOAL.c, 'G', '#fff', '#1e40af');
+    lbl(START.r, START.c, 'S', '#111', null);
+
+    // trajectory of the most recent hierarchical episode
+    lastSegments.forEach(seg => {
+      if (seg.path.length < 1) return;
+      const pts = seg.path.map(st => `${st.c * CELL + CELL / 2},${st.r * CELL + CELL / 2}`).join(' ');
+      el('polyline', {
+        points: pts, fill: 'none', stroke: OCOL[seg.o],
+        'stroke-width': 2.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.9
+      }, svg);
+      const s0 = seg.path[0];
+      el('circle', {
+        cx: s0.c * CELL + CELL / 2, cy: s0.r * CELL + CELL / 2, r: 4.5,
+        fill: OCOL[seg.o], stroke: '#fff', 'stroke-width': 1.5
+      }, svg);
+    });
+    const last = lastSegments[lastSegments.length - 1];
+    if (last && last.path.length) {
+      const e = last.path[last.path.length - 1];
+      el('circle', {
+        cx: e.c * CELL + CELL / 2, cy: e.r * CELL + CELL / 2, r: 6,
+        fill: '#fff', stroke: '#111', 'stroke-width': 2.5
+      }, svg);
+    }
+  }
+
+  function moving(arr) {
+    const w = 8, out = [];
+    for (let i = 0; i < arr.length; i++) {
+      const s = Math.max(0, i - w + 1);
+      let sum = 0;
+      for (let j = s; j <= i; j++) sum += arr[j];
+      out.push(sum / (i - s + 1));
+    }
+    return out;
+  }
+
+  function renderChart() {
+    chart.innerHTML = '';
+    const W = 520, H = 220, ml = 44, mr = 16, mt = 16, mb = 36;
+    const xw = W - ml - mr, yh = H - mt - mb;
+    const X = e => ml + (e / MAXEP) * xw;
+    const Y = v => mt + yh - (Math.min(v, MAXSTEP) / MAXSTEP) * yh;
+    el('line', { x1: ml, y1: mt, x2: ml, y2: mt + yh, stroke: '#e5e5e5' }, chart);
+    el('line', { x1: ml, y1: mt + yh, x2: ml + xw, y2: mt + yh, stroke: '#e5e5e5' }, chart);
+    [0, 45, 90, 135, 180].forEach(t => {
+      el('text', { x: ml - 8, y: Y(t) + 4, 'text-anchor': 'end', 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, chart).textContent = t;
+    });
+    [0, 50, 100, 150].forEach(t => {
+      el('text', { x: X(t), y: mt + yh + 17, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, chart).textContent = t;
+    });
+    el('text', { x: 6, y: mt + 8, 'font-size': 10, fill: '#9ca3af' }, chart).textContent = 'steps';
+    el('text', { x: ml + xw, y: mt + yh + 30, 'text-anchor': 'end', 'font-size': 10, fill: '#9ca3af' }, chart).textContent = 'episode';
+    const poly = (arr, color) => {
+      if (!arr.length) return;
+      let d = '';
+      arr.forEach((v, i) => { d += (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1) + ' '; });
+      el('path', { d, fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round' }, chart);
+    };
+    if (mode !== 'opt') poly(flatAvg, '#111');
+    if (mode !== 'flat') poly(optAvg, '#2563eb');
+    let lx = ml + 10;
+    const ly = mt + 12;
+    if (mode !== 'opt') {
+      el('rect', { x: lx, y: ly - 8, width: 14, height: 3, rx: 1.5, fill: '#111' }, chart);
+      el('text', { x: lx + 20, y: ly - 4, 'font-size': 11, fill: '#6b7280' }, chart).textContent = 'flat';
+      lx += 78;
+    }
+    if (mode !== 'flat') {
+      el('rect', { x: lx, y: ly - 8, width: 14, height: 3, rx: 1.5, fill: '#2563eb' }, chart);
+      el('text', { x: lx + 20, y: ly - 4, 'font-size': 11, fill: '#6b7280' }, chart).textContent = 'options';
+    }
+  }
+
+  function renderEq() {
+    if (!lastUpdate) return;
+    const { R, tau, old, neu, term, m } = lastUpdate;
+    const gpow = Math.pow(GAMMA, tau).toFixed(3);
+    const inner = term
+      ? `${R.toFixed(2)}`
+      : `${R.toFixed(2)}+${gpow}\\!\\cdot\\!${m.toFixed(2)}`;
+    T(eqEl,
+      `\\begin{aligned}
+      Q(s,o) &\\leftarrow Q(s,o)+\\alpha\\big[R+\\gamma^{\\tau}\\max_{o'}Q(s',o')-Q(s,o)\\big]\\\\
+      &= ${old.toFixed(2)}+0.40\\big[${inner}-${old.toFixed(2)}\\big]=\\mathbf{${neu.toFixed(3)}}
+      \\end{aligned}`, true);
+  }
+
+  function renderInfo() {
+    info.textContent = `episode = ${ep}   flat = ${lastFlat} steps   options = ${lastOpt} steps / ${lastOpts} macro-decisions`;
+  }
+
+  function tick() {
+    for (let b = 0; b < BATCH && ep < MAXEP; b++) {
+      lastFlat = flatEpisode();
+      const h = hierEpisode();
+      lastOpt = h.steps; lastOpts = h.opts; lastSegments = h.segments;
+      flatSteps.push(lastFlat);
+      optSteps.push(lastOpt);
+      ep++;
+    }
+    flatAvg = moving(flatSteps);
+    optAvg = moving(optSteps);
+    renderGrid(); renderChart(); renderEq(); renderInfo();
+    if (ep >= MAXEP) stop();
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  function resetAll() {
+    stop();
+    Qh = new Array(NSZ * NO).fill(0);
+    Qf = new Array(NSZ * 4).fill(0);
+    flatSteps = []; optSteps = []; flatAvg = []; optAvg = [];
+    lastSegments = []; lastUpdate = null;
+    ep = 0; lastFlat = 0; lastOpt = 0; lastOpts = 0;
+    renderGrid(); renderChart(); renderEq(); renderInfo();
+  }
+
+  $('#optRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    if (ep >= MAXEP) resetAll();
+    running = setInterval(tick, 110);
+  });
+  $('#optReset').addEventListener('click', resetAll);
+
+  epsSlider.addEventListener('input', () => {
+    eps = parseFloat(epsSlider.value);
+    epsVal.textContent = eps.toFixed(2);
+  });
+
+  $$('#optModeBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      $$('#optModeBtns button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      mode = b.dataset.mode;
+      renderChart();
+    });
+  });
+
+  // legend
+  legEl.innerHTML = ONAME.map((n, i) =>
+    `<span><i style="background:${OCOL[i]}"></i>${n}</span>`
+  ).join('');
+
+  resetAll();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initCorridor();
+  initOptions();
+  initScroll();
+});
+</script>
+</body>
+</html>

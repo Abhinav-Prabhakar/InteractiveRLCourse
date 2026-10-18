@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 19 · Distributional and Risk-Sensitive RL</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Ch. 19 · Distributional RL</a>
+    <nav class="nav">
+      <a href="#dist">Distributions</a>
+      <a href="#repr">Representations</a>
+      <a href="#risk">Risk measures</a>
+      <a href="#explore">Explorer</a>
+      <a href="#pg">Gradients</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Part IV · Chapter 19</p>
+    <h1>Distributional and<br>Risk-Sensitive RL</h1>
+    <p class="lede">A value is not a number — it is a random variable. Track its whole distribution and you get to choose how much the bad tail matters.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="dist">
+  <div class="wrap">
+    <h2><span class="num">01</span>Return distributions</h2>
+    <p>Every method so far chased a single number: the expected return. <b>Distributional RL</b> keeps the random variable itself,</p>
+    <div class="eqbox">
+      $$Z^\pi(s,a)\;=\;\sum_{k=0}^{\infty}\gamma^{k}R_{t+k+1}\quad\text{given } S_t=s,\;A_t=a,\qquad Q^\pi(s,a)=\mathbb{E}\!\left[Z^\pi(s,a)\right].$$
+    </div>
+    <p>The distribution obeys a Bellman equation of its own, with equality in <em>distribution</em>:</p>
+    <div class="eqbox">
+      $$Z^\pi(s,a)\;\overset{D}{=}\;R(s,a)+\gamma\,Z^\pi(S',A'),\qquad S'\sim P(\cdot\mid s,a),\; A'\sim\pi(\cdot\mid S').$$
+    </div>
+    <p><b>Equal in distribution, not equal as numbers.</b> Both sides are random variables, so the object of study is the whole law of $Z$, and the operator acts on entire distributions:</p>
+    <div class="eqbox">
+      $$\left(\mathcal{T}^{\pi}Z\right)(s,a)\;\overset{D}{=}\;R(s,a)+\gamma\,Z(S',A').$$
+    </div>
+    <div class="note">
+      <b>The classical operator falls straight out.</b> Taking expectations of both sides, $\mathbb{E}[(\mathcal{T}^\pi Z)(s,a)]=R(s,a)+\gamma\sum_{s'}P(s'|s,a)\sum_{a'}\pi(a'|s')\mathbb{E}[Z(s',a')]$. The mean of the fixed point of $\mathcal{T}^\pi$ is exactly $Q^\pi$, so distributional RL strictly generalizes value-based RL.
+    </div>
+    <p>Contraction survives, in the right metric. Let $d_p$ be the $p$-Wasserstein distance between distributions and $\bar d_p$ its sup over state–action pairs:</p>
+    <div class="eqbox">
+      $$\bar d_p\!\left(\mathcal{T}^{\pi}Z_1,\;\mathcal{T}^{\pi}Z_2\right)\;\le\;\gamma\,\bar d_p\!\left(Z_1,\,Z_2\right),\qquad p\in[1,\infty).$$
+    </div>
+    <div class="note">
+      The sup-norm that made value iteration a contraction is <em>undefined</em> between distributions. The Wasserstein metric takes its place, and the $\gamma$-contraction — hence a unique fixed point — survives.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="repr">
+  <div class="wrap">
+    <h2><span class="num">02</span>Representing the distribution</h2>
+    <p>A distribution on a continuum of returns must be pinned down by finitely many parameters, and there are three standard answers.</p>
+
+    <h3>C51 — categorical</h3>
+    <p>Fix $K$ atoms on a bounded range and let the network emit a probability on each:</p>
+    <div class="eqbox">
+      $$z_i=V_{\min}+(i-1)\Delta,\quad \Delta=\frac{V_{\max}-V_{\min}}{K-1},\qquad Z(s,a)=z_i\ \text{ with prob. } p_i(s,a).$$
+    </div>
+    <p>The Bellman target lives off the grid, so it is <b>projected</b> back onto the atoms by splitting the mass of $r+\gamma z_j$ between its two nearest neighbours, giving the target distribution $m$ trained by cross-entropy:</p>
+    <div class="eqbox">
+      $$\left(\Phi\,\hat{\mathcal{T}}Z\right)_i=\sum_{j=1}^{K}\Big[1-\tfrac{|r+\gamma z_j-z_i|}{\Delta}\Big]_0^1 p_j(s',a^*),\qquad L(\theta)=-\sum_{i=1}^{K}m_i\log p_i(s,a).$$
+    </div>
+
+    <h3>QR-DQN — quantile</h3>
+    <p>Quantiles need no bounded support. Fix $N$ levels $\tau_i=(i-\tfrac12)/N$, learn their values $\theta_i(s,a)$, and fit with the <b>pinball</b> (quantile) loss on the Bellman target:</p>
+    <div class="eqbox">
+      $$\rho^{1}_{\tau}(\delta)=\delta\left(\tau-\mathbf{1}\{\delta\lt0\}\right),\qquad L(\theta)=\frac{1}{N}\sum_{i=1}^{N}\mathbb{E}\!\left[\rho^{1}_{\tau_i}\!\left(r+\gamma\,z_{\tau_i}(s',a^*)-\theta_i(s,a)\right)\right].$$
+    </div>
+
+    <h3>IQN — implicit</h3>
+    <p>Instead of fixing the levels, sample $\tau\sim U(0,1)$ and condition the network on it. One network then represents every quantile — a continuous distribution:</p>
+    <div class="eqbox">
+      $$Z_\tau(s,a)=f\!\left(\psi(s,a)\odot\phi(\tau)\right),\qquad \phi(\tau)=\mathrm{ReLU}\!\left(\sum_{i}\cos(\pi i\tau)\,w_i+b\right).$$
+    </div>
+
+    <table class="cmp">
+      <tr><th></th><th>C51 — categorical</th><th>QR-DQN — quantile</th><th>IQN — implicit</th></tr>
+      <tr><td>Parameters</td><td>$p_i$ over $K$ fixed atoms</td><td>$N$ quantile values $\theta_i$</td><td>network of the quantile level $\tau$</td></tr>
+      <tr><td>Support</td><td>bounded, fixed grid</td><td>free, unbounded</td><td>free, continuous</td></tr>
+      <tr><td>Loss</td><td>cross-entropy on the projection</td><td>quantile (pinball) regression</td><td>sampled quantile regression</td></tr>
+      <tr><td>Risk readout</td><td>CVaR from tail atoms</td><td>CVaR exactly from quantiles</td><td>any distorted expectation</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="risk">
+  <div class="wrap">
+    <h2><span class="num">03</span>Risk measures</h2>
+    <p>A distribution is strictly richer information than its mean, but a controller needs one scalar to maximize. A <b>risk measure</b> $\rho$ collapses $Z$ to a number, and different $\rho$ give different policies from the very same $Z$.</p>
+    <p>The neutral choice is the mean; the simplest risk-aware one adds a penalty on spread:</p>
+    <div class="eqbox">
+      $$\rho(Z)=\mathbb{E}[Z],\qquad \rho_\lambda(Z)=\mathbb{E}[Z]-\lambda\,\mathrm{Var}[Z],\qquad \lambda\ge 0.$$
+    </div>
+    <p><b>CVaR</b> (conditional value-at-risk) penalizes only the tail. At level $\alpha\in(0,1]$ it is the mean of the worst $\alpha$-fraction of outcomes:</p>
+    <div class="eqbox">
+      $$\mathrm{CVaR}_\alpha(Z)=\frac{1}{\alpha}\int_0^{\alpha}F_Z^{-1}(u)\,du=\mathbb{E}\!\left[Z \mid Z\le \mathrm{VaR}_\alpha(Z)\right].$$
+    </div>
+    <p>As $\alpha\to0$ it approaches the worst case; at $\alpha=1$ it is the mean.</p>
+
+    <h3>Distorted expectations</h3>
+    <p>The quantile function $F_Z^{-1}$ <em>is</em> the distribution. A <b>distortion</b> $h:[0,1]\to[0,1]$ that is nondecreasing with $h(0)=0,\;h(1)=1$ reweights the quantiles:</p>
+    <div class="eqbox">
+      $$\rho_h(Z)=\int_0^1 F_Z^{-1}(u)\,dh(u).$$
+    </div>
+    <div class="note">
+      This single formula contains the others. $h(u)=u$ gives the mean; $h(u)=\min(u/\alpha,\,1)$ gives exactly $\mathrm{CVaR}_\alpha$; the Gaussian tilt $h(u)=\Phi\!\left(\Phi^{-1}(u)+\lambda\right)$ is the Wang transform. Because $h$ is a probability weighting, $\rho_h$ is a <b>Choquet integral</b>.
+    </div>
+    <p>The explorer below uses the one-parameter family $h(u)=u^{\tau}$. It sweeps every attitude: $\tau=1$ is the mean, $\tau\lt 1$ steepens the weight near $u=0$ so the worst outcomes dominate (<em>risk-averse</em>), and $\tau\gt1$ pushes weight to $u=1$ onto the best outcomes (<em>risk-seeking</em>).</p>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="explore">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Risk Profile Explorer</h2>
+      <p>Two actions with <em>identical</em> mean return but wildly different spread: a safe action and a risky gamble. Drag $\tau$ and watch which action the distorted expectation prefers.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · Risk Profile Explorer</span>
+        <div class="slider-row" style="width:240px">
+          <span class="small muted">$\tau$</span>
+          <input type="range" id="riskTau" min="0.2" max="3" step="0.05" value="1" aria-label="risk distortion parameter tau">
+          <span class="val" id="riskTauVal">1.00</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 400px">
+          <svg id="riskSvg" viewBox="0 0 640 300" role="img" aria-label="Return distributions and their distorted expectations" style="width:100%"></svg>
+          <p class="small muted" style="text-align:center;margin:6px 0 0">Bars = outcome probabilities · dashed gray = mean · solid black = distorted expectation $\rho_\tau$</p>
+        </div>
+
+        <div class="col" style="flex:1 1 260px">
+          <h4 style="margin-top:0">Policy over actions</h4>
+          <div id="riskPolicy"></div>
+          <p class="small" id="riskRead" style="margin-top:8px"></p>
+          <h4>Live numbers</h4>
+          <div class="eqbox" id="riskEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p class="small muted">Safe returns $\{0.0,\,0.4\}$ each with probability $0.5$; risky returns $\{-3.0,\,5.0\}$ with probabilities $0.6,\,0.4$. Both have mean $0.2$, so the two distorted expectations cross exactly at $\tau=1$ — risk attitude alone decides.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="pg">
+  <div class="wrap">
+    <h2><span class="num">05</span>Risk-sensitive policy gradients</h2>
+    <p>The policy gradient maximizes $J(\theta)=\mathbb{E}_\pi[G]$. Swap the scalar return $G$ for a risk measure of $Z_\theta$ and the theorem is unchanged except in the <em>weight</em> it attaches to each return.</p>
+    <p>Mean–variance replaces $G$ by a penalized return. Since $\nabla_\theta\mathbb{E}[G^2]=\mathbb{E}[\nabla_\theta\log\pi\cdot G^2]$ and $\mathbb{E}[\nabla_\theta\log\pi]=0$, the variance gradient collapses to a squared-deviation weight:</p>
+    <div class="eqbox">
+      $$\nabla_\theta\big(J-\lambda\,\mathrm{Var}[G]\big)=\mathbb{E}_\pi\!\left[\nabla_\theta\log\pi_\theta(A\mid S)\left(G-\lambda\,(G-J)^2\right)\right].$$
+    </div>
+    <p>CVaR keeps the likelihood-ratio estimator but credits only the worst $\alpha$-fraction of trajectories, with the threshold read off the learned distribution:</p>
+    <div class="eqbox">
+      $$\nabla_\theta\,\mathrm{CVaR}_\alpha(Z_\theta)=\frac{1}{\alpha}\,\mathbb{E}_\pi\!\left[\nabla_\theta\log\pi_\theta(A\mid S)\;G\;\mathbf{1}\!\left\{G\le \mathrm{VaR}_\alpha(Z_\theta)\right\}\right].$$
+    </div>
+    <div class="note">
+      <b>You cannot reweight a tail you cannot see.</b> Both estimators need $\mathrm{VaR}_\alpha$ or $\mathrm{Var}[G]$, which are properties of $Z$ — so the distribution is learned first and the risk-sensitive gradient is read off it.
+    </div>
+    <p>The general distorted objective differentiates through the quantile function; sampling $\tau\sim U(0,1)$ turns the integral into a one-sample estimator weighted by $h'(\tau)$, exactly the IQN-style risk-sensitive policy gradient:</p>
+    <div class="eqbox">
+      $$\rho_h(Z_\theta)=\int_0^1 F_\theta^{-1}(u)\,dh(u)\quad\Longrightarrow\quad \nabla_\theta\,\rho_h=\mathbb{E}_{\tau\sim U(0,1)}\!\left[h'(\tau)\,\nabla_\theta F_\theta^{-1}(\tau)\right].$$
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">06</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Scalar value</th><th>Return distribution</th></tr>
+      <tr><td>Object</td><td>$Q_\pi(s,a)=\mathbb{E}[Z^\pi(s,a)]$</td><td>$Z^\pi(s,a)$, the full law of the return</td></tr>
+      <tr><td>Bellman</td><td>$Q=R+\gamma\,\mathbb{E}[Q]$</td><td>$Z\overset{D}{=}R+\gamma\,Z$</td></tr>
+      <tr><td>Metric</td><td>sup-norm, $\gamma$-contraction</td><td>Wasserstein $d_p$, $\gamma$-contraction</td></tr>
+      <tr><td>Loss</td><td>squared TD error</td><td>cross-entropy (C51) / quantile regression (QR-DQN, IQN)</td></tr>
+      <tr><td>Risk</td><td>fixed — risk-neutral</td><td>chosen by a risk measure $\rho$</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      \left(\mathcal{T}^{\pi}Z\right)(s,a) &\overset{D}{=} R(s,a)+\gamma\,Z(S',A')\\[2pt]
+      \left(\Phi\,\hat{\mathcal{T}}Z\right)_i &= \sum_{j}\Big[1-\tfrac{|r+\gamma z_j-z_i|}{\Delta}\Big]_0^1 p_j(s',a^*)\\[2pt]
+      \mathrm{CVaR}_\alpha(Z) &= \tfrac{1}{\alpha}\int_0^{\alpha}F_Z^{-1}(u)\,du\\[2pt]
+      \rho_h(Z) &= \int_0^1 F_Z^{-1}(u)\,dh(u)\\[2pt]
+      \nabla_\theta\big(J-\lambda\,\mathrm{Var}[G]\big) &= \mathbb{E}_\pi\!\left[\nabla_\theta\log\pi_\theta(A\mid S)\big(G-\lambda\,(G-J)^2\big)\right]
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Next: imitation learning and inverse reinforcement learning, where the reward function itself — not just its distribution — is the unknown.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="18-meta-reinforcement-learning-and-multi-task-rl.html"><span class="pg-k">Previous</span><span class="pg-t">Meta-RL &amp; Multi-Task RL</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="20-imitation-learning-and-inverse-rl.html"><span class="pg-k">Next</span><span class="pg-t">Imitation &amp; Inverse RL</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+/* =====================================================================
+   04 — Risk Profile Explorer
+   ===================================================================== */
+function initRiskProfile() {
+  const svg = $('#riskSvg');
+  const eqEl = $('#riskEq');
+  const slider = $('#riskTau');
+  const valEl = $('#riskTauVal');
+  const polEl = $('#riskPolicy');
+  const readEl = $('#riskRead');
+
+  const SAFE = [{ z: 0.0, p: 0.5 }, { z: 0.4, p: 0.5 }];
+  const RISKY = [{ z: -3.0, p: 0.6 }, { z: 5.0, p: 0.4 }];
+  const TPOL = 0.4;
+  const ZMIN = -4, ZMAX = 6, PAD = 54, W = 640, H = 300, ROWH = 86;
+
+  function distorted(outcomes, tau) {
+    const z = outcomes.slice().sort((a, b) => a.z - b.z);
+    let F = 0, prevH = 0, rho = 0;
+    for (const o of z) {
+      F += o.p;
+      const h = Math.pow(F, tau);
+      rho += o.z * (h - prevH);
+      prevH = h;
+    }
+    return rho;
+  }
+  const meanOf = o => o.reduce((a, b) => a + b.z * b.p, 0);
+
+  function render() {
+    const tau = parseFloat(slider.value);
+    valEl.textContent = tau.toFixed(2);
+
+    const rhoS = distorted(SAFE, tau);
+    const rhoR = distorted(RISKY, tau);
+    const mS = meanOf(SAFE), mR = meanOf(RISKY);
+    const pR = 1 / (1 + Math.exp(-(rhoR - rhoS) / TPOL));
+    const pS = 1 - pR;
+
+    /* ---- distribution chart ---- */
+    svg.innerHTML = '';
+    const xOf = z => PAD + (z - ZMIN) / (ZMAX - ZMIN) * (W - 2 * PAD);
+
+    for (let t = -4; t <= 6; t += 2) {
+      el('line', { x1: xOf(t), y1: H - 26, x2: xOf(t), y2: H - 21, stroke: '#d4d4d8' }, svg);
+      const tx = el('text', {
+        x: xOf(t), y: H - 9, 'text-anchor': 'middle', 'font-size': 11,
+        fill: '#9ca3af', 'font-family': 'ui-monospace, monospace'
+      }, svg);
+      tx.textContent = t;
+    }
+
+    const rows = [
+      { name: 'Safe', data: SAFE, rho: rhoS, mean: mS, top: 22 },
+      { name: 'Risky', data: RISKY, rho: rhoR, mean: mR, top: 164 }
+    ];
+
+    rows.forEach(row => {
+      const base = row.top + ROWH;
+      el('line', { x1: PAD, y1: base, x2: W - PAD, y2: base, stroke: '#ededed' }, svg);
+      const lab = el('text', {
+        x: PAD - 10, y: base - 4, 'text-anchor': 'end', 'font-size': 12,
+        'font-weight': 650, fill: '#111', 'font-family': 'ui-monospace, monospace'
+      }, svg);
+      lab.textContent = row.name;
+
+      row.data.forEach(o => {
+        const x = xOf(o.z), bh = (o.p / 0.7) * ROWH * 0.8, bw = 26;
+        el('rect', {
+          x: x - bw / 2, y: base - bh, width: bw, height: bh, rx: 5,
+          fill: o.z >= 0 ? '#2563eb' : '#dc2626'
+        }, svg);
+        const pl = el('text', {
+          x: x, y: base - bh - 5, 'text-anchor': 'middle', 'font-size': 11,
+          fill: '#6b7280', 'font-family': 'ui-monospace, monospace'
+        }, svg);
+        pl.textContent = o.p.toFixed(1);
+        const zl = el('text', {
+          x: x, y: base + 15, 'text-anchor': 'middle', 'font-size': 11,
+          'font-weight': 600, fill: '#111', 'font-family': 'ui-monospace, monospace'
+        }, svg);
+        zl.textContent = o.z.toFixed(1);
+      });
+
+      el('line', {
+        x1: xOf(row.mean), y1: row.top - 6, x2: xOf(row.mean), y2: base,
+        stroke: '#c2c9d4', 'stroke-width': 1.5, 'stroke-dasharray': '3 3'
+      }, svg);
+      el('line', {
+        x1: xOf(row.rho), y1: row.top - 6, x2: xOf(row.rho), y2: base,
+        stroke: '#111', 'stroke-width': 2
+      }, svg);
+      const rt = el('text', {
+        x: xOf(row.rho), y: row.top - 12, 'text-anchor': 'middle', 'font-size': 11.5,
+        'font-weight': 700, fill: '#111', 'font-family': 'ui-monospace, monospace',
+        style: 'paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round'
+      }, svg);
+      rt.textContent = 'ρ=' + row.rho.toFixed(2);
+    });
+
+    /* ---- policy bar ---- */
+    polEl.innerHTML =
+      '<div style="display:flex;height:28px;border-radius:8px;overflow:hidden;border:1px solid #f0f0f0">' +
+        '<div style="width:' + (pS * 100).toFixed(2) + '%;background:#c2c9d4"></div>' +
+        '<div style="width:' + (pR * 100).toFixed(2) + '%;background:#111"></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:7px;font-family:ui-monospace, monospace">' +
+        '<span class="muted">safe ' + (pS * 100).toFixed(0) + '%</span>' +
+        '<span>risky ' + (pR * 100).toFixed(0) + '%</span>' +
+      '</div>';
+
+    const mode = pR > 0.55 ? 'risk-seeking' : (pR < 0.45 ? 'risk-averse' : 'risk-neutral');
+    readEl.innerHTML = 'At τ = ' + tau.toFixed(2) + ' the policy is <b>' + mode + '</b>.';
+
+    /* ---- live equation ---- */
+    T(eqEl,
+      '\\begin{aligned}' +
+      '\\rho_\\tau(Z_{\\text{safe}}) &= \\int_0^1 F_{\\text{safe}}^{-1}(u)\\,d(u^\\tau) = ' + rhoS.toFixed(2) + '\\\\' +
+      '\\rho_\\tau(Z_{\\text{risky}}) &= \\int_0^1 F_{\\text{risky}}^{-1}(u)\\,d(u^\\tau) = ' + rhoR.toFixed(2) + '\\\\' +
+      'p(\\text{risky}) &= \\sigma\\!\\left(\\frac{\\rho_\\tau(Z_{\\text{risky}})-\\rho_\\tau(Z_{\\text{safe}})}{T}\\right) = ' + pR.toFixed(2) +
+      '\\end{aligned}', true);
+  }
+
+  slider.addEventListener('input', render);
+  render();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initRiskProfile();
+  initScroll();
+});
+</script>
+</body>
+</html>

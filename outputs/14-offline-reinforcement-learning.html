@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline Reinforcement Learning</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<!--
+  Chapter 14 — Offline Reinforcement Learning.
+  Assumptions (per prompt.md, which invites a top-of-file note):
+   · No quiz component (the reference has none). The brief's quiz prompts
+     are folded into the prose as derivations of the CQL penalty and the
+     IQL loss.
+   · Two visualizers: (1) an extrapolation-error plot in §02, (2) the
+     required "Offline Data Explorer" in §05. Both are hand-written
+     numeric code.
+   · The three learners are tabular on a 4x4 gridworld. "Naive DQN" is the
+     offline Q-learning backup (the DQN loss restricted to a table); CQL
+     and IQL follow their tabular forms. Every number is computed in-page.
+-->
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- chain diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+/* ---------------- chapter extensions (reuse the tokens above) ---------------- */
+.plot{width:100%;max-width:540px;margin:0 auto;display:block}
+.barchart{width:100%;max-width:480px;margin:0 auto;display:block}
+.mlegend{display:flex;gap:16px;justify-content:center;font-size:11.5px;color:#6b7280;font-family:ui-monospace,monospace;margin-top:10px;flex-wrap:wrap}
+.mlegend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.mlegend i.dash{width:16px;height:0;border-top:1.5px dashed #9ca3af;border-radius:0;vertical-align:middle}
+.ogcap{font-size:11.5px;color:#9ca3af;font-family:ui-monospace,monospace;text-align:center;margin:6px 0 0}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Offline RL</a>
+    <nav class="nav">
+      <a href="#setting">The log</a>
+      <a href="#shift">Distribution shift</a>
+      <a href="#max">The blind max</a>
+      <a href="#cql">CQL</a>
+      <a href="#explorer">Explorer</a>
+      <a href="#iql">IQL</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Modern and Advanced Topics</p>
+    <h1>Offline Reinforcement<br>Learning</h1>
+    <p class="lede">Learn a policy from a fixed log of experience — with no environment to query and no second chance at the states you never visited.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="setting">
+  <div class="wrap">
+    <h2><span class="num">01</span>The offline setting</h2>
+    <p><b>Offline RL</b> — also called batch RL — hands you a fixed dataset and forbids all further interaction. The data was produced by some <b>behavior policy</b> $\mu$, usually unknown and usually mediocre.</p>
+    <div class="eqbox">
+      $$\mathcal{D}=\big\{(s_i,a_i,r_i,s'_i)\big\}\sim\mu,\qquad
+        \max_{\pi}\;J(\pi)=\mathbb{E}_{\pi}\!\Big[\textstyle\sum_{t}\gamma^{t}r_t\Big]
+        \quad\text{using only }\mathcal{D}.$$
+    </div>
+    <p>The dataset is a sample from the state distribution that $\mu$ induces — <em>not</em> the one $\pi$ will induce. That single mismatch is the whole chapter.</p>
+    <div class="note">
+      <b>Why it matters.</b> Logged hospital treatments, driving fleets, and recommendation feeds are all offline. The environment is not available; the counterfactual action is never observed. You get one distribution of experience and must not leave it carelessly.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="shift">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>The distribution shift problem</h2>
+      <p>Every value-based method improves the policy by pushing probability toward actions with high value. Offline, that push can walk straight out of the data.</p>
+      <div class="eqbox">
+        $$\pi(a\mid s)>0\quad\text{where}\quad\mu(a\mid s)\approx 0.$$
+      </div>
+      <p>Nothing in $\mathcal{D}$ constrains $Q(s,a)$ there. A function approximator will still report <em>some</em> value, and the $\arg\max$ will still select it. The defect is not noise — it is an unconstrained <b>extrapolation</b>, and bootstrapping feeds it back into every predecessor.</p>
+      <p>Give a fit too little flexibility and it cannot bend where the data does; give it too much and it bends everywhere the data does not. Either way its maximum can leave the region the data covers. Drag the slider and watch where $\hat a$ lands.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · extrapolation error</span>
+        <div class="slider-row" style="width:240px">
+          <span class="small muted">fit degree</span>
+          <input type="range" id="exDeg" min="1" max="7" step="1" value="4" aria-label="polynomial fit degree">
+          <span class="val" id="exDegVal">4</span>
+        </div>
+      </div>
+      <svg id="exSvg" class="plot" viewBox="0 0 540 250" role="img" aria-label="Extrapolation of a value fit beyond the support of the behavior policy"></svg>
+      <div class="mlegend">
+        <span><i style="background:#9ca3af"></i>true $Q^*(a)$</span>
+        <span><i style="background:#111"></i>fitted $\hat Q(a)$</span>
+        <span><i style="background:#2563eb"></i>data $(a_i,y_i)$</span>
+        <span><i style="background:rgba(37,99,235,.18)"></i>support of $\mu$</span>
+      </div>
+      <div class="eqbox" id="exEq" style="margin-top:16px"></div>
+      <p class="small muted" style="text-align:center;margin-bottom:0">The dashed line is the truth; the black curve is what the data can defend. Where $\mu$ is thin, they part.</p>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p class="small muted">Read the gap back: inside the shaded band the fit tracks the truth and its maximum is honest; past the edge it climbs on nothing.</p>
+      <div class="note">
+        <b>The support is the contract.</b> Inside $\mathrm{supp}(\mu)$ the data pins $Q$ down; outside it, $Q$ is whatever your model happens to say.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="max">
+  <div class="wrap">
+    <h2><span class="num">03</span>Where the blind max fails</h2>
+    <p>The offline DQN objective (Chapter 10) is unchanged from the online one — only the expectation moves onto $\mathcal{D}$:</p>
+    <div class="eqbox">
+      $$\mathcal{L}_{\mathrm{DQN}}(\theta)=\mathbb{E}_{(s,a,r,s')\sim\mathcal{D}}\Big[\big(r+\gamma\max_{a'}Q_\theta(s',a')-Q_\theta(s,a)\big)^2\Big].$$
+    </div>
+    <p>The $\max_{a'}$ queries $Q_\theta$ at <em>every</em> action, including the ones $\mathcal{D}$ never contains. Write the fit error between the empirical backup operator $\hat{\mathcal{T}}$ and the true one $\mathcal{T}$ and it splits cleanly:</p>
+    <div class="eqbox">
+      $$\hat Q-Q^*=\underbrace{\big(\mathcal{T}\hat Q-\mathcal{T}Q^*\big)}_{\le\,\gamma\|\hat Q-Q^*\|_\infty}+\underbrace{\big(\hat{\mathcal{T}}\hat Q-\mathcal{T}\hat Q\big)}_{\textbf{extrapolation error}}.$$
+    </div>
+    <p>The first term is a $\gamma$-contraction and the data repairs it. The second is the <b>extrapolation error</b> identified by BCQ: the gap between the operator you <em>fit</em> — a regression on $\mathcal{D}$ — and the operator you <em>wish</em> you fit. Where the data is thin it is unbounded.</p>
+    <p>The first term is bounded; the second is not. <b>That second term is exactly where the distribution shift is spent.</b></p>
+    <div class="note">
+      <b>The max off-support is the enemy.</b> Restrict the $\arg\max$ to actions $\mu$ actually takes and the error vanishes — at the cost of never improving past $\mu$. Every method below buys back some improvement for some conservatism.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="cql">
+  <div class="wrap">
+    <h2><span class="num">04</span>Conservative Q-learning</h2>
+    <p><b>CQL</b> keeps the whole action set but prices it. It adds a penalty that pushes $Q$ down everywhere except on the actions the data supports:</p>
+    <div class="eqbox">
+      $$\mathcal{L}_{\mathrm{CQL}}(\theta)=\tfrac12\,\mathbb{E}_{\mathcal{D}}\big[(Q_\theta-\mathcal{B}^\pi Q_\theta)^2\big]
+        +\alpha\,\mathbb{E}_{s\sim\mathcal{D}}\Big[\underbrace{\log\!\sum_{a}e^{Q_\theta(s,a)}}_{\text{push every action down}}-\underbrace{\mathbb{E}_{a\sim\mu}[Q_\theta(s,a)]}_{\text{hold data actions up}}\Big].$$
+    </div>
+    <p>The $\log\sum_a e^{Q}$ is a soft maximum, so lowering it lowers the high end of $Q$; the second term holds $Q$ up only on actions $\mu$ chose. The net pressure lands on unseen actions.</p>
+    <p>Tabularly the effect has a closed form — every unsupported action drops by exactly $\alpha$:</p>
+    <div class="eqbox">
+      $$\hat Q_{\mathrm{CQL}}(s,a)=\hat Q(s,a)-\alpha\,\mathbf 1\!\big[a\notin\mathcal{D}(s)\big].$$
+    </div>
+    <p class="small muted">Read the penalty back as an adversary: it finds the action with the largest $Q$ and drags it down until the data's own actions are competitive.</p>
+    <div class="note">
+      <b>Conservatism is a repaired $\max$.</b> CQL still maximizes, but over <em>pessimistic</em> values, so the winning action is the best one it can defend from data. Too little $\alpha$ and the phantom survives; too much and you refuse to improve at all.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="explorer">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>The offline data explorer</h2>
+      <p>A 4×4 grid from the bottom-left corner to the top-right goal. A behavior policy $\mu$ collected 1500 transitions by mostly walking toward the goal and mostly avoiding the pit at $(2,2)$ — but it left whole state–action pairs untouched, and those gaps are labelled <b>ood</b> below.</p>
+      <p>Pick a learner, move the sliders, and click any cell. The value bars show what each action is <em>worth to that learner</em>. With the blind max, an action $\mu$ never tried still reads $0.00$ — optimistic next to the genuinely negative values around it — so the greedy arrows curl back on themselves and the agent loops instead of leaving.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Learner</span>
+        <div class="btnrow" id="learnerBtns">
+          <button class="active" data-l="naive">Naive DQN</button>
+          <button data-l="cql">CQL</button>
+          <button data-l="iql">IQL</button>
+        </div>
+      </div>
+
+      <div class="gridwrap">
+        <div class="gw-left">
+          <svg id="gridSvg" viewBox="0 0 340 340" role="img" aria-label="Gridworld value map"></svg>
+          <div class="legend">
+            <span>−1</span><span class="grad"></span><span>+1</span>
+          </div>
+          <p class="ogcap" id="gwCap">dashed ring = start · red corner = greedy policy can’t reach the goal</p>
+        </div>
+
+        <div class="gw-right">
+          <div class="panel-head" style="margin-bottom:8px">
+            <span class="panel-title" id="cellTitle">(4,1) · start</span>
+            <span class="small muted" id="cellBadge"></span>
+          </div>
+          <div id="valBars" style="margin-bottom:18px"></div>
+
+          <div class="slider-row">
+            <span class="small muted" style="min-width:96px">behavior ε</span>
+            <input type="range" id="eps" min="0" max="0.5" step="0.05" value="0">
+            <span class="val" id="epsVal">0.00</span>
+          </div>
+          <div class="slider-row" id="alphaWrap">
+            <span class="small muted" style="min-width:96px">CQL α</span>
+            <input type="range" id="alpha" min="0" max="2" step="0.1" value="1.2">
+            <span class="val" id="alphaVal">1.20</span>
+          </div>
+          <div class="slider-row" id="tauWrap">
+            <span class="small muted" style="min-width:96px">IQL τ</span>
+            <input type="range" id="tau" min="0.5" max="0.95" step="0.05" value="0.9">
+            <span class="val" id="tauVal">0.90</span>
+          </div>
+
+          <hr class="soft">
+          <div class="row" style="gap:10px">
+            <div style="flex:1 1 120px">
+              <div class="muted small">can’t reach goal</div>
+              <div style="font-size:26px;font-weight:680;font-family:ui-monospace,monospace" id="badCount">–</div>
+            </div>
+            <div style="flex:1 1 120px">
+              <div class="muted small">pairs covered</div>
+              <div style="font-size:26px;font-weight:680;font-family:ui-monospace,monospace" id="covCount">–</div>
+            </div>
+          </div>
+          <p class="small muted" style="margin:10px 0 0">“Can’t reach goal” counts non-goal cells whose greedy action, followed forever, ends in the pit or in a loop. Red corners mark them on the grid.</p>
+        </div>
+      </div>
+
+      <div style="margin-top:20px">
+        <div class="panel-title" style="margin-bottom:6px">A rollout of the learned policy</div>
+        <div class="traj" id="traj"></div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <div class="row" style="margin-top:26px">
+        <div class="col">
+          <h3 style="margin-top:0">What you should see</h3>
+          <p>At $\varepsilon=0$ the naive learner cannot reach the goal from six of the fourteen cells: unsupported actions still read $0.00$ and out-score the real, negative values beside them, so the arrows point into a loop (the red corners). Set $\alpha$ to $1.2$ and CQL writes $-\alpha$ into exactly those actions; IQL never compares against them at all. Both recover the route.</p>
+        </div>
+        <div class="col">
+          <h3 style="margin-top:0">What closes the gap</h3>
+          <p>Raise $\varepsilon$ and $\mu$ visits more pairs; the “pairs covered” count climbs toward 56 and the naive learner stops needing rescue. Offline RL is not magic — it is what you do when that slider is stuck.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="iql">
+  <div class="wrap">
+    <h2><span class="num">06</span>Implicit Q-learning: never ask the out-of-distribution question</h2>
+    <p><b>IQL</b> takes a different road. The problem was the $\max$; IQL removes it. Instead of bootstrapping from the largest next-action value, it learns a state value $V$ by <b>expectile regression</b> over the actions the data contains:</p>
+    <div class="eqbox">
+      $$\mathcal{L}_V(\psi)=\mathbb{E}_{\mathcal{D}}\Big[L_\tau^{\mathrm{exp}}\big(Q_\theta(s,a)-V_\psi(s)\big)\Big],\qquad
+        L_\tau^{\mathrm{exp}}(u)=\big|\tau-\mathbf 1[u<0]\big|\,u^{2}.$$
+    </div>
+    <p>For $\tau\in(0,1)$ this is a soft maximum: $\tau\to1$ behaves like the max, $\tau=0.5$ like the mean, and every $\tau$ in between leans toward the upper tail <em>without ever querying an action outside the batch</em>. The value head then regresses onto the data's rewards:</p>
+    <div class="eqbox">
+      $$\mathcal{L}_Q(\theta)=\mathbb{E}_{(s,a,r,s')\sim\mathcal{D}}\Big[\big(r+\gamma V_\psi(s')-Q_\theta(s,a)\big)^2\Big].$$
+    </div>
+    <p>No term in either loss samples an action from $\pi$. The policy is extracted afterwards — an advantage-weighted behavioral clone, $\pi(a\mid s)\propto\mu(a\mid s)\exp\!\big(\beta(Q_\theta-V_\psi)\big)$ — which is why IQL is <b>conservative-by-construction</b> rather than penalized.</p>
+    <div class="note">
+      <b>Why this is the cleanest idea in offline RL.</b> The $\arg\max$ is where the extrapolation error entered; drop it and the question simply never arises. You give up the ability to <em>actively</em> prefer unseen actions, which is precisely the ability that was unsafe.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="beyond">
+  <div class="wrap">
+    <h2><span class="num">07</span>The rest of the family</h2>
+    <p>CQL and IQL are two entry points into one idea — <b>do not trust $Q$ where $\mu$ did not go</b>. The remaining methods implement the same discipline differently.</p>
+
+    <h3>Restrict the action set</h3>
+    <p><b>BCQ</b> trains a generative model $\hat\mu(a\mid s)$ and perturbs only actions near the data manifold, then maximizes over that restricted set — the max can no longer leave $\mathrm{supp}(\mu)$.</p>
+
+    <h3>Regularize the actor toward the data</h3>
+    <p><b>TD3+BC</b> appends a plain behavioral-cloning term to the deterministic actor:</p>
+    <div class="eqbox">
+      $$\pi=\arg\max_\pi\;\mathbb{E}_{s\sim\mathcal{D}}\Big[\lambda\,Q(s,\pi(s))-\big(\pi(s)-a\big)^2\Big],\quad \lambda=\frac{\alpha}{\frac1N\sum_s|Q(s,\pi(s))|}.$$
+    </div>
+    <p><b>AWAC</b> reweights the actor update by $\exp\!\big(A(s,a)/\lambda\big)$, so the policy moves toward actions the data says are good and ignores the rest.</p>
+
+    <h3>Say the word “model”</h3>
+    <p><b>Model-based offline RL</b> (MOPO, MOReL) fits a dynamics model on $\mathcal{D}$ and marks regions of low data density as high-uncertainty; the planner is penalized by that uncertainty, so it never rolls out into the unknown. It is CQL’s pessimism, applied to imagination.</p>
+
+    <h3>Skip the value function entirely</h3>
+    <p>The <b>Decision Transformer</b> models the whole trajectory with a sequence model conditioned on a target return. It never bootstraps and never computes a $\max$ — so it cannot extrapolate a value at all, only replay the patterns in the log at the quality you request.</p>
+
+    <h3>Evaluation is the quiet problem</h3>
+    <p>You cannot run $\pi$ to score it. The offline tools are importance sampling and <b>fitted Q-evaluation</b> (FQE — learn $Q^\pi$ on $\mathcal{D}$ and average). Both inherit the same support assumption; an over-optimistic value function scores a policy well and lies.</p>
+
+    <table class="cmp">
+      <thead><tr><th>Method</th><th>Mechanism</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td>Naive offline DQN</td><td>unchanged max over all actions</td><td>extrapolation error, unbounded</td></tr>
+        <tr><td>BCQ</td><td>constrain actions to $\mathrm{supp}(\hat\mu)$</td><td>needs a generative model</td></tr>
+        <tr><td>CQL</td><td>soft-max penalty on the value</td><td>tuning $\alpha$; can be over-pessimistic</td></tr>
+        <tr><td>IQL</td><td>expectile value, no max sampled</td><td>cannot strongly prefer unseen actions</td></tr>
+        <tr><td>TD3+BC / AWAC</td><td>behavior-regularized actor</td><td>limited improvement past $\mu$</td></tr>
+        <tr><td>Model-based (MOPO/MOReL)</td><td>uncertainty-penalized imagination</td><td>model misspecification</td></tr>
+        <tr><td>Decision Transformer</td><td>sequence model over returns</td><td>no bootstrapping; brittle to distribution</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">08</span>Summary</h2>
+    <p>Offline RL is one failure mode with one fix:</p>
+    <div class="eqbox">
+      $$\text{extrapolation error}\;\Longrightarrow\;\text{don't trust }Q\text{ off }\mathrm{supp}(\mu).$$
+    </div>
+    <ul style="padding-left:20px">
+      <li>The dataset is one sample from $\mu$’s state distribution; $\pi$ will induce another.</li>
+      <li>The blind $\max_{a'}Q$ queries actions the data never covered, and bootstrapping amplifies the answer.</li>
+      <li>The error separates into a contracting on-support part and an unbounded extrapolation part.</li>
+      <li>CQL penalizes off-support actions by $\alpha$; IQL removes the out-of-distribution question by never asking it.</li>
+      <li>Every other method — BCQ, AWAC, TD3+BC, model-based, Decision Transformer — is the same pessimism wearing a different mask.</li>
+      <li>Raise behavior coverage and the problem softens; you rarely get to choose the behavior policy.</li>
+    </ul>
+
+    <h3>Checklist</h3>
+    <table class="cmp">
+      <thead><tr><th>Ask</th><th>If not…</th></tr></thead>
+      <tbody>
+        <tr><td>Is $\mu$ broad enough that $\mathrm{supp}(\pi)\subseteq\mathrm{supp}(\mu)$?</td><td>add conservatism — BCQ’s constraint or CQL’s penalty.</td></tr>
+        <tr><td>Does the optimizer take a raw $\max$ over $Q$?</td><td>replace it with a pessimistic or expectile one.</td></tr>
+        <tr><td>Can you evaluate $\pi$ at all?</td><td>use FQE, and distrust the number.</td></tr>
+        <tr><td>Is improvement worth the conservatism?</td><td>tune $\alpha$/$\tau$ until the policy stops leaving the batch.</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:26px"><span class="muted">Next: how an agent with no reward to define — only a person to please — learns a policy from preferences, in Chapter 22.</span></p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="13-model-based-reinforcement-learning.html"><span class="pg-k">Previous</span><span class="pg-t">Model-Based RL</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="15-exploration-and-intrinsic-motivation.html"><span class="pg-k">Next</span><span class="pg-t">Exploration &amp; Curiosity</span></a></nav>
+<footer>
+  <div class="wrap">
+    Offline Reinforcement Learning · Interactive course chapter. All values computed live from a fixed 1500-transition dataset; KaTeX renders the mathematics.
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+
+  /* ------------------------------------------------------------------ */
+  /*  Numeric helpers                                                     */
+  /* ------------------------------------------------------------------ */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function normal(rng) {
+    var u1 = rng() || 1e-9, u2 = rng();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  }
+  function invert(m) {
+    var n = m.length, i, j, k;
+    var a = [];
+    for (i = 0; i < n; i++) {
+      a.push(m[i].slice());
+      for (j = 0; j < n; j++) a[i].push(i === j ? 1 : 0);
+    }
+    for (var c = 0; c < n; c++) {
+      var p = c;
+      for (var r = c + 1; r < n; r++) if (Math.abs(a[r][c]) > Math.abs(a[p][c])) p = r;
+      var tmp = a[c]; a[c] = a[p]; a[p] = tmp;
+      var pv = a[c][c];
+      if (Math.abs(pv) < 1e-12) continue;
+      for (j = 0; j < 2 * n; j++) a[c][j] /= pv;
+      for (r = 0; r < n; r++) {
+        if (r === c) continue;
+        var f = a[r][c];
+        if (!f) continue;
+        for (j = 0; j < 2 * n; j++) a[r][j] -= f * a[c][j];
+      }
+    }
+    var out = [];
+    for (i = 0; i < n; i++) out.push(a[i].slice(n));
+    return out;
+  }
+  function matVec(M, v) {
+    var out = [], n = M.length, i, j;
+    for (i = 0; i < n; i++) { var s = 0; for (j = 0; j < n; j++) s += M[i][j] * v[j]; out.push(s); }
+    return out;
+  }
+  function polyfit(xs, ys, deg) {
+    var n = deg + 1, i, j, k;
+    var A = [], b = [];
+    for (i = 0; i < n; i++) { A.push(new Array(n).fill(0)); b.push(0); }
+    for (i = 0; i < xs.length; i++) {
+      var x = xs[i], y = ys[i], pw = [];
+      var p = 1;
+      for (j = 0; j < n; j++) { pw.push(p); p *= x; }
+      for (j = 0; j < n; j++) {
+        b[j] += pw[j] * y;
+        for (k = 0; k < n; k++) A[j][k] += pw[j] * pw[k];
+      }
+    }
+    return matVec(invert(A), b);
+  }
+  function polyval(c, x) {
+    var s = 0, p = 1;
+    for (var i = 0; i < c.length; i++) { s += c[i] * p; p *= x; }
+    return s;
+  }
+  function typeset(el) {
+    if (window.renderMathInElement) {
+      try {
+        renderMathInElement(el, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true }
+          ],
+          throwOnError: false
+        });
+      } catch (e) { /* KaTeX not ready */ }
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Scroll progress                                                     */
+  /* ------------------------------------------------------------------ */
+  function initScroll() {
+    var bar = $('#progress');
+    var onScroll = function () {
+      var h = document.documentElement;
+      var max = h.scrollHeight - h.clientHeight;
+      bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+
+  /* ================================================================== */
+  /*  §02  Extrapolation-error plot                                      */
+  /* ================================================================== */
+  function initExtrap() {
+    var svg = $('#exSvg');
+    if (!svg) return;
+
+    var W = 540, H = 250, x0 = 44, x1 = 520, yT = 18, yB = 222;
+    var A0 = -1, A1 = 1, V0 = -0.25, V1 = 0.72;
+    var X = function (a) { return x0 + (a - A0) / (A1 - A0) * (x1 - x0); };
+    var Y = function (v) { return yB - (v - V0) / (V1 - V0) * (yB - yT); };
+
+    var Qtrue = function (a) { return 0.72 * Math.exp(-((a - 0.30) * (a - 0.30)) / (2 * 0.20 * 0.20)) - 0.18 * a; };
+    var muRaw = function (a) { return Math.exp(-((a - 0.05) * (a - 0.05)) / (2 * 0.30 * 0.30)); };
+
+    var supThr = 0.15;
+    var d = 0.30 * Math.sqrt(2 * Math.log(1 / supThr));
+    var supLo = 0.05 - d, supHi = 0.05 + d;
+
+    var rng = mulberry32(987654), pts = [], guard = 0;
+    while (pts.length < 46 && guard < 100000) {
+      guard++;
+      var a = 0.05 + 0.30 * normal(rng);
+      if (a < -1 || a > 1) continue;
+      pts.push({ a: a, y: Qtrue(a) + 0.028 * normal(rng) });
+    }
+
+    var degEl = $('#exDeg'), degVal = $('#exDegVal'), eqEl = $('#exEq');
+
+    function pathOf(f) {
+      var dd = '', N = 220, i;
+      for (i = 0; i <= N; i++) {
+        var a = A0 + (A1 - A0) * i / N;
+        dd += (i ? 'L' : 'M') + X(a).toFixed(2) + ' ' + Y(f(a)).toFixed(2) + ' ';
+      }
+      return dd;
+    }
+
+    function draw() {
+      var deg = +degEl.value;
+      degVal.textContent = deg;
+
+      var xs = pts.map(function (p) { return p.a; });
+      var ys = pts.map(function (p) { return p.y; });
+      var coeff = polyfit(xs, ys, deg);
+      var fit = function (a) { return polyval(coeff, a); };
+
+      var best = -Infinity, bestA = A0, i;
+      for (i = 0; i <= 400; i++) {
+        var a = A0 + (A1 - A0) * i / 400;
+        var v = fit(a);
+        if (v > best) { best = v; bestA = a; }
+      }
+      var outside = (bestA < supLo - 1e-9 || bestA > supHi + 1e-9);
+
+      var out = '';
+      out += '<rect x="' + x0 + '" y="' + yT + '" width="' + (x1 - x0) + '" height="' + (yB - yT) + '" fill="#fff"/>';
+      out += '<rect x="' + X(supLo).toFixed(1) + '" y="' + yT + '" width="' + (X(supHi) - X(supLo)).toFixed(1) + '" height="' + (yB - yT) + '" fill="rgba(37,99,235,.09)"/>';
+      out += '<line x1="' + x0 + '" y1="' + Y(0) + '" x2="' + x1 + '" y2="' + Y(0) + '" stroke="#eee"/>';
+      out += '<path d="' + pathOf(Qtrue) + '" fill="none" stroke="#9ca3af" stroke-width="1.6" stroke-dasharray="5 4"/>';
+      out += '<path d="' + pathOf(fit) + '" fill="none" stroke="#111" stroke-width="2"/>';
+
+      for (i = 0; i < pts.length; i++) {
+        out += '<circle cx="' + X(pts[i].a).toFixed(2) + '" cy="' + Y(pts[i].y).toFixed(2) + '" r="2.6" fill="#2563eb" opacity="0.75"/>';
+      }
+      out += '<line x1="' + X(bestA).toFixed(1) + '" y1="' + Y(best).toFixed(1) + '" x2="' + X(bestA).toFixed(1) + '" y2="' + yB + '" stroke="' + (outside ? '#dc2626' : '#111') + '" stroke-width="1.4" stroke-dasharray="3 3"/>';
+      out += '<circle cx="' + X(bestA).toFixed(2) + '" cy="' + Y(best).toFixed(2) + '" r="4" fill="' + (outside ? '#dc2626' : '#111') + '"/>';
+      out += '<text x="' + x0 + '" y="' + (yB + 20) + '" font-size="11" fill="#9ca3af" font-family="ui-monospace,monospace">a = ' + A0.toFixed(1) + '</text>';
+      out += '<text x="' + x1 + '" y="' + (yB + 20) + '" font-size="11" fill="#9ca3af" text-anchor="end" font-family="ui-monospace,monospace">a = ' + A1.toFixed(1) + '</text>';
+      out += '<text x="' + X(supHi).toFixed(1) + '" y="' + (yT + 13) + '" font-size="10.5" fill="#2563eb" text-anchor="middle" font-family="ui-monospace,monospace">support of \u03bc</text>';
+      svg.innerHTML = out;
+
+      var flag = outside
+        ? '\\hat a\\notin\\mathrm{supp}(\\mu)\\ \\Rightarrow\\ \\text{extrapolation}'
+        : '\\hat a\\in\\mathrm{supp}(\\mu)\\ \\Rightarrow\\ \\text{supported}';
+      eqEl.innerHTML = '$$\\hat a=' + bestA.toFixed(2) + ',\\quad \\hat Q(\\hat a)=' + best.toFixed(2) +
+        ',\\quad \\mathrm{supp}(\\mu)=[' + supLo.toFixed(2) + ',' + supHi.toFixed(2) + ']\\quad \\text{—}\\quad ' + flag + '$$';
+      typeset(eqEl);
+    }
+
+    degEl.addEventListener('input', draw);
+    draw();
+  }
+
+  /* ================================================================== */
+  /*  §05  Offline data explorer                                         */
+  /* ================================================================== */
+  function initExplorer() {
+    var svg = $('#gridSvg');
+    if (!svg) return;
+
+    var N = 4, NA = 4;
+    var GOAL = 3, PIT = 5;
+    var DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+    var GLYPH = ['\u2191', '\u2192', '\u2193', '\u2190'];
+    var GAMMA = 0.9, STEP = -0.3, BETA = 4.0;
+
+    function rc(s) { return [Math.floor(s / N), s % N]; }
+    function idx(r, c) { return r * N + c; }
+    function isTerm(s) { return s === GOAL || s === PIT; }
+    function next(s, a) {
+      if (isTerm(s)) return s;
+      var p = rc(s), r = p[0] + DIRS[a][0], c = p[1] + DIRS[a][1];
+      if (r < 0 || r >= N || c < 0 || c >= N) return s;
+      return idx(r, c);
+    }
+    function reward(s, a) {
+      var ns = next(s, a);
+      if (ns === GOAL) return 1;
+      if (ns === PIT) return -1;
+      return STEP;
+    }
+    function dist(s) { var p = rc(s), g = rc(GOAL); return Math.abs(p[0] - g[0]) + Math.abs(p[1] - g[1]); }
+
+    /* true Q*, by value iteration on the real MDP */
+    var Qstar = new Array(N * N);
+    (function () {
+      var V = new Array(N * N).fill(0), s, a, it;
+      for (it = 0; it < 300; it++) {
+        for (s = 0; s < N * N; s++) {
+          if (isTerm(s)) continue;
+          var best = -Infinity;
+          for (a = 0; a < NA; a++) best = Math.max(best, reward(s, a) + GAMMA * V[next(s, a)]);
+          V[s] = best;
+        }
+      }
+      for (s = 0; s < N * N; s++) {
+        Qstar[s] = [];
+        for (a = 0; a < NA; a++) Qstar[s][a] = isTerm(s) ? 0 : reward(s, a) + GAMMA * V[next(s, a)];
+      }
+    })();
+
+    /* -------- behavior policy & dataset (deterministic) --------------- */
+    var state = { eps: 0, alpha: 1.2, tau: 0.9, learner: 'naive', sel: idx(3, 0), cov: 0 };
+
+    function mu(s) {
+      var logits = [], a, mx = -Infinity;
+      for (a = 0; a < NA; a++) {
+        var ns = next(s, a);
+        var prog = dist(s) - dist(ns);
+        if (ns === PIT) prog -= 6;
+        if (isTerm(s)) prog = 0;
+        logits.push(BETA * prog);
+        if (logits[a] > mx) mx = logits[a];
+      }
+      var Z = 0, p = [];
+      for (a = 0; a < NA; a++) { p[a] = Math.exp(logits[a] - mx); Z += p[a]; }
+      for (a = 0; a < NA; a++) p[a] = (1 - state.eps) * p[a] / Z + state.eps / NA;
+      return p;
+    }
+
+    var M = 1500, count, support, trans;
+    function buildData() {
+      var rng = mulberry32(20240514), i, s, a;
+      count = []; support = []; trans = [];
+      for (s = 0; s < N * N; s++) {
+        count.push([0, 0, 0, 0]); support.push([false, false, false, false]); trans.push([[], [], [], []]);
+      }
+      var free = [];
+      for (s = 0; s < N * N; s++) if (!isTerm(s)) free.push(s);
+      for (i = 0; i < M; i++) {
+        s = free[Math.floor(rng() * free.length)];
+        var p = mu(s), u = rng(), cum = 0;
+        a = NA - 1;
+        for (var k = 0; k < NA; k++) { cum += p[k]; if (u <= cum) { a = k; break; } }
+        var ns = next(s, a), r = reward(s, a);
+        count[s][a]++; support[s][a] = true;
+        trans[s][a].push([r, ns]);
+      }
+      state.cov = 0;
+      for (s = 0; s < N * N; s++) for (a = 0; a < NA; a++) if (support[s][a]) state.cov++;
+    }
+
+    /* -------- the three learners (tabular) ---------------------------- */
+    function train(learner) {
+      var s, a, i, it, Q = [], V = [], SW = 60;
+      for (s = 0; s < N * N; s++) { Q.push([0, 0, 0, 0]); V.push(0); }
+
+      if (learner === 'naive' || learner === 'cql') {
+        var alpha = state.alpha;
+        for (it = 0; it < SW; it++) {
+          var Qe = [];
+          for (s = 0; s < N * N; s++) {
+            Qe.push([0, 0, 0, 0]);
+            for (a = 0; a < NA; a++) Qe[s][a] = support[s][a] ? Q[s][a] : (learner === 'cql' ? -alpha : 0);
+          }
+          for (s = 0; s < N * N; s++) {
+            if (isTerm(s)) continue;
+            for (a = 0; a < NA; a++) {
+              if (!support[s][a]) continue;
+              var t = trans[s][a], acc = 0;
+              for (i = 0; i < t.length; i++) {
+                var ns = t[i][1], mx = -Infinity;
+                for (var b = 0; b < NA; b++) mx = Math.max(mx, Qe[ns][b]);
+                acc += t[i][0] + GAMMA * mx;
+              }
+              Q[s][a] = acc / t.length;
+            }
+          }
+        }
+        if (learner === 'cql') {
+          for (s = 0; s < N * N; s++) {
+            if (isTerm(s)) continue;
+            for (a = 0; a < NA; a++) if (!support[s][a]) Q[s][a] = -alpha;
+          }
+        }
+      } else { /* iql */
+        var tau = state.tau;
+        function expectile(vals) {
+          var v = 0, k;
+          for (k = 0; k < vals.length; k++) v += vals[k];
+          v /= vals.length;
+          for (var q = 0; q < 50; q++) {
+            var num = 0, den = 0;
+            for (k = 0; k < vals.length; k++) {
+              var w = vals[k] > v ? tau : (1 - tau);
+              num += w * vals[k]; den += w;
+            }
+            var nv = num / den;
+            if (Math.abs(nv - v) < 1e-10) { v = nv; break; }
+            v = nv;
+          }
+          return v;
+        }
+        for (it = 0; it < SW; it++) {
+          for (s = 0; s < N * N; s++) {
+            if (isTerm(s)) continue;
+            for (a = 0; a < NA; a++) {
+              if (!support[s][a]) continue;
+              var t2 = trans[s][a], acc2 = 0;
+              for (i = 0; i < t2.length; i++) acc2 += t2[i][0] + GAMMA * V[t2[i][1]];
+              Q[s][a] = acc2 / t2.length;
+            }
+          }
+          for (s = 0; s < N * N; s++) {
+            if (isTerm(s)) continue;
+            var vals = [];
+            for (a = 0; a < NA; a++) if (support[s][a]) vals.push(Q[s][a]);
+            if (vals.length) V[s] = expectile(vals);
+          }
+        }
+      }
+      return { Q: Q, V: V };
+    }
+
+    function qOf(model, s, a) {
+      if (isTerm(s)) return null;
+      if (!support[s][a]) return state.learner === 'iql' ? null : model.Q[s][a];
+      return model.Q[s][a];
+    }
+    function bestAction(model, s) {
+      if (isTerm(s)) return -1;
+      var best = -Infinity, bi = -1, a;
+      for (a = 0; a < NA; a++) {
+        var v = qOf(model, s, a);
+        if (v === null) continue;
+        if (v > best + 1e-12) { best = v; bi = a; }
+      }
+      return bi;
+    }
+    function vOf(model, s) {
+      if (isTerm(s)) return null;
+      if (state.learner === 'iql') return model.V[s];
+      var best = -Infinity;
+      for (var a = 0; a < NA; a++) best = Math.max(best, qOf(model, s, a));
+      return best;
+    }
+    function reachesGoal(s) {
+      var seen = {}, steps = 0;
+      while (steps < 80) {
+        if (isTerm(s)) return s === GOAL;
+        var a = bestAction(model, s);
+        if (a < 0) return false;
+        s = next(s, a);
+        if (seen[s]) return false;
+        seen[s] = true; steps++;
+      }
+      return false;
+    }
+
+    /* -------- rendering ---------------------------------------------- */
+    var model = null, offRoute = 0;
+
+    function color(v) {
+      if (v === null) return '#f4f4f5';
+      var t = Math.max(-1, Math.min(1, v / 1.0));
+      var tgt = t >= 0 ? [37, 99, 235] : [220, 38, 38];
+      var k = Math.abs(t);
+      var r = Math.round(255 + (tgt[0] - 255) * k);
+      var g = Math.round(255 + (tgt[1] - 255) * k);
+      var b = Math.round(255 + (tgt[2] - 255) * k);
+      return 'rgb(' + r + ',' + g + ',' + b + ')';
+    }
+
+    function drawGrid() {
+      var pad = 10, cs = (340 - 2 * pad) / N, out = '', s, a;
+      var bad = 0;
+      for (s = 0; s < N * N; s++) {
+        var p = rc(s), X = pad + p[1] * cs, Yy = pad + p[0] * cs;
+        var v = vOf(model, s);
+        out += '<rect class="cell" data-s="' + s + '" x="' + X + '" y="' + Yy + '" width="' + (cs - 3) + '" height="' + (cs - 3) +
+          '" rx="9" fill="' + color(v) + '" stroke="' + (s === state.sel ? '#111' : '#ffffff') + '" stroke-width="' + (s === state.sel ? 3 : 1.5) + '"/>';
+
+        if (isTerm(s)) {
+          out += '<text x="' + (X + cs / 2 - 1.5) + '" y="' + (Yy + cs / 2 + 8) + '" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">' +
+            (s === GOAL ? '\u2605' : '\u2716') + '</text>';
+          out += '<text x="' + (X + cs / 2 - 1.5) + '" y="' + (Yy + cs - 9) + '" text-anchor="middle" font-size="10" fill="rgba(255,255,255,.85)" font-family="ui-monospace,monospace">' +
+            (s === GOAL ? 'goal +1' : 'pit \u22121') + '</text>';
+          continue;
+        }
+
+        var dark = (v !== null && v < -0.45) || (v !== null && v > 0.5);
+        var ink = dark ? '#fff' : '#374151';
+        out += '<text x="' + (X + 9) + '" y="' + (Yy + 17) + '" font-size="11.5" font-family="ui-monospace,monospace" fill="' + ink + '" font-weight="600">' +
+          (v === null ? '–' : v.toFixed(2)) + '</text>';
+
+        var ba = bestAction(model, s);
+        if (ba >= 0) {
+          out += '<text x="' + (X + cs / 2 - 1.5) + '" y="' + (Yy + cs / 2 + 11) + '" text-anchor="middle" font-size="26" fill="' + ink + '">' + GLYPH[ba] + '</text>';
+        }
+
+        if (ba >= 0 && !reachesGoal(s)) {
+          bad++;
+          out += '<circle cx="' + (X + cs - 13) + '" cy="' + (Yy + 13) + '" r="4" fill="#dc2626"/>';
+        }
+        if (s === idx(3, 0)) {
+          out += '<circle cx="' + (X + cs / 2 - 1.5) + '" cy="' + (Yy + cs / 2) + '" r="' + (cs / 2 - 9) + '" fill="none" stroke="' + ink + '" stroke-width="1.5" stroke-dasharray="3 3"/>';
+        }
+      }
+      svg.innerHTML = out;
+      offRoute = bad;
+    }
+
+    function renderBars() {
+      var el = $('#valBars'), s = state.sel, a, html = '';
+      var vals = [];
+      for (a = 0; a < NA; a++) vals.push(qOf(model, s, a));
+      var fin = vals.filter(function (v) { return v !== null; });
+      var scale = Math.max(0.5, Math.max.apply(null, fin.map(Math.abs)));
+      var selA = bestAction(model, s);
+
+      if (isTerm(s)) {
+        el.innerHTML = '<p class="small muted" style="margin:0">Terminal state — the episode ends here.</p>';
+        return;
+      }
+      for (a = 0; a < NA; a++) {
+        var v = vals[a], ood = !support[s][a];
+        var barHtml = '', valHtml;
+        if (v === null) {
+          valHtml = '<span class="vval" style="color:#9ca3af">n/a</span>';
+        } else {
+          var pct = Math.min(50, Math.abs(v) / scale * 50);
+          var pos = v >= 0;
+          var st = pos ? ('left:50%;width:' + pct + '%') : ('right:50%;width:' + pct + '%');
+          barHtml = '<div class="vbar ' + (pos ? 'pos' : 'neg') + '" style="' + st + '"></div>';
+          valHtml = '<span class="vval">' + v.toFixed(2) + '</span>';
+        }
+        html += '<div class="vrow' + (a === selA ? ' sel' : '') + '"' + (ood ? ' title="never tried by the behavior policy"' : '') + '>' +
+          '<span class="vlabel">' + GLYPH[a] + '</span>' +
+          '<div class="vtrack"><div class="vzero"></div>' + barHtml + '</div>' +
+          '<span class="vval" style="width:14px;color:#dc2626">' + (ood ? '\u2022' : '') + '</span>' +
+          valHtml +
+          '</div>';
+      }
+      el.innerHTML = html;
+    }
+
+    function renderCell() {
+      var s = state.sel, p = rc(s);
+      $('#cellTitle').textContent = '(' + (p[0] + 1) + ',' + (p[1] + 1) + ')' + (s === idx(3, 0) ? ' \u00b7 start' : (isTerm(s) ? ' \u00b7 terminal' : ''));
+      var badge = '';
+      if (!isTerm(s)) {
+        var rare = 0;
+        for (var a = 0; a < NA; a++) if (!support[s][a]) rare++;
+        badge = rare + '/4 actions unvisited';
+      }
+      $('#cellBadge').textContent = badge;
+      renderBars();
+    }
+
+    function renderTraj() {
+      var el = $('#traj'), s = idx(3, 0), seen = {}, path = [s], steps = 0;
+      while (!isTerm(s) && steps < 30) {
+        var a = bestAction(model, s);
+        if (a < 0) break;
+        s = next(s, a);
+        if (seen[s]) { path.push(s); break; }
+        seen[s] = true;
+        path.push(s);
+        steps++;
+      }
+      var html = '';
+      for (var i = 0; i < path.length; i++) {
+        if (i) html += '<span class="arw">\u2192</span>';
+        var st = path[i], last = (i === path.length - 1);
+        var cls = 'chip' + (last ? ' now' : '');
+        var sty = '';
+        if (last && st === PIT) sty = ' style="background:#dc2626;color:#fff"';
+        if (last && st === GOAL) sty = ' style="background:#2563eb;color:#fff"';
+        var pp = rc(st);
+        html += '<span class="' + cls + '"' + sty + '>' + (st === GOAL ? 'G' : st === PIT ? 'P' : (pp[0] + 1) + ',' + (pp[1] + 1)) + '</span>';
+      }
+      var outcome = path[path.length - 1] === GOAL ? 'reaches the goal' : (path[path.length - 1] === PIT ? 'falls into the pit' : 'stalls');
+      el.innerHTML = html + '<span class="small muted" style="margin-left:10px">' + outcome + '</span>';
+    }
+
+    function refresh() {
+      model = train(state.learner);
+      drawGrid();
+      renderCell();
+      renderTraj();
+      $('#badCount').textContent = offRoute;
+      $('#covCount').textContent = state.cov + '/' + ((N * N - 2) * NA);
+    }
+
+    /* -------- controls ------------------------------------------------ */
+    var btns = document.querySelectorAll('#learnerBtns button');
+    Array.prototype.forEach.call(btns, function (b) {
+      b.addEventListener('click', function () {
+        Array.prototype.forEach.call(btns, function (x) { x.classList.remove('active'); });
+        b.classList.add('active');
+        state.learner = b.getAttribute('data-l');
+        $('#alphaWrap').style.opacity = state.learner === 'cql' ? '1' : '.4';
+        $('#tauWrap').style.opacity = state.learner === 'iql' ? '1' : '.4';
+        refresh();
+      });
+    });
+
+    svg.addEventListener('click', function (e) {
+      var t = e.target.closest ? e.target.closest('.cell') : null;
+      if (!t) return;
+      state.sel = +t.getAttribute('data-s');
+      drawGrid();
+      renderCell();
+    });
+
+    $('#eps').addEventListener('input', function () {
+      state.eps = +this.value;
+      $('#epsVal').textContent = state.eps.toFixed(2);
+      buildData();
+      refresh();
+    });
+    $('#alpha').addEventListener('input', function () {
+      state.alpha = +this.value;
+      $('#alphaVal').textContent = state.alpha.toFixed(2);
+      refresh();
+    });
+    $('#tau').addEventListener('input', function () {
+      state.tau = +this.value;
+      $('#tauVal').textContent = state.tau.toFixed(2);
+      refresh();
+    });
+
+    $('#alphaWrap').style.opacity = '.4';
+    buildData();
+    refresh();
+  }
+
+  /* ================================================================== */
+  /*  Boot                                                               */
+  /* ================================================================== */
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          { left: '$$', right: '$$', display: true },
+          { left: '$', right: '$', display: false },
+          { left: '\\(', right: '\\)', display: false },
+          { left: '\\[', right: '\\]', display: true }
+        ],
+        throwOnError: false
+      });
+    }
+    initExtrap();
+    initExplorer();
+    initScroll();
+  });
+})();
+</script>
+</body>
+</html>

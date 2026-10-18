@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model-Based Reinforcement Learning</title>
+
+<!-- Assumptions (per prompt.md):
+     - The brief requests a quiz; prompt.md forbids quizzes, so it is skipped and the
+       bias-variance question is answered in prose (section 07) instead.
+     - The brief names one visualizer (World-Model Rollout). A second is added in
+       section 04 (receding-horizon shooting/MPC) because MPC and shooting are required
+       topics and the planner's objective cannot be shown working on the page otherwise.
+       Both reuse the reference's tokens; no new CSS classes are introduced — every new
+       visual is an SVG drawn programmatically in JS. The tiny dynamics model is hand-
+       written least-squares polynomial regression (no external code).
+     - The MuZero network is shown as a small programmatically drawn SVG diagram, not a
+       separate interactive. -->
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- diagrams ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- legend ---------------- */
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:30%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Model-Based RL</a>
+    <nav class="nav">
+      <a href="#model">The model</a>
+      <a href="#dyna">Dyna</a>
+      <a href="#rollout">Rollout</a>
+      <a href="#mpc">MPC</a>
+      <a href="#world">World models</a>
+      <a href="#muzero">MuZero</a>
+      <a href="#bias">Bias vs variance</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Modern Methods</p>
+    <h1>Model-Based<br>Reinforcement Learning</h1>
+    <p class="lede">Stop asking the environment what happens. Learn the world once, then answer the question yourself.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="model">
+  <div class="wrap">
+    <h2><span class="num">01</span>Learning a model</h2>
+    <p>Every method so far asked the environment a question and waited for the answer. A <b>model</b> lets you answer it yourself. Model-based RL learns two functions from transitions: a <b>dynamics model</b> $\hat P_\phi(s'\mid s,a)$ and a <b>reward model</b> $\hat R_\psi(s,a)$.</p>
+    <div class="eqbox">
+      $$\hat P_\phi,\ \hat R_\psi \;=\; \arg\max_{\phi,\psi}\;\mathbb{E}_{(s,a,r,s')\sim\mathcal{D}}\Big[\log\hat P_\phi(s'\mid s,a)\;+\;\log\mathcal{N}\!\big(r;\hat R_\psi(s,a),\sigma^{2}\big)\Big].$$
+    </div>
+    <p>For deterministic control — a pendulum, a robot arm — the transition is a regression, and the whole model is least squares:</p>
+    <div class="eqbox">
+      $$\min_\phi\;\mathbb{E}_{(s,a,s')\sim\mathcal{D}}\big\|s' - f_\phi(s,a)\big\|^{2}.$$
+    </div>
+    <p>One line of supervised learning, then planning forever. The catch is in the distribution of inputs.</p>
+    <div class="note">
+      <b>A model is supervised learning with adversarial test data.</b> The states you will actually query are the states your own policy chooses, not the states you trained on. The model fits $\mathcal{D}$ perfectly and still fails exactly where planning wants to go.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="dyna">
+  <div class="wrap">
+    <h2><span class="num">02</span>Dyna — planning with a model</h2>
+    <p><b>Dyna</b> keeps the model-free update and adds one more loop. After every real step, sample a state-action pair you have seen, roll it forward through the model for a simulated reward and next state, and apply the same backup to that fabricated transition.</p>
+    <div class="eqbox">
+      $$\begin{aligned}
+      &\textbf{act:}\quad a=\arg\max_{a'}Q(s,a')\ ;\ \ \text{step the world to }(r,s')\\[2pt]
+      &\textbf{learn:}\quad Q(s,a)\leftarrow Q(s,a)+\alpha\big[r+\gamma\max_{a'}Q(s',a')-Q(s,a)\big]\\[2pt]
+      &\textbf{plan:}\ \ \text{repeat }n\text{ times:}\quad (s,a)\sim\mathcal{D},\ \ \hat s'\sim\hat P_\phi(\cdot\mid s,a),\ \ \hat r=\hat R_\psi(s,a)\\[2pt]
+      &\phantom{\textbf{plan:}}\quad Q(s,a)\leftarrow Q(s,a)+\alpha\big[\hat r+\gamma\max_{a'}Q(\hat s',a')-Q(s,a)\big]
+      \end{aligned}$$
+    </div>
+    <p>One real transition now produces $n+1$ backups. The third and fourth lines are ordinary TD updates — they simply never touch the environment. The only new ingredient is the sampling of $\hat s'$ from the model instead of the world.</p>
+    <div class="note">
+      <b>Planning is just learning from data you did not have to collect.</b> That is the entire source of model-based sample efficiency, and the entire source of its risk: the imagined data inherits every error in the model, and it never pushes back.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="rollout">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>The world-model rollout</h2>
+      <p>Fit a model, roll it forward, and measure how far the imagined trajectory drifts from the real one. The task is a pendulum, $\ddot\theta=-10\sin\theta-0.1\,\dot\theta+u$, integrated at $\Delta t=0.05$. The model is a polynomial regression $f_\phi(\theta,\dot\theta,u)$ fit to nine thousand real transitions by least squares.</p>
+      <p>Raise the model's degree and the one-step error falls. Raise the horizon and the error compounds anyway. Drag both sliders and watch the blue imagination peel away from the black truth.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · world-model rollout</span>
+        <div class="btnrow">
+          <div class="slider-row" style="width:190px">
+            <span class="small muted">capacity</span>
+            <input type="range" id="capSlider" min="1" max="3" step="1" value="3" aria-label="model capacity">
+            <span class="val" id="capVal">quintic</span>
+          </div>
+          <div class="slider-row" style="width:180px">
+            <span class="small muted">horizon $H$</span>
+            <input type="range" id="horizonSlider" min="1" max="40" step="1" value="20" aria-label="rollout horizon">
+            <span class="val" id="horizonVal">20</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="phaseSvg" class="diagram" viewBox="0 0 340 300" role="img" aria-label="Phase portrait of the real and imagined pendulum trajectory"></svg>
+          <p class="small muted" style="text-align:center;margin-top:8px">Real <span style="color:#111;font-weight:700">—</span> &nbsp;·&nbsp; Imagined <span style="color:#2563eb;font-weight:700">– –</span> &nbsp;·&nbsp; phase space $(\theta,\dot\theta)$</p>
+        </div>
+
+        <div class="col" style="flex:1 1 300px">
+          <p class="small muted" style="margin-top:0;font-family:ui-monospace,monospace;line-height:1.9">
+            one-step error&nbsp; <span id="oneStepErr">0.0000</span><br>
+            $H$-step error&nbsp;&nbsp;&nbsp; <span id="hStepErr">0.000</span>
+          </p>
+          <div class="eqbox" id="rollEq" style="margin-top:14px"></div>
+          <p class="small muted" style="margin-bottom:0">Every blue point is the model talking to itself. The black points are the only ones that are true.</p>
+        </div>
+      </div>
+
+      <div style="margin-top:16px">
+        <p class="small muted" style="margin:0 0 4px;font-family:ui-monospace,monospace">compounded error vs. horizon, by capacity</p>
+        <svg id="errSvg" viewBox="0 0 480 170" style="width:100%;max-width:560px" role="img" aria-label="Compounded model error versus rollout horizon for three model capacities"></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="mpc">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Short-horizon control: MPC and shooting</h2>
+      <p>With a model in hand, control becomes optimization. <b>Model-predictive control (MPC)</b> solves a finite-horizon problem, executes one action, and replans from the new state.</p>
+      <div class="eqbox">
+        $$u^{*}_{0:H-1}=\arg\max_{u_{0:H-1}}\;\mathbb{E}\Big[\sum_{k=0}^{H-1}\gamma^{k}\,\hat r(s_k,u_k)\Big]\quad\text{s.t.}\quad s_{k+1}=f_\phi(s_k,u_k),\qquad u^{*}_0\ \text{executed}.$$
+      </div>
+      <p>When the action space is continuous and the model is cheap, you do not need gradients. <b>Random shooting</b> samples $K$ action sequences, rolls each one out, and keeps the best. <b>CEM</b> iterates that idea, refitting a Gaussian to the elite samples. <b>PETS</b> wraps the whole loop in a probabilistic ensemble so the optimizer cannot exploit uncertainty.</p>
+      <div class="note">
+        <b>The optimizer attacks the model.</b> A horizon-$H$ objective has $H$ chances to find a state where the model is optimistic and the world is not. Short horizons and uncertainty penalties are not conservatism for its own sake — they are the only thing standing between a planner and its model's blind spots.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · receding-horizon shooting</span>
+        <div class="btnrow">
+          <div class="slider-row" style="width:150px">
+            <span class="small muted">$H$</span>
+            <input type="range" id="mpcH" min="3" max="20" step="1" value="12" aria-label="planning horizon">
+            <span class="val" id="mpcHVal">12</span>
+          </div>
+          <div class="slider-row" style="width:165px">
+            <span class="small muted">$K$</span>
+            <input type="range" id="mpcK" min="8" max="192" step="8" value="128" aria-label="number of sampled action sequences">
+            <span class="val" id="mpcKVal">128</span>
+          </div>
+          <button id="mpcStep" class="primary">Plan &amp; step ▸</button>
+          <button id="mpcAuto">Auto ▶</button>
+          <button id="mpcReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="mpcSvg" class="diagram" viewBox="0 0 360 320" role="img" aria-label="Receding-horizon shooting: sampled rollouts, the best rollout, and the executed path in phase space"></svg>
+          <p class="small muted" style="text-align:center;margin-top:8px">Candidates <span style="color:#c2c9d4;font-weight:700">—</span> &nbsp;·&nbsp; Best rollout <span style="color:#2563eb;font-weight:700">—</span> &nbsp;·&nbsp; Executed <span style="color:#111;font-weight:700">—</span></p>
+        </div>
+
+        <div class="col" style="flex:1 1 300px">
+          <p class="small muted" style="margin-top:0">The pendulum starts tilted near the top. Each plan samples $K$ action sequences of length $H$, rolls them through the learned model, and executes only the first action of the best sequence — then replans.</p>
+          <p class="small muted" style="font-family:ui-monospace,monospace;line-height:1.9">
+            best return&nbsp; <span id="mpcRet">—</span><br>
+            chosen $u_0$&nbsp;&nbsp; <span id="mpcAct">—</span><br>
+            angle $\theta$&nbsp;&nbsp;&nbsp; <span id="mpcTheta">—</span>
+          </p>
+          <div class="eqbox" id="mpcEq" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="world">
+  <div class="wrap">
+    <h2><span class="num">05</span>Latent world models: PETS, MBPO, Dreamer</h2>
+    <p>Pixels are high-dimensional; the dynamics behind them are not. A <b>latent world model</b> compresses each observation into a small state $z_t$ and learns the dynamics there. Planning then happens in the latent space.</p>
+    <p><b>PETS</b> keeps the model explicit — an ensemble of probabilistic dynamics models — and plans with MPC, adding a penalty wherever the ensemble disagrees. <b>MBPO</b> trusts the model for only a few steps at a time: it branches short rollouts from real replay states and trains the policy on those, mixing imagined and real data.</p>
+    <div class="eqbox">
+      $$J(\theta)=\mathbb{E}_{s_0\in\mathcal{D}}\Big[\sum_{k=0}^{H-1}\gamma^{k}\,\hat r\big(s_k,\pi_\theta(s_k)\big)\Big],\qquad s_{k+1}=f_\phi\big(s_k,\pi_\theta(s_k)\big).$$
+    </div>
+    <p><b>Dreamer</b> removes the planner entirely. It learns a recurrent state-space model — encode $z_t$, roll $z_{t+1}\sim p_\theta(\cdot\mid z_t,a_t)$, decode — and trains the policy <em>only</em> on rollouts imagined inside the latent space.</p>
+    <div class="eqbox">
+      $$\begin{aligned}
+      &\textbf{representation:}\quad z_t\sim q_\theta(z_t\mid o_{\le t},a_{\lt t})\\[2pt]
+      &\textbf{dynamics:}\quad z_{t+1}\sim p_\theta(z_{t+1}\mid z_t,a_t),\qquad \hat r_t\sim q_\theta(r_t\mid z_t)\\[2pt]
+      &\textbf{imagination:}\quad \max_{\theta}\;\mathbb{E}\Big[\sum_{k\ge 0}\gamma^{k}\,\hat r_\theta(z_k,a_k)\Big]
+      \end{aligned}$$
+    </div>
+    <p>Because the model is differentiable, the policy gradient flows straight through it. This is the <b>model-based policy gradient</b>: backpropagation through the unrolled dynamics.</p>
+    <div class="eqbox">
+      $$\nabla_\theta J=\mathbb{E}\Big[\sum_{k}\big(\nabla_{s_{k}}J\big)^{\!\top}\,\nabla_\theta f_\phi\big(s_k,\pi_\theta(s_k)\big)\Big].$$
+    </div>
+    <p>No environment query appears anywhere in the update — the entire gradient is manufactured inside the model. That is the difference between dreaming and acting.</p>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="muzero">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>MuZero — planning without rules</h2>
+      <p>Dreamer still decodes observations. <b>MuZero</b> refuses even that. It learns a latent model whose only job is to serve the search: it must predict rewards, values, and policies, not pixels.</p>
+      <div class="eqbox">
+        $$s^{0}=h_\theta(o_{1:t}),\qquad s^{k},\,r^{k}=g_\theta(s^{k-1},a_k),\qquad p^{k},\,v^{k}=f_\theta(s^{k}).$$
+      </div>
+      <p>Inside the search, <b>MCTS</b> unfolds $g_\theta$ along hypothetical action sequences and uses $p^{k},v^{k}$ to guide the tree. Nothing is ever decoded back to an observation — the state $s^{k}$ is free to mean whatever the search needs it to mean.</p>
+    </div>
+
+    <div style="margin:22px 0">
+      <svg id="mzSvg" viewBox="0 0 660 220" style="width:100%;max-width:680px;margin:0 auto" role="img" aria-label="MuZero network: observation encoded by h, rolled forward by g, decoded by prediction heads f"></svg>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>The three functions are trained end-to-end by unrolling the model $K$ steps and matching the search's own improved policy $\pi^{k}$, the observed reward $u$, and the game outcome $z$:</p>
+      <div class="eqbox">
+        $$\mathcal{L}=\sum_{k=0}^{K}\Big[\underbrace{(v^{k}-z)^{2}}_{\text{value}}+\underbrace{\pi^{k\top}\log p^{k}}_{\text{policy}}+\underbrace{(r^{k}-u)^{2}}_{\text{reward}}\Big].$$
+      </div>
+      <div class="note">
+        <b>MuZero is the punchline of the chapter.</b> The model is no longer a replica of the world — it is a simulator that exists only to be searched, trained by the value it produces. An explicit dynamics model is one way to build it; a neural latent one is another. Both are just $f_\phi$.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="bias">
+  <div class="wrap">
+    <h2><span class="num">07</span>Why the model lies: bias versus variance</h2>
+    <p>Compare the two ways to estimate a return. Model-free Monte Carlo averages <em>actual</em> sampled returns: unbiased, but its variance falls only as $1/n$. Model-based prediction rolls the learned dynamics forward: cheap and low-variance, but every imagined step spends a little of the model's bias.</p>
+    <div class="eqbox">
+      $$\mathrm{MSE}=\underbrace{\big(\mathbb{E}[\hat J]-J\big)^{2}}_{\text{bias}^{2}}+\underbrace{\mathbb{V}\mathrm{ar}[\hat J]}_{\text{variance}},\qquad
+        \big|\hat J-J\big|\;\approx\;\sum_{k=0}^{H-1}\gamma^{k}\,\epsilon_k\ \ \text{for per-step model error }\epsilon_k.$$
+    </div>
+    <p>The bias compounds through the rollout. If the one-step dynamics error is $\epsilon$ and the model is $L$-Lipschitz, the $k$-step state error is bounded by</p>
+    <div class="eqbox">
+      $$\|\hat s_k-s_k\|\;\le\;\epsilon\sum_{i=0}^{k-1}L^{i}\;=\;\epsilon\,\frac{L^{k}-1}{L-1}.$$
+    </div>
+    <p class="small muted">Read that last line back: the one-step error is multiplied by an <em>exponential</em> in the horizon. When $L>1$ — exactly the interesting regime — a model that is excellent one step out can be useless twenty steps out. That is the blue curve in the rollout above.</p>
+    <div class="note">
+      <b>Planning buys variance with bias.</b> A short model rollout behaves like a noisy but cheap return estimate; a long one behaves like a confident but wrong one. Every real system — MBPO's short branches, Dreamer's imagination horizon, MuZero's search depth — is one chosen point on that curve.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">08</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Model-free</th><th>Model-based</th></tr>
+      <tr><td>Learns</td><td>$Q_\theta(s,a)$ or $\pi_\theta(a\mid s)$ directly</td><td>$\hat P_\phi(s'\mid s,a)$ and $\hat R_\psi(s,a)$, then plans</td></tr>
+      <tr><td>What one real step buys</td><td>One update</td><td>One update plus $n$ imagined ones (Dyna)</td></tr>
+      <tr><td>Return estimate</td><td>Unbiased, high variance</td><td>Low variance, biased by model error</td></tr>
+      <tr><td>Error with horizon</td><td>Flat — returns are sampled, not rolled</td><td>Compounds like $L^{k}$</td></tr>
+      <tr><td>Cost per decision</td><td>One forward pass</td><td>Model training plus a search or MPC solve</td></tr>
+      <tr><td>Examples</td><td>DQN, Sarsa, PPO</td><td>Dyna, MPC, PETS, MBPO, Dreamer, MuZero</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      &\text{model:}\quad \min_\phi\;\mathbb{E}_{(s,a,s')}\big\|s'-f_\phi(s,a)\big\|^{2}\\[2pt]
+      &\text{Dyna:}\quad Q(s,a)\leftarrow Q(s,a)+\alpha\big[\hat r+\gamma\max_{a'}Q(\hat s',a')-Q(s,a)\big]\\[2pt]
+      &\text{MPC:}\quad u^{*}_{0:H-1}=\arg\max_{u}\;\mathbb{E}\Big[\sum_{k=0}^{H-1}\gamma^{k}\hat r(s_k,u_k)\Big]\\[2pt]
+      &\text{compounding:}\quad \|\hat s_k-s_k\|\le\epsilon\,\tfrac{L^{k}-1}{L-1}\\[2pt]
+      &\text{MuZero:}\quad s^{k},r^{k}=g_\theta(s^{k-1},a_k),\qquad p^{k},v^{k}=f_\theta(s^{k})
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything after this — offline RL, curiosity, hierarchy, and the alignment stack in Part V — is a different answer to the same question: how much of the world should you learn, and how far should you trust what you learned.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="12-trust-region-and-proximal-policy-optimization.html"><span class="pg-k">Previous</span><span class="pg-t">TRPO &amp; PPO</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="14-offline-reinforcement-learning.html"><span class="pg-k">Next</span><span class="pg-t">Offline RL</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* =====================================================================
+   The tiny learned dynamics model
+   Pendulum:  thetaddot = -10 sin(theta) - 0.1 thetadot + u
+   State s = [theta, thetadot].  The model is a polynomial regression
+   on (theta, thetadot, u) that predicts the per-step change ds.
+   ===================================================================== */
+const GL = 10, BD = 0.1, DT = 0.05;
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function realDeriv(x, u) { return [x[1], -GL * Math.sin(x[0]) - BD * x[1] + u]; }
+function rk4(x, u, dt) {
+  const k1 = realDeriv(x, u);
+  const x2 = [x[0] + dt / 2 * k1[0], x[1] + dt / 2 * k1[1]];
+  const k2 = realDeriv(x2, u);
+  const x3 = [x[0] + dt / 2 * k2[0], x[1] + dt / 2 * k2[1]];
+  const k3 = realDeriv(x3, u);
+  const x4 = [x[0] + dt * k3[0], x[1] + dt * k3[1]];
+  const k4 = realDeriv(x4, u);
+  return [
+    x[0] + dt / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]),
+    x[1] + dt / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])
+  ];
+}
+function simReal(x0, us) {
+  const out = [x0.slice()]; let x = x0;
+  for (const u of us) { x = rk4(x, u, DT); out.push(x.slice()); }
+  return out;
+}
+function expoList(deg) {
+  const L = [];
+  for (let a = 0; a <= deg; a++)
+    for (let b = 0; b <= deg; b++)
+      for (let c = 0; c <= deg; c++)
+        if (a + b + c <= deg) L.push([a, b, c]);
+  return L;
+}
+function rawPhi(s, u, expo) {
+  const o = [];
+  for (const [a, b, c] of expo)
+    o.push(Math.pow(s[0], a) * Math.pow(s[1], b) * Math.pow(u, c));
+  return o;
+}
+function fitModel(S, deg) {
+  const expo = expoList(deg), n = expo.length, N = S.length;
+  const phi = S.map(q => rawPhi(q.s, q.u, expo));
+  const mean = new Array(n).fill(0), std = new Array(n).fill(0);
+  for (let j = 0; j < n; j++) { let m = 0; for (let i = 0; i < N; i++) m += phi[i][j]; mean[j] = m / N; }
+  for (let j = 0; j < n; j++) {
+    let v = 0;
+    for (let i = 0; i < N; i++) { const d = phi[i][j] - mean[j]; v += d * d; }
+    std[j] = Math.sqrt(v / N) || 1;
+  }
+  const XtX = Array.from({ length: n }, () => new Array(n).fill(0));
+  const Xty = Array.from({ length: n }, () => [0, 0]);
+  const xs = new Array(n);
+  for (let i = 0; i < N; i++) {
+    const ph = phi[i];
+    for (let j = 0; j < n; j++) xs[j] = (ph[j] - mean[j]) / std[j];
+    const d0 = S[i].s2[0] - S[i].s[0], d1 = S[i].s2[1] - S[i].s[1];
+    for (let j = 0; j < n; j++) {
+      Xty[j][0] += xs[j] * d0; Xty[j][1] += xs[j] * d1;
+      for (let k = j; k < n; k++) XtX[j][k] += xs[j] * xs[k];
+    }
+  }
+  for (let j = 0; j < n; j++) for (let k = 0; k < j; k++) XtX[j][k] = XtX[k][j];
+  for (let j = 0; j < n; j++) XtX[j][j] += 1e-6 * N;
+  const Xi = inv(XtX);
+  const beta = Array.from({ length: n }, () => [0, 0]);
+  for (let j = 0; j < n; j++) {
+    let b0 = 0, b1 = 0;
+    for (let k = 0; k < n; k++) { b0 += Xi[j][k] * Xty[k][0]; b1 += Xi[j][k] * Xty[k][1]; }
+    beta[j] = [b0, b1];
+  }
+  return { expo, mean, std, beta };
+}
+function modelStep(M, s, u) {
+  let d0 = 0, d1 = 0, i = 0;
+  for (const [a, b, c] of M.expo) {
+    const v = Math.pow(s[0], a) * Math.pow(s[1], b) * Math.pow(u, c);
+    const x = (v - M.mean[i]) / M.std[i];
+    d0 += M.beta[i][0] * x; d1 += M.beta[i][1] * x; i++;
+  }
+  return [s[0] + d0, s[1] + d1];
+}
+function simModel(M, x0, us) {
+  const out = [x0.slice()]; let x = x0;
+  for (const u of us) { x = modelStep(M, x, u); out.push(x.slice()); }
+  return out;
+}
+function makeData(seed) {
+  const rnd = mulberry32(seed), S = [];
+  for (let t = 0; t < 1500; t++) {
+    let x = [(rnd() * 2 - 1) * 2, (rnd() * 2 - 1) * 2];
+    for (let k = 0; k < 6; k++) {
+      const u = (rnd() * 2 - 1) * 6;
+      const nx = rk4(x, u, DT);
+      S.push({ s: [x[0], x[1]], u, s2: [nx[0], nx[1]] });
+      x = nx;
+    }
+  }
+  return S;
+}
+
+/* Train once, share across panels. */
+let DATA = null, MODELS = {};
+function getData() { if (!DATA) DATA = makeData(1234); return DATA; }
+function getModel(deg) { if (!MODELS[deg]) MODELS[deg] = fitModel(getData(), deg); return MODELS[deg]; }
+
+/* =====================================================================
+   Phase-portrait helpers
+   ===================================================================== */
+function phaseFrame(svg, W, Hh, wMax) {
+  svg.setAttribute('viewBox', `0 0 ${W} ${Hh}`);
+  svg.innerHTML = '';
+  const pad = 34;
+  const X = t => pad + clamp((t + Math.PI) / (2 * Math.PI), 0, 1) * (W - 2 * pad);
+  const Y = w => pad + clamp((wMax - w) / (2 * wMax), 0, 1) * (Hh - 2 * pad);
+  const g = el('g', {}, svg);
+  el('rect', { x: pad, y: pad, width: W - 2 * pad, height: Hh - 2 * pad, fill: '#fafafa', stroke: '#f0f0f0', rx: 8 }, g);
+  const wStep = wMax >= 5 ? 2 : 1;
+  for (let w = -Math.floor(wMax); w <= Math.floor(wMax); w += wStep) {
+    el('line', { x1: pad, x2: W - pad, y1: Y(w), y2: Y(w), stroke: '#f0f0f0', 'stroke-width': 1 }, g);
+  }
+  [-Math.PI, -Math.PI / 2, 0, Math.PI / 2, Math.PI].forEach(t => {
+    el('line', { x1: X(t), x2: X(t), y1: pad, y2: Hh - pad, stroke: '#f0f0f0', 'stroke-width': 1 }, g);
+  });
+  el('line', { x1: pad, x2: W - pad, y1: Y(0), y2: Y(0), stroke: '#d4d4d8' }, g);
+  el('line', { x1: X(0), x2: X(0), y1: pad, y2: Hh - pad, stroke: '#d4d4d8' }, g);
+  const lab = (x, y, txt) => {
+    el('text', { x, y, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, g).textContent = txt;
+  };
+  lab(X(-Math.PI), Hh - pad + 14, '-π');
+  lab(X(-Math.PI / 2), Hh - pad + 14, '-π/2');
+  lab(X(0), Hh - pad + 14, '0');
+  lab(X(Math.PI / 2), Hh - pad + 14, 'π/2');
+  lab(X(Math.PI), Hh - pad + 14, 'π');
+  for (let w = -Math.floor(wMax); w <= Math.floor(wMax); w += wStep) {
+    if (w !== 0) lab(pad - 14, Y(w) + 3, String(w));
+  }
+  lab(pad - 12, Y(0) + 3, '0');
+  el('text', { x: W / 2, y: Hh - 4, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280' }, g).textContent = 'θ';
+  el('text', { x: 11, y: Hh / 2, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280', transform: `rotate(-90 11 ${Hh / 2})` }, g).textContent = 'θ̇';
+  return { X, Y, gpaths: el('g', {}, svg) };
+}
+function drawTraj(g, X, Y, pts, color, dash, dotR) {
+  if (pts.length > 1) {
+    const d = 'M ' + pts.map(p => `${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join(' L ');
+    const path = el('path', {
+      d, fill: 'none', stroke: color, 'stroke-width': 2,
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round'
+    }, g);
+    if (dash) path.setAttribute('stroke-dasharray', dash);
+  }
+  if (dotR) pts.forEach(p => el('circle', { cx: X(p[0]), cy: Y(p[1]), r: dotR, fill: color }, g));
+}
+
+/* =====================================================================
+   03 — World-model rollout
+   ===================================================================== */
+function initRollout() {
+  const svg = $('#phaseSvg'), errSvg = $('#errSvg'), eqEl = $('#rollEq');
+  const capSlider = $('#capSlider'), capVal = $('#capVal');
+  const hSlider = $('#horizonSlider'), hVal = $('#horizonVal');
+  const oneEl = $('#oneStepErr'), hEl = $('#hStepErr');
+
+  const DEG = [1, 3, 5], LAB = ['linear', 'cubic', 'quintic'];
+  const HMAX = 40, WMAX = 6.5;
+  const x0 = [2.6, 0.0];
+  const us0 = new Array(HMAX).fill(0);
+
+  const real = simReal(x0, us0);
+  const curves = {};
+  DEG.forEach(d => {
+    const tr = simModel(getModel(d), x0, us0);
+    curves[d] = tr.map((p, k) => Math.hypot(p[0] - real[k][0], p[1] - real[k][1]));
+  });
+
+  function renderErr(activeDeg, H) {
+    const W = 480, Hh = 170, pad = 36;
+    errSvg.setAttribute('viewBox', `0 0 ${W} ${Hh}`);
+    errSvg.innerHTML = '';
+    let ymax = 0.2;
+    DEG.forEach(d => { ymax = Math.max(ymax, curves[d][HMAX]); });
+    ymax = Math.ceil(ymax * 10) / 10;
+    const X = k => pad + (k / HMAX) * (W - pad - 12);
+    const Y = e => Hh - pad - (e / ymax) * (Hh - 2 * pad);
+    const g = el('g', {}, errSvg);
+    [0, 0.5, 1].forEach(f => {
+      const e = ymax * f;
+      el('line', { x1: pad, x2: W - 12, y1: Y(e), y2: Y(e), stroke: '#f0f0f0' }, g);
+      el('text', { x: pad - 6, y: Y(e) + 3, 'text-anchor': 'end', 'font-size': 9.5, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, g).textContent = e.toFixed(1);
+    });
+    el('line', { x1: pad, x2: W - 12, y1: Y(0), y2: Y(0), stroke: '#d4d4d8' }, g);
+    el('line', { x1: pad, x2: pad, y1: pad - 6, y2: Hh - pad, stroke: '#d4d4d8' }, g);
+    el('text', { x: (W) / 2, y: Hh - 6, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280' }, g).textContent = 'rollout horizon k';
+    el('text', { x: 12, y: Hh / 2, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280', transform: `rotate(-90 12 ${Hh / 2})` }, g).textContent = '‖ŝ_k − s_k‖';
+
+    DEG.forEach((d, i) => {
+      const active = d === activeDeg;
+      const c = active ? '#2563eb' : '#c2c9d4';
+      el('path', {
+        d: 'M ' + curves[d].map((e, k) => `${X(k).toFixed(1)} ${Y(e).toFixed(1)}`).join(' L '),
+        fill: 'none', stroke: c, 'stroke-width': active ? 2.4 : 1.4,
+        'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+      }, g);
+      const eEnd = curves[d][HMAX];
+      el('text', {
+        x: X(HMAX) + 2, y: clamp(Y(eEnd) + 3, pad, Hh - pad + 12), 'font-size': 9.5,
+        fill: active ? '#2563eb' : '#9ca3af', 'font-weight': active ? 700 : 500,
+        'font-family': 'ui-monospace,monospace'
+      }, g).textContent = LAB[i];
+    });
+    el('line', { x1: X(H), x2: X(H), y1: pad - 6, y2: Hh - pad, stroke: '#111', 'stroke-width': 1, 'stroke-dasharray': '3 3' }, g);
+    el('circle', { cx: X(H), cy: Y(curves[activeDeg][H]), r: 3.4, fill: '#111' }, g);
+  }
+
+  function render() {
+    const di = parseInt(capSlider.value, 10) - 1;
+    const deg = DEG[di];
+    capVal.textContent = LAB[di];
+    const H = parseInt(hSlider.value, 10);
+    hVal.textContent = String(H);
+
+    const M = getModel(deg);
+    const frame = phaseFrame(svg, 340, 300, WMAX);
+    const { X, Y, gpaths } = frame;
+    drawTraj(gpaths, X, Y, real.slice(0, H + 1), '#111', null, 0);
+    real.slice(0, H + 1).forEach(p => el('circle', { cx: X(p[0]), cy: Y(p[1]), r: 2.2, fill: '#111' }, gpaths));
+    const tr = simModel(M, x0, us0).slice(0, H + 1);
+    drawTraj(gpaths, X, Y, tr, '#2563eb', '5 4', 0);
+    tr.forEach(p => el('circle', { cx: X(p[0]), cy: Y(p[1]), r: 2.2, fill: '#2563eb' }, gpaths));
+    el('circle', { cx: X(x0[0]), cy: Y(x0[1]), r: 4.5, fill: '#111' }, gpaths);
+    el('circle', { cx: X(x0[0]), cy: Y(x0[1]), r: 4.5, fill: 'none', stroke: '#fff', 'stroke-width': 1.5 }, gpaths);
+
+    const nxt = modelStep(M, x0, 0);
+    const e1 = Math.hypot(nxt[0] - real[1][0], nxt[1] - real[1][1]);
+    const eH = curves[deg][H];
+    oneEl.textContent = e1.toFixed(4);
+    hEl.textContent = eH.toFixed(3);
+
+    renderErr(deg, H);
+    T(eqEl,
+      `\\hat s_{k+1}=s_k+f_\\phi(s_k,u_k)\\quad(\\text{${LAB[di]}})\\qquad ` +
+      `\\big\\|\\hat s_{${H}}-s_{${H}}\\big\\|=\\mathbf{${eH.toFixed(3)}}`, true);
+  }
+
+  capSlider.addEventListener('input', render);
+  hSlider.addEventListener('input', render);
+  render();
+}
+
+/* =====================================================================
+   04 — Receding-horizon shooting (MPC)
+   ===================================================================== */
+function initMPC() {
+  const svg = $('#mpcSvg'), eqEl = $('#mpcEq');
+  const hSlider = $('#mpcH'), hVal = $('#mpcHVal');
+  const kSlider = $('#mpcK'), kVal = $('#mpcKVal');
+  const retEl = $('#mpcRet'), actEl = $('#mpcAct'), thetaEl = $('#mpcTheta');
+
+  const M = getModel(5);
+  const WMAX = 3.0, UMAX = 6.0, GAMMA = 0.95;
+  const START = [0.6, 0.15];
+  const rnd = mulberry32(7);
+
+  let state = START.slice();
+  let execPath = [state.slice()];
+  let cands = [], best = null, bestJ = -Infinity;
+  let timer = null, ticks = 0;
+
+  const reward = (s, u) =>
+    -(1 - Math.cos(s[0])) * 2 - 0.1 * s[1] * s[1] - 0.002 * u * u;
+
+  function plan(H, K) {
+    let bJ = -Infinity, bu = null, btr = null;
+    const cs = [];
+    for (let i = 0; i < K; i++) {
+      const us = new Array(H);
+      for (let k = 0; k < H; k++) us[k] = (rnd() * 2 - 1) * UMAX;
+      let s = state.slice(), J = 0;
+      const tr = [s.slice()];
+      for (let k = 0; k < H; k++) {
+        s = modelStep(M, s, us[k]);
+        J += Math.pow(GAMMA, k) * reward(s, us[k]);
+        tr.push(s.slice());
+      }
+      cs.push(tr);
+      if (J > bJ) { bJ = J; bu = us; btr = tr; }
+    }
+    cands = cs; best = bu; bestJ = bJ;
+    return btr;
+  }
+
+  function render(bestPath) {
+    const frame = phaseFrame(svg, 360, 320, WMAX);
+    const { X, Y, gpaths } = frame;
+    const step = Math.max(1, Math.ceil(cands.length / 40));
+    for (let i = 0; i < cands.length; i += step) {
+      if (cands[i] === bestPath) continue;
+      drawTraj(gpaths, X, Y, cands[i], '#c2c9d4', null, 0);
+    }
+    if (bestPath) drawTraj(gpaths, X, Y, bestPath, '#2563eb', null, 0);
+    drawTraj(gpaths, X, Y, execPath, '#111', null, 2.4);
+    el('circle', { cx: X(state[0]), cy: Y(state[1]), r: 5, fill: '#2563eb', stroke: '#fff', 'stroke-width': 1.5 }, gpaths);
+    el('circle', { cx: X(START[0]), cy: Y(START[1]), r: 3.4, fill: '#111' }, gpaths);
+  }
+
+  function stepOnce() {
+    const H = parseInt(hSlider.value, 10), K = parseInt(kSlider.value, 10);
+    const bestPath = plan(H, K);
+    state = rk4(state, best[0], DT);
+    execPath.push(state.slice());
+    if (execPath.length > 80) execPath.shift();
+    render(bestPath);
+    retEl.textContent = bestJ.toFixed(3);
+    actEl.textContent = best[0].toFixed(2);
+    thetaEl.textContent = state[0].toFixed(3);
+    T(eqEl,
+      `\\hat J(u^{*}_{0:H-1})=\\sum_{k=0}^{${H - 1}}\\gamma^{k}\\hat r(s_k,u_k)=` +
+      `\\mathbf{${bestJ.toFixed(3)}},\\qquad u_0^{*}=${best[0].toFixed(2)}`, true);
+    return state;
+  }
+
+  function stop() { if (timer) { clearInterval(timer); timer = null; $('#mpcAuto').classList.remove('active'); } }
+
+  $('#mpcStep').addEventListener('click', () => { stop(); stepOnce(); });
+  $('#mpcAuto').addEventListener('click', () => {
+    if (timer) { stop(); return; }
+    $('#mpcAuto').classList.add('active');
+    timer = setInterval(() => {
+      const s = stepOnce();
+      ticks++;
+      if ((Math.abs(s[0]) < 0.12 && Math.abs(s[1]) < 0.4) || ticks > 60) stop();
+    }, 320);
+  });
+  $('#mpcReset').addEventListener('click', () => {
+    stop(); ticks = 0; state = START.slice(); execPath = [state.slice()];
+    cands = []; best = null; bestJ = -Infinity;
+    render(null); retEl.textContent = '—'; actEl.textContent = '—'; thetaEl.textContent = '—';
+    T(eqEl, `\\text{Click }\\textit{Plan and step}\\text{ to sample }K\\text{ action sequences and execute the best.}`, true);
+  });
+  hSlider.addEventListener('input', () => { hVal.textContent = hSlider.value; stop(); });
+  kSlider.addEventListener('input', () => { kVal.textContent = kSlider.value; stop(); });
+
+  hVal.textContent = hSlider.value;
+  kVal.textContent = kSlider.value;
+  render(null);
+  T(eqEl, `\\text{Click }\\textit{Plan and step}\\text{ to sample }K\\text{ action sequences and execute the best.}`, true);
+}
+
+/* =====================================================================
+   06 — MuZero network diagram
+   ===================================================================== */
+function drawMuZero() {
+  const svg = $('#mzSvg');
+  if (!svg) return;
+  svg.innerHTML = '';
+  const defs = el('defs', {}, svg);
+  const mk = (id, color) => {
+    const m = el('marker', {
+      id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7,
+      orient: 'auto', markerUnits: 'userSpaceOnUse'
+    }, defs);
+    el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: color }, m);
+    return `url(#${id})`;
+  };
+  const AR = mk('mzar', '#111'), ARG = mk('mzarg', '#c2c9d4');
+  const SUB = ['₀', '₁', '₂', '₃'];
+  const xs = [190, 360, 530], y = 128;
+
+  el('rect', { x: 54, y: y - 18, width: 62, height: 36, rx: 8, fill: '#f4f4f5' }, svg);
+  el('text', { x: 85, y: y + 4, 'text-anchor': 'middle', 'font-size': 12, 'font-family': 'ui-monospace,monospace', fill: '#111' }, svg).textContent = 'o_t';
+
+  const arrow = (x1, y1, x2, y2, color) => el('path', {
+    d: `M ${x1} ${y1} L ${x2} ${y2}`, stroke: color, 'stroke-width': 1.4, fill: 'none', 'marker-end': color === '#111' ? AR : ARG
+  }, svg);
+
+  arrow(116, y, xs[0] - 24, y, '#111');
+  el('text', { x: (116 + xs[0] - 24) / 2, y: y - 8, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 650, fill: '#111' }, svg).textContent = 'h';
+
+  for (let i = 0; i < xs.length; i++) {
+    if (i > 0) {
+      const mx = (xs[i - 1] + xs[i]) / 2;
+      arrow(xs[i - 1] + 24, y, xs[i] - 24, y, '#111');
+      el('text', { x: mx, y: y - 9, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 650, fill: '#111' }, svg).textContent = 'g';
+      el('text', { x: mx, y: y + 24, 'text-anchor': 'middle', 'font-size': 11, fill: '#dc2626', 'font-family': 'ui-monospace,monospace' }, svg).textContent = 'r' + SUB[i];
+      arrow(mx, y - 64, mx, y - 32, '#c2c9d4');
+      el('text', { x: mx, y: y - 70, 'text-anchor': 'middle', 'font-size': 11, fill: '#6b7280', 'font-family': 'ui-monospace,monospace' }, svg).textContent = 'a' + SUB[i];
+    }
+    el('circle', { cx: xs[i], cy: y, r: 24, fill: '#fff', stroke: '#111', 'stroke-width': 1.6 }, svg);
+    el('text', { x: xs[i], y: y + 4, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 650, fill: '#111', 'font-family': 'ui-monospace,monospace' }, svg).textContent = 's' + SUB[i];
+    arrow(xs[i], y - 24, xs[i], 82, '#111');
+    el('rect', { x: xs[i] - 24, y: 54, width: 48, height: 28, rx: 7, fill: '#f4f4f5' }, svg);
+    el('text', { x: xs[i], y: 73, 'text-anchor': 'middle', 'font-size': 12, fill: '#111', 'font-family': 'ui-monospace,monospace' }, svg).textContent = 'f';
+    el('text', { x: xs[i] - 40, y: 73, 'text-anchor': 'middle', 'font-size': 11, fill: '#2563eb', 'font-family': 'ui-monospace,monospace' }, svg).textContent = 'p' + SUB[i];
+    el('text', { x: xs[i] + 40, y: 73, 'text-anchor': 'middle', 'font-size': 11, fill: '#6b7280', 'font-family': 'ui-monospace,monospace' }, svg).textContent = 'v' + SUB[i];
+  }
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initRollout();
+  initMPC();
+  drawMuZero();
+  initScroll();
+});
+</script>
+</body>
+</html>

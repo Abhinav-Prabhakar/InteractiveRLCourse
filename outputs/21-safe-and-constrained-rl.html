@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 21 · Safe and Constrained RL</title>
+<!--
+  Assumption: per the task instructions, no prev/next footer links are included
+  (the design reference RL.html has none). Every visualiser below runs a real
+  algorithm in the browser. The curriculum panel uses a fixed seed (12345), so
+  the numbers quoted in the prose are exactly reproducible.
+-->
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:16px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- diagrams / svg ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.plot{width:100%;max-width:520px;margin:0 auto}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;border-radius:8px;padding:2px 4px}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:22px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vbar{position:absolute;top:3px;bottom:3px;left:0;border-radius:3px;transition:width .3s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- stat readout ---------------- */
+.stat{font-family:ui-monospace,monospace;font-size:12.5px;color:#374151}
+.center-note{text-align:center;margin:8px 0 0}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:24%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .vval{width:48px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Ch. 21 · Safe &amp; Constrained RL</a>
+    <nav class="nav">
+      <a href="#cmdp">CMDPs</a>
+      <a href="#lagrangian">Lagrangian</a>
+      <a href="#primaldual">Primal–dual</a>
+      <a href="#shield">Shielding</a>
+      <a href="#curriculum">Curriculum</a>
+      <a href="#budget">Budget</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Part IV · Chapter 21</p>
+    <h1>Safe and Constrained RL</h1>
+    <p class="lede">Every algorithm so far optimised one number. Real deployments charge for two — the reward you want and the damage you tolerate — and this chapter is about trading the second for the first.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="cmdp">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>Constrained MDPs</h2>
+      <p>An MDP scores a policy with one number. A deployment charges for two: how good it is, and how much damage it does getting there. A <b>constrained MDP</b> carries both.</p>
+      <div class="eqbox">
+        $$\mathcal M=(\mathcal S,\mathcal A,P,r,c,\gamma),\qquad
+        \max_{\pi}\;J(\pi)=\mathbb E_\pi\!\Big[\textstyle\sum_t\gamma^{t}r_t\Big]\quad
+        \text{s.t.}\quad J_c(\pi)=\mathbb E_\pi\!\Big[\textstyle\sum_t\gamma^{t}c_t\Big]\le d .$$
+      </div>
+      <p>Here $c_t\ge0$ is a <b>cost</b> — a collision, a torque overrun, a dollar — and $d$ is the budget. The <b>feasible set</b> $\Pi_d=\{\pi:J_c(\pi)\le d\}$ is a thin corner of policy space, and the reward-optimal policy often lives outside it.</p>
+      <div class="note">
+        <b>Optimality is not safety.</b> The greedy policy of the underlying MDP can be its worst violator, and patching it afterwards is the failure the constraint was meant to prevent.
+      </div>
+      <p>Assume $\Pi_d\ne\emptyset$ and $c$ bounded. A CMDP is secretly a linear program over occupancy measures, so under Slater's condition the duality gap is zero — which makes the single multiplier below exact rather than a heuristic.</p>
+    </div>
+
+    <div class="panel" style="margin-top:24px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · feasible set and the frontier</span>
+        <div class="slider-row" style="width:230px">
+          <span class="small muted">budget $d$</span>
+          <input type="range" id="frontD" min="0.05" max="1" step="0.01" value="0.4" aria-label="cost budget">
+          <span class="val" id="frontDVal">0.40</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 420px">
+          <svg id="frontSvg" class="plot" viewBox="0 0 380 270" role="img" aria-label="Reward versus cost frontier, with the feasible cost region and the constrained optimum"></svg>
+        </div>
+        <div class="col" style="flex:1 1 280px">
+          <p class="small muted" style="margin-top:0">Each point is a policy, plotted by cost $J_c$ and reward $J$. Tighten $d$ and the constraint slices off everything to the right; the best survivor slides down the frontier.</p>
+          <div class="eqbox" id="frontEq" style="margin-bottom:0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="lagrangian">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>The Lagrangian and the price of safety</h2>
+      <p>Free the constraint by pricing it. Fold cost into one scalar with a multiplier $\lambda\ge0$:</p>
+      <div class="eqbox">
+        $$\mathcal L(\pi,\lambda)=J(\pi)-\lambda\big(J_c(\pi)-d\big).$$
+      </div>
+      <p>The constrained problem is its <b>saddle point</b> — max over policies, min over prices:</p>
+      <div class="eqbox">
+        $$\max_{\pi}\min_{\lambda\ge0}\mathcal L(\pi,\lambda)\;=\;\min_{\lambda\ge0}\max_{\pi}\mathcal L(\pi,\lambda).$$
+      </div>
+      <p>Read the inner problem back: for a fixed $\lambda$, maximising $\mathcal L$ is <em>ordinary</em> RL on the shifted reward $r_t-\lambda c_t$. The constraint has become a toll.</p>
+      <p>And $\lambda$ is a literal price — the <b>price of safety</b>. At the optimum the two gradients line up:</p>
+      <div class="eqbox">
+        $$\nabla J(\pi^\star)=\lambda^\star\nabla J_c(\pi^\star),\qquad
+        \lambda^\star\big(J_c(\pi^\star)-d\big)=0 .$$
+      </div>
+      <p>So $\lambda^\star>0$ only when the budget binds, and then it is the marginal reward of loosening the constraint — the shadow price of safety. The <b>dual function</b> $g(\lambda)=\max_\pi\mathcal L(\pi,\lambda)$ is convex, and the correct price is its minimiser:</p>
+      <div class="eqbox">
+        $$g(\lambda)=\max_{\pi}\mathcal L(\pi,\lambda),\qquad
+        \lambda^\star=\arg\min_{\lambda\ge0}g(\lambda).$$
+      </div>
+      <div class="note">
+        <b>The dual is one-dimensional.</b> However large $\pi$ is, choosing the price is a root-find.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:24px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the dual function</span>
+        <div class="slider-row" style="width:200px">
+          <span class="small muted">$d$</span>
+          <input type="range" id="dualD" min="0.05" max="0.95" step="0.01" value="0.4" aria-label="cost budget">
+          <span class="val" id="dualDVal">0.40</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 420px">
+          <svg id="dualSvg" class="plot" viewBox="0 0 380 250" role="img" aria-label="Convex dual function of the multiplier, with its minimiser"></svg>
+        </div>
+        <div class="col" style="flex:1 1 280px">
+          <div class="slider-row" style="margin-top:0">
+            <span class="small muted">price $\lambda$</span>
+            <input type="range" id="dualLam" min="0" max="4" step="0.05" value="1" aria-label="multiplier price of safety">
+            <span class="val" id="dualLamVal">1.00</span>
+          </div>
+          <p class="small muted">Slide the price and watch the policy it buys: at $\lambda=0$ cost is free and the policy is reckless; as $\lambda$ climbs it retreats until its cost exactly meets $d$.</p>
+          <div class="eqbox" id="dualEq" style="margin-bottom:0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="primaldual">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Primal–dual updates and CPO</h2>
+      <p>Two variables, one loop. Alternate an exact primal maximisation with a gradient step on the price:</p>
+      <div class="eqbox">
+        $$\pi_{k+1}=\arg\max_{\pi}\mathcal L(\pi,\lambda_k),\qquad
+        \lambda_{k+1}=\big[\lambda_k+\eta\,\big(J_c(\pi_k)-d\big)\big]_+.$$
+      </div>
+      <p>The second line is <b>dual ascent</b> — gradient descent on the convex $g$. Overspend and the price rises; come in under budget it falls: <b>a market clearing demand against a fixed supply.</b> The projection $[\cdot]_+$ keeps the price non-negative.</p>
+      <p>Choose $\eta$ small enough and the pair reaches a saddle point; too large and the price rings across the boundary. Nearly every practical constrained method is this loop.</p>
+      <h3>CPO: a trust region with a second constraint</h3>
+      <p><b>CPO</b> (constrained policy optimization) makes the primal step a trust region, so each update moves little and the budget holds along the trajectory, not just at the fixed point:</p>
+      <div class="eqbox">
+        $$\max_\theta\;\mathbb E\!\Big[\tfrac{\pi_\theta(a\mid s)}{\pi_{\theta_k}(a\mid s)}A^{\pi_{\theta_k}}(s,a)\Big]
+        \quad\text{s.t.}\quad
+        \bar D_{\mathrm{KL}}(\pi_{\theta_k}\Vert\pi_\theta)\le\delta,\;
+        J_c(\pi_{\theta_k})+\mathbb E\!\Big[\tfrac{\pi_\theta}{\pi_{\theta_k}}A_c^{\pi_{\theta_k}}\Big]\le d .$$
+      </div>
+      <p>TRPO with a second, linear constraint on cost; the dual now carries two multipliers — trust and safety — and CPO solves the resulting quadratic in closed form. <b>PPO-Lagrangian</b> is the cheap cousin: clip the ratio, subtract $\lambda c_t$ from the reward, animate $\lambda$ by the rule above.</p>
+    </div>
+
+    <div class="panel" style="margin-top:24px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · primal–dual iteration</span>
+        <div class="btnrow">
+          <button id="pdStep">Step</button>
+          <button id="pdRun" class="primary">Run ▶</button>
+          <button id="pdReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 400px">
+          <svg id="pdSvg" class="plot" viewBox="0 0 380 270" role="img" aria-label="Primal-dual iterates sliding along the reward-cost frontier toward the budget"></svg>
+        </div>
+        <div class="col" style="flex:1 1 280px">
+          <div class="slider-row" style="margin-top:0">
+            <span class="small muted">step $\eta$</span>
+            <input type="range" id="pdEta" min="0.1" max="3.5" step="0.05" value="0.5" aria-label="dual step size">
+            <span class="val" id="pdEtaVal">0.50</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">budget $d$</span>
+            <input type="range" id="pdD" min="0.1" max="0.9" step="0.01" value="0.3" aria-label="cost budget">
+            <span class="val" id="pdDVal">0.30</span>
+          </div>
+          <p class="small muted">Each blue point is one iterate; the dot slides along the frontier to where cost equals $d$. Push $\eta$ past $2$ and the price overshoots and rings.</p>
+          <p class="stat" id="pdInfo" style="margin:0 0 10px"></p>
+          <div class="eqbox" id="pdEq" style="margin-bottom:0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="shield">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Shielding and model-based guarantees</h2>
+      <p>A price is soft: it discourages violations but never forbids them. A <b>shield</b> is hard, sitting between policy and environment and giving unsafe actions zero mass:</p>
+      <div class="eqbox">
+        $$\pi^{\text{shield}}(a\mid s)=\frac{\pi(a\mid s)\,\mathbf 1\{a\in\mathcal A_{\text{safe}}(s)\}}{\displaystyle\sum_{a'}\pi(a'\mid s)\,\mathbf 1\{a'\in\mathcal A_{\text{safe}}(s)\}} .$$
+      </div>
+      <p>With a known model the mask $\mathcal A_{\text{safe}}(s)=\{a:T(s,a)\cap\mathcal S_{\text{bad}}=\emptyset\}$ forbids any action with a successor in the bad set; a probabilistic variant keeps only actions whose reach probability stays below a tolerance $\delta$.</p>
+      <div class="note">
+        <b>The guarantee is about the model, not the learner.</b> If the mask is correct, no policy — however badly trained — can select a masked action, so the cost bound holds from step one. The price is conservatism: a too-tight mask can make the goal unreachable.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:24px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · a shield on a corridor</span>
+        <div class="btnrow">
+          <button id="shieldToggle" class="active">Shield: on</button>
+          <button id="shieldReset">Reset</button>
+        </div>
+      </div>
+      <svg id="shieldSvg" class="plot" viewBox="0 0 340 110" role="img" aria-label="Corridor with unsafe cells, a shield masking actions that would enter them"></svg>
+      <p class="small muted center-note">A goal-directed policy that stumbles left at random; without the shield it enters the unsafe cells, with it those actions are masked — using the known dynamics, not learning.</p>
+      <p class="stat center-note" id="shieldInfo" style="margin-top:6px"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="curriculum">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Curriculum induction for safe exploration</h2>
+      <p>Constraint satisfaction has to survive <em>learning</em>, not just deployment. Every exploratory action is a chance to violate, and random exploration is worst exactly where the state space is dangerous.</p>
+      <p><b>Curriculum induction</b> grows the task instead of the policy: begin where success is easy and failure is cheap, and widen the reachable set as competence arrives.</p>
+      <div class="eqbox">
+        $$\mathcal D_{k+1}=\begin{cases}
+          \mathcal D_k\cup\{\text{harder tasks}\}, & \hat J_c(\pi_k)\le d,\\[2pt]
+          \mathcal D_k, & \text{otherwise.}
+        \end{cases}$$
+      </div>
+      <p>A curriculum turns an infeasible exploration problem into a sequence of feasible ones. The mechanism is generic: shrink the hazard set, anneal the start outward from the goal, or cap the horizon. Two identical learners differ only in the order of exposure; the curriculum arm banks far fewer violations while it is still incompetent, and the two meet once both are competent.</p>
+    </div>
+
+    <div class="panel" style="margin-top:24px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · direct vs. curriculum training</span>
+        <div class="btnrow">
+          <button id="curRun" class="primary">Run ▶</button>
+          <button id="curReset">Reset</button>
+        </div>
+      </div>
+      <svg id="curSvg" class="plot" viewBox="0 0 760 260" style="max-width:100%" role="img" aria-label="Cumulative constraint violations during training, direct versus curriculum"></svg>
+      <p class="small muted center-note">Left: the grid, hazards in red. Right: cumulative hazard entries for two tabular Q-learning agents — one on the full task, one on a start-state curriculum. Seeded, so the curves are fixed.</p>
+      <p class="stat center-note" id="curInfo" style="margin-top:6px"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="budget">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>The safety budget</h2>
+      <p>Put it together. A car runs a fixed-length trip; going faster covers more ground but risks a collision. Reward is progress, cost is the collision rate, and the budget $d$ is the slider — a CMDP solved by a live price.</p>
+      <div class="eqbox">
+        $$r(v)=v,\qquad \mathbb E[c_t\mid v]=\kappa v^2,\qquad
+        \max_{v}\;T\,v\;\;\text{s.t.}\;\;\kappa T\,v^2\le d
+        \;\;\Longrightarrow\;\;
+        v^\star=\sqrt{\tfrac{d}{\kappa T}},\qquad \lambda^\star=\frac{1}{2\kappa v^\star}.$$
+      </div>
+      <p>Expected collisions over the trip are $\kappa T v^2$, equal to $d$ at the optimum. Tighten the budget and the price rises, speed falls, and the same dual ascent makes the policy conservative.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · safety budget</span>
+        <div class="slider-row" style="width:240px">
+          <span class="small muted">budget $d$</span>
+          <input type="range" id="budgetD" min="0.05" max="1.8" step="0.05" value="0.5" aria-label="collision budget per trip">
+          <span class="val" id="budgetDVal">0.50</span>
+        </div>
+      </div>
+      <svg id="budgetSvg" class="plot" viewBox="0 0 400 190" style="max-width:560px" role="img" aria-label="A car driving a road, slowing as the collision budget tightens"></svg>
+      <div class="row" style="margin-top:16px">
+        <div class="col" style="flex:1 1 300px">
+          <div class="vrow">
+            <span class="vlabel">$v$</span>
+            <div class="vtrack"><div class="vbar pos" id="budV" style="width:0%"></div></div>
+            <span class="vval" id="budVVal">0.00</span>
+          </div>
+          <div class="vrow">
+            <span class="vlabel">$\lambda$</span>
+            <div class="vtrack"><div class="vbar neg" id="budL" style="width:0%"></div></div>
+            <span class="vval" id="budLVal">0.00</span>
+          </div>
+          <p class="stat" id="budgetInfo" style="margin:12px 0 0"></p>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="eqbox" id="budgetEq" style="margin-top:0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">07</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Reward-only MDP</th><th>Lagrangian / primal–dual</th><th>CPO</th><th>Shielding</th></tr>
+      <tr><td>Objective</td><td>$\max_\pi J(\pi)$</td><td>$\max_\pi\min_{\lambda\ge0}\mathcal L(\pi,\lambda)$</td><td>Trust region + linear cost constraint</td><td>$\max_\pi J(\pi)$ over masked actions</td></tr>
+      <tr><td>How cost is handled</td><td>Ignored</td><td>Priced by $\lambda$, satisfied at the fixed point</td><td>Enforced every update</td><td>Forbidden every step</td></tr>
+      <tr><td>Guarantee</td><td>None</td><td>Asymptotic, if the saddle is reached</td><td>Approximate, per update</td><td>Hard, given a correct model</td></tr>
+      <tr><td>Needs</td><td>—</td><td>A cost signal</td><td>Cost advantage + value critics</td><td>A safety model</td></tr>
+      <tr><td>Failure mode</td><td>Unsafe optima</td><td>$\eta$ and $\lambda$ tuning; violations early</td><td>Fragile quadratic step</td><td>Over-conservative mask blocks the goal</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      \max_\pi\;&J(\pi)\quad\text{s.t.}\quad J_c(\pi)\le d\\[2pt]
+      \mathcal L(\pi,\lambda)&=J(\pi)-\lambda\big(J_c(\pi)-d\big),\qquad \lambda\ge0\\[2pt]
+      \lambda_{k+1}&=\big[\lambda_k+\eta\,(J_c(\pi_k)-d)\big]_+,\qquad
+      \pi_{k+1}=\arg\max_\pi\mathcal L(\pi,\lambda_k)\\[2pt]
+      \nabla J(\pi^\star)&=\lambda^\star\nabla J_c(\pi^\star),\qquad
+      \lambda^\star\big(J_c(\pi^\star)-d\big)=0\\[2pt]
+      \pi^{\text{shield}}(a\mid s)&\propto\pi(a\mid s)\,\mathbf 1\{a\in\mathcal A_{\text{safe}}(s)\}
+      \end{aligned}$$
+    </div>
+    <p class="small muted">The multiplier travels further than safety: in the next chapter the same primal–dual machinery returns as RLHF, where the cost is the KL divergence from a reference policy and $\lambda$ is the coefficient that keeps the aligned model from drifting.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="20-imitation-learning-and-inverse-rl.html"><span class="pg-k">Previous</span><span class="pg-t">Imitation &amp; Inverse RL</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="22-rlhf-and-llm-alignment.html"><span class="pg-k">Next</span><span class="pg-t">RLHF &amp; LLM Alignment</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+/* =====================================================================
+   Shared convex toy model:  policy a in [0,1], J = 2a - a^2,  J_c = a
+   ===================================================================== */
+const RA = a => 2 * a - a * a;
+const CA = a => a;
+const aStar = lam => clamp(1 - lam / 2, 0, 1);
+
+/* =====================================================================
+   01 — Feasible set / reward-cost frontier
+   ===================================================================== */
+function initFrontier() {
+  const svg = $('#frontSvg'), eqEl = $('#frontEq');
+  const sl = $('#frontD'), val = $('#frontDVal');
+  const W = 380, H = 270, pl = 48, pr = 16, pt = 16, pb = 36;
+  const pw = W - pl - pr, ph = H - pt - pb;
+  const X = c => pl + c * pw, Y = r => pt + (1 - r) * ph;
+  svg.innerHTML = '';
+  const g = el('g', {}, svg);
+  el('line', { x1: pl, y1: pt, x2: pl, y2: pt + ph, stroke: '#d4d4d8' }, g);
+  el('line', { x1: pl, y1: pt + ph, x2: pl + pw, y2: pt + ph, stroke: '#d4d4d8' }, g);
+  [0, 0.5, 1].forEach(c => { const t = el('text', { x: X(c), y: pt + ph + 17, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af' }, g); t.textContent = c.toFixed(1); });
+  [0, 0.5, 1].forEach(r => { const t = el('text', { x: pl - 9, y: Y(r) + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#9ca3af' }, g); t.textContent = r.toFixed(1); });
+  const xl = el('text', { x: pl + pw / 2, y: H - 6, 'text-anchor': 'middle', 'font-size': 11.5, fill: '#6b7280' }, g); xl.textContent = 'cost J\u1d9c';
+  const yl = el('text', { x: 14, y: pt + ph / 2, 'text-anchor': 'middle', 'font-size': 11.5, fill: '#6b7280', transform: `rotate(-90 14 ${pt + ph / 2})` }, g); yl.textContent = 'reward J';
+  const band = el('rect', { x: pl, y: pt, width: 0, height: ph, fill: '#eef2ff' }, g);
+  let d = '';
+  for (let a = 0; a <= 1.0001; a += 0.02) d += (d ? ' L' : 'M') + ' ' + X(a) + ' ' + Y(RA(a));
+  el('path', { d, fill: 'none', stroke: '#111', 'stroke-width': 2 }, g);
+  const dline = el('line', { stroke: '#c2c9d4', 'stroke-dasharray': '4 4' }, g);
+  const tan = el('line', { stroke: '#2563eb', 'stroke-width': 1.5, 'stroke-dasharray': '6 4' }, g);
+  const opt = el('circle', { r: 5.5, fill: '#2563eb' }, g);
+  const uncon = el('circle', { cx: X(1), cy: Y(1), r: 4, fill: '#dc2626' }, g);
+  const uncLab = el('text', { x: X(1) - 7, y: Y(1) - 9, 'text-anchor': 'end', 'font-size': 11, fill: '#dc2626' }, g);
+  uncLab.textContent = 'reward-only optimum';
+  const optLab = el('text', { 'font-size': 11, 'font-weight': 600, fill: '#2563eb' }, g);
+
+  function update() {
+    const b = parseFloat(sl.value); val.textContent = b.toFixed(2);
+    const a = clamp(b, 0, 1), r = RA(a), lam = 2 * (1 - a);
+    band.setAttribute('width', Math.max(0, X(a) - pl));
+    dline.setAttribute('x1', X(a)); dline.setAttribute('x2', X(a));
+    dline.setAttribute('y1', pt); dline.setAttribute('y2', pt + ph);
+    const m = -lam * (ph / pw), y0 = Y(r);
+    const xA = X(Math.max(0, a - 0.4)), xB = X(Math.min(1, a + 0.4));
+    tan.setAttribute('x1', xA); tan.setAttribute('y1', y0 + m * (xA - X(a)));
+    tan.setAttribute('x2', xB); tan.setAttribute('y2', y0 + m * (xB - X(a)));
+    opt.setAttribute('cx', X(a)); opt.setAttribute('cy', Y(r));
+    optLab.setAttribute('x', X(a) + 9); optLab.setAttribute('y', Y(r) - 8);
+    optLab.textContent = 'a* = ' + a.toFixed(2);
+    T(eqEl, `d=${b.toFixed(2)}\\;\\Rightarrow\\;a^\\star=${a.toFixed(2)},\\quad J^\\star=1-(1-d)^2=${r.toFixed(3)},\\quad \\lambda^\\star=2(1-d)=${lam.toFixed(2)}`, true);
+  }
+  sl.addEventListener('input', update); update();
+}
+
+/* =====================================================================
+   02 — Dual function
+   ===================================================================== */
+function initDual() {
+  const svg = $('#dualSvg'), eqEl = $('#dualEq');
+  const dsl = $('#dualD'), dval = $('#dualDVal'), lsl = $('#dualLam'), lval = $('#dualLamVal');
+  const W = 380, H = 250, pl = 48, pr = 16, pt = 16, pb = 36;
+  const pw = W - pl - pr, ph = H - pt - pb;
+  const LMAX = 4, GMAX = 4;
+  const X = l => pl + (l / LMAX) * pw, Y = gv => pt + (1 - clamp(gv, 0, GMAX) / GMAX) * ph;
+  const gOf = (l, b) => { const a = aStar(l); return RA(a) - l * (CA(a) - b); };
+  svg.innerHTML = '';
+  const g = el('g', {}, svg);
+  el('line', { x1: pl, y1: pt, x2: pl, y2: pt + ph, stroke: '#d4d4d8' }, g);
+  el('line', { x1: pl, y1: pt + ph, x2: pl + pw, y2: pt + ph, stroke: '#d4d4d8' }, g);
+  [0, 1, 2, 3, 4].forEach(l => { const t = el('text', { x: X(l), y: pt + ph + 17, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af' }, g); t.textContent = l; });
+  const xl = el('text', { x: pl + pw / 2, y: H - 6, 'text-anchor': 'middle', 'font-size': 11.5, fill: '#6b7280' }, g); xl.textContent = 'price \u03bb';
+  const yl = el('text', { x: 14, y: pt + ph / 2, 'text-anchor': 'middle', 'font-size': 11.5, fill: '#6b7280', transform: `rotate(-90 14 ${pt + ph / 2})` }, g); yl.textContent = 'g(\u03bb)';
+  const curve = el('path', { fill: 'none', stroke: '#111', 'stroke-width': 2 }, g);
+  const starLine = el('line', { stroke: '#c2c9d4', 'stroke-dasharray': '4 4' }, g);
+  const starDot = el('circle', { r: 4, fill: '#9ca3af' }, g);
+  const curLine = el('line', { stroke: '#2563eb', 'stroke-width': 1.2, 'stroke-dasharray': '3 3' }, g);
+  const curDot = el('circle', { r: 5, fill: '#2563eb' }, g);
+  const curLab = el('text', { 'font-size': 11, 'font-weight': 600, fill: '#2563eb' }, g);
+
+  function update() {
+    const b = parseFloat(dsl.value); dval.textContent = b.toFixed(2);
+    const lam = parseFloat(lsl.value); lval.textContent = lam.toFixed(2);
+    let d = '';
+    for (let l = 0; l <= LMAX + 1e-9; l += 0.04) d += (d ? ' L' : 'M') + ' ' + X(l) + ' ' + Y(gOf(l, b));
+    curve.setAttribute('d', d);
+    const ls = 2 * (1 - b), gs = gOf(ls, b);
+    starLine.setAttribute('x1', X(ls)); starLine.setAttribute('x2', X(ls));
+    starLine.setAttribute('y1', Y(gs)); starLine.setAttribute('y2', pt + ph);
+    starDot.setAttribute('cx', X(ls)); starDot.setAttribute('cy', Y(gs));
+    const gc = gOf(lam, b), a = aStar(lam);
+    curLine.setAttribute('x1', X(lam)); curLine.setAttribute('x2', X(lam));
+    curLine.setAttribute('y1', Y(gc)); curLine.setAttribute('y2', pt + ph);
+    curDot.setAttribute('cx', X(lam)); curDot.setAttribute('cy', Y(gc));
+    curLab.setAttribute('x', X(lam) + 8); curLab.setAttribute('y', Y(gc) - 8);
+    curLab.textContent = 'g = ' + gc.toFixed(3);
+    T(eqEl, `\\begin{aligned}a^\\star(\\lambda)&=${a.toFixed(2)}\\;\\Rightarrow\\;J_c=${CA(a).toFixed(2)},\\;J=${RA(a).toFixed(3)}\\\\
+      g(\\lambda)&=${gc.toFixed(3)},\\qquad \\lambda^\\star=${ls.toFixed(2)}\\;\\;(g=${gs.toFixed(3)},\\;J_c=d)\\end{aligned}`, true);
+  }
+  dsl.addEventListener('input', update);
+  lsl.addEventListener('input', update);
+  update();
+}
+
+/* =====================================================================
+   03 — Primal-dual iteration on the frontier
+   ===================================================================== */
+function initPD() {
+  const svg = $('#pdSvg'), eqEl = $('#pdEq'), info = $('#pdInfo');
+  const etaSl = $('#pdEta'), etaVal = $('#pdEtaVal'), dSl = $('#pdD'), dVal = $('#pdDVal');
+  const W = 380, H = 270, pl = 48, pr = 16, pt = 16, pb = 36;
+  const pw = W - pl - pr, ph = H - pt - pb;
+  const X = c => pl + c * pw, Y = r => pt + (1 - r) * ph;
+  let eta = parseFloat(etaSl.value), d = parseFloat(dSl.value);
+  let lam = 0.5, k = 0, trail = [], running = null;
+
+  svg.innerHTML = '';
+  const g = el('g', {}, svg);
+  el('line', { x1: pl, y1: pt, x2: pl, y2: pt + ph, stroke: '#d4d4d8' }, g);
+  el('line', { x1: pl, y1: pt + ph, x2: pl + pw, y2: pt + ph, stroke: '#d4d4d8' }, g);
+  [0, 0.5, 1].forEach(c => { const t = el('text', { x: X(c), y: pt + ph + 17, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af' }, g); t.textContent = c.toFixed(1); });
+  [0, 0.5, 1].forEach(r => { const t = el('text', { x: pl - 9, y: Y(r) + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#9ca3af' }, g); t.textContent = r.toFixed(1); });
+  const xl = el('text', { x: pl + pw / 2, y: H - 6, 'text-anchor': 'middle', 'font-size': 11.5, fill: '#6b7280' }, g); xl.textContent = 'cost J\u1d9c';
+  let curve = '';
+  for (let a = 0; a <= 1.0001; a += 0.02) curve += (curve ? ' L' : 'M') + ' ' + X(a) + ' ' + Y(RA(a));
+  el('path', { d: curve, fill: 'none', stroke: '#c2c9d4', 'stroke-width': 1.6 }, g);
+  const dline = el('line', { stroke: '#2563eb', 'stroke-dasharray': '4 4' }, g);
+  const dLab = el('text', { 'font-size': 11, fill: '#2563eb', 'font-weight': 600 }, g);
+  const pathEl = el('polyline', { fill: 'none', stroke: '#93c5fd', 'stroke-width': 1.4 }, g);
+  const dot = el('circle', { r: 5.5, fill: '#2563eb' }, g);
+
+  function render() {
+    dline.setAttribute('x1', X(d)); dline.setAttribute('x2', X(d));
+    dline.setAttribute('y1', pt); dline.setAttribute('y2', pt + ph);
+    dLab.setAttribute('x', X(d) + 6); dLab.setAttribute('y', pt + 13);
+    dLab.textContent = 'd = ' + d.toFixed(2);
+    pathEl.setAttribute('points', trail.map(p => X(p.c) + ',' + Y(p.r)).join(' '));
+    const a0 = trail.length ? trail[trail.length - 1] : { c: 0, r: 0 };
+    dot.setAttribute('cx', X(a0.c)); dot.setAttribute('cy', Y(a0.r));
+    const a = aStar(lam);
+    info.textContent = `k=${k}   \u03bb=${lam.toFixed(3)}   a=${a.toFixed(3)}   J_c=${CA(a).toFixed(3)}   J=${RA(a).toFixed(3)}   \u03bb*=2(1\u2212d)=${(2 * (1 - d)).toFixed(2)}`;
+    T(eqEl, `\\begin{aligned}
+      \\lambda_{k+1}&=[\\lambda_k+\\eta(J_c-d)]_+=[${lam.toFixed(3)}+${eta.toFixed(2)}(${CA(a).toFixed(3)}-${d.toFixed(2)})]_+\\\\
+      a_{k+1}&=\\mathrm{clamp}(1-\\lambda_{k+1}/2,0,1)\\end{aligned}`, true);
+  }
+  function step() {
+    const a = aStar(lam);
+    trail.push({ c: CA(a), r: RA(a) });
+    if (trail.length > 400) trail.shift();
+    lam = Math.max(0, lam + eta * (CA(a) - d));
+    k++;
+    render();
+  }
+  function stop() { if (running) { clearInterval(running); running = null; } }
+  function reset() { stop(); lam = 0.5; k = 0; trail = []; render(); }
+
+  $('#pdStep').addEventListener('click', () => { stop(); step(); });
+  $('#pdRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(step, 110);
+  });
+  $('#pdReset').addEventListener('click', reset);
+  etaSl.addEventListener('input', () => { eta = parseFloat(etaSl.value); etaVal.textContent = eta.toFixed(2); reset(); });
+  dSl.addEventListener('input', () => { d = parseFloat(dSl.value); dVal.textContent = d.toFixed(2); reset(); });
+  render();
+}
+
+/* =====================================================================
+   04 — Shield on a corridor
+   ===================================================================== */
+function initShield() {
+  const svg = $('#shieldSvg'), info = $('#shieldInfo');
+  const toggle = $('#shieldToggle');
+  const N = 10, CW = 32, x0 = 8, y0 = 26, cw = 28, ch = 46;
+  const holes = new Set([3, 6]);
+  const GOAL = 9;
+  let idx = 0, steps = 0, viol = 0, blocked = 0, on = true, timer = null;
+
+  svg.innerHTML = '';
+  const gCells = el('g', {}, svg);
+  const gToken = el('g', {}, svg);
+  const cellX = i => x0 + i * CW;
+  const cellY = y0;
+  const cellEls = [];
+  for (let i = 0; i < N; i++) {
+    const hole = holes.has(i), goal = i === GOAL, start = i === 0;
+    const r = el('rect', {
+      x: cellX(i) + 2, y: cellY, width: cw, height: ch, rx: 6,
+      fill: hole ? '#fef2f2' : (goal ? '#eef2ff' : '#f7f7f8'),
+      stroke: hole ? '#dc2626' : (goal ? '#2563eb' : '#ececec'),
+      'stroke-width': hole || goal ? 1.6 : 1
+    }, gCells);
+    const t = el('text', { x: cellX(i) + 2 + cw / 2, y: cellY + ch + 15, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af' }, gCells);
+    t.textContent = i;
+    if (start) { const s = el('text', { x: cellX(i) + 2 + cw / 2, y: cellY + 15, 'text-anchor': 'middle', 'font-size': 9, fill: '#9ca3af' }, gCells); s.textContent = 'start'; }
+    if (goal) { const s = el('text', { x: cellX(i) + 2 + cw / 2, y: cellY + 15, 'text-anchor': 'middle', 'font-size': 9, fill: '#2563eb' }, gCells); s.textContent = 'goal'; }
+    if (hole) { const s = el('text', { x: cellX(i) + 2 + cw / 2, y: cellY + ch / 2 + 4, 'text-anchor': 'middle', 'font-size': 13, fill: '#dc2626' }, gCells); s.textContent = '\u2715'; }
+    cellEls.push({ r, i });
+  }
+  const token = el('circle', { r: 9, fill: '#111' }, gToken);
+
+  function paint() {
+    token.setAttribute('cx', cellX(idx) + 2 + cw / 2);
+    token.setAttribute('cy', cellY + ch / 2);
+    info.textContent = `steps=${steps}   unsafe entries=${viol}   masked by shield=${blocked}`;
+  }
+  function step() {
+    steps++;
+    let mv = Math.random() < 0.75 ? 1 : (Math.random() < 0.5 ? -1 : 1);
+    let next = clamp(idx + mv, 0, N - 1);
+    if (on && holes.has(next)) {
+      const alt = clamp(idx + (mv > 0 ? -1 : 1), 0, N - 1);
+      next = holes.has(alt) ? idx : alt;
+      blocked++;
+    }
+    if (holes.has(next)) viol++;
+    idx = next;
+    if (idx === GOAL) { idx = 0; }
+    paint();
+  }
+  toggle.addEventListener('click', () => {
+    on = !on;
+    toggle.classList.toggle('active', on);
+    toggle.textContent = 'Shield: ' + (on ? 'on' : 'off');
+  });
+  $('#shieldReset').addEventListener('click', () => { idx = 0; steps = 0; viol = 0; blocked = 0; paint(); });
+  paint();
+  timer = setInterval(step, 450);
+}
+
+/* =====================================================================
+   05 — Curriculum induction (tabular Q-learning, fixed seed)
+   ===================================================================== */
+function initCurriculum() {
+  const svg = $('#curSvg'), info = $('#curInfo');
+  const runBtn = $('#curRun'), resetBtn = $('#curReset');
+  const N = 6, GOAL = [0, 5], STEP = -1, GOALR = 20, HAZ = -20;
+  const HAZARDS = [[4, 1], [2, 2], [3, 3], [1, 4], [4, 3], [2, 4]];
+  const CHAIN = [[1, 4], [2, 4], [3, 3], [3, 4], [4, 2], [4, 1], [5, 1], [5, 0]];
+  const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+  const EP = 360, CHUNK = 12;
+  const isHaz = (r, c) => HAZARDS.some(h => h[0] === r && h[1] === c);
+
+  function makeAgent(useCur, seed) {
+    let s = seed >>> 0;
+    const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+    const Q = Array.from({ length: N }, () => Array.from({ length: N }, () => [0, 0, 0, 0]));
+    return { useCur, rnd, Q, viol: 0, cum: [], ep: 0 };
+  }
+  function trainChunk(ag) {
+    const alpha = 0.3, gam = 0.95, eps = 0.2;
+    for (let n = 0; n < CHUNK && ag.ep < EP; n++) {
+      let start = [5, 0];
+      if (ag.useCur) {
+        const stage = Math.min(CHAIN.length - 1, Math.floor(ag.ep / (EP / CHAIN.length)));
+        start = CHAIN[stage];
+      }
+      let r = start[0], c = start[1], steps = 0;
+      while (steps < 60) {
+        steps++;
+        let a;
+        if (ag.rnd() < eps) a = Math.floor(ag.rnd() * 4);
+        else { const q = ag.Q[r][c]; a = q.indexOf(Math.max(...q)); }
+        let nr = r + DIRS[a][0], nc = c + DIRS[a][1];
+        if (nr < 0 || nr >= N || nc < 0 || nc >= N) { nr = r; nc = c; }
+        let rew = STEP, term = false;
+        if (nr === GOAL[0] && nc === GOAL[1]) { rew = GOALR; term = true; }
+        else if (isHaz(nr, nc)) { rew = HAZ; term = true; ag.viol++; }
+        const best = Math.max(...ag.Q[nr][nc]);
+        ag.Q[r][c][a] += alpha * (rew + gam * (term ? 0 : best) - ag.Q[r][c][a]);
+        r = nr; c = nc;
+        if (term) break;
+      }
+      ag.cum.push(ag.viol);
+      ag.ep++;
+    }
+  }
+
+  let direct, curric, timer = null;
+
+  /* --- static grid on the left --- */
+  const W = 760, H = 260, pl = 200, pr = 16, pt = 16, pb = 30;
+  const pw = W - pl - pr, ph = H - pt - pb;
+  const CX = i => 8 + i * 26, CY = j => 26 + j * 26;
+  svg.innerHTML = '';
+  const gGrid = el('g', {}, svg);
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const haz = isHaz(r, c), goal = r === GOAL[0] && c === GOAL[1], start = r === 5 && c === 0;
+    el('rect', {
+      x: CX(c), y: CY(r), width: 23, height: 23, rx: 4,
+      fill: haz ? '#fef2f2' : (goal ? '#eef2ff' : '#f7f7f8'),
+      stroke: haz ? '#dc2626' : (goal ? '#2563eb' : '#ececec'), 'stroke-width': 1
+    }, gGrid);
+    if (haz) el('text', { x: CX(c) + 11.5, y: CY(r) + 16, 'text-anchor': 'middle', 'font-size': 12, fill: '#dc2626' }, gGrid).textContent = '\u2715';
+    if (goal || start) el('text', { x: CX(c) + 11.5, y: CY(r) + 16, 'text-anchor': 'middle', 'font-size': 10, fill: goal ? '#2563eb' : '#6b7280' }, gGrid).textContent = goal ? 'G' : 'S';
+  }
+  const glab = el('text', { x: 8, y: 18, 'font-size': 11, fill: '#9ca3af' }, gGrid);
+  glab.textContent = 'grid (hazards \u2715)';
+
+  /* --- chart frame --- */
+  el('line', { x1: pl, y1: pt, x2: pl, y2: pt + ph, stroke: '#d4d4d8' }, svg);
+  el('line', { x1: pl, y1: pt + ph, x2: pl + pw, y2: pt + ph, stroke: '#d4d4d8' }, svg);
+  const xl = el('text', { x: pl + pw / 2, y: H - 6, 'text-anchor': 'middle', 'font-size': 11.5, fill: '#6b7280' }, svg); xl.textContent = 'episode';
+  const yl = el('text', { x: 176, y: pt + ph / 2, 'text-anchor': 'middle', 'font-size': 11.5, fill: '#6b7280', transform: `rotate(-90 176 ${pt + ph / 2})` }, svg); yl.textContent = 'cumulative violations';
+  const yTicks = el('g', {}, svg), xTicks = el('g', {}, svg);
+  const lineD = el('path', { fill: 'none', stroke: '#dc2626', 'stroke-width': 2 }, svg);
+  const lineC = el('path', { fill: 'none', stroke: '#2563eb', 'stroke-width': 2 }, svg);
+  const mark = el('line', { x1: 0, x2: 0, y1: pt, y2: pt + ph, stroke: '#e5e5e5', 'stroke-dasharray': '3 3' }, svg);
+  const legD = el('text', { 'font-size': 11, fill: '#dc2626', 'font-weight': 600 }, svg);
+  const legC = el('text', { 'font-size': 11, fill: '#2563eb', 'font-weight': 600 }, svg);
+  legD.textContent = '\u2014 direct'; legC.textContent = '\u2014 curriculum';
+
+  function XE(ep) { return pl + (ep / EP) * pw; }
+  function render() {
+    const ep = direct.ep;
+    const maxY = Math.max(5, direct.cum[ep - 1] || 0, curric.cum[ep - 1] || 0);
+    const YV = v => pt + (1 - v / maxY) * ph;
+    yTicks.innerHTML = ''; xTicks.innerHTML = '';
+    [0, maxY / 2, maxY].forEach(v => {
+      const t = el('text', { x: pl - 9, y: YV(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#9ca3af' }, yTicks);
+      t.textContent = Math.round(v);
+    });
+    [0, EP / 2, EP].forEach(e => {
+      const t = el('text', { x: XE(e), y: pt + ph + 17, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af' }, xTicks);
+      t.textContent = Math.round(e);
+    });
+    const pd = direct.cum.slice(0, ep).map((v, i) => (i ? ' L' : 'M') + XE(i + 1) + ' ' + YV(v)).join('');
+    const pc = curric.cum.slice(0, ep).map((v, i) => (i ? ' L' : 'M') + XE(i + 1) + ' ' + YV(v)).join('');
+    lineD.setAttribute('d', pd); lineC.setAttribute('d', pc);
+    mark.setAttribute('x1', XE(100)); mark.setAttribute('x2', XE(100));
+    legD.setAttribute('x', pl + pw - 150); legD.setAttribute('y', pt + 12);
+    legC.setAttribute('x', pl + pw - 150); legC.setAttribute('y', pt + 26);
+    const d100 = direct.cum[99] || 0, c100 = curric.cum[99] || 0;
+    info.textContent = `episode=${ep}/${EP}   at ep 100: direct=${d100}, curriculum=${c100}   now: direct=${direct.cum[ep - 1] || 0}, curriculum=${curric.cum[ep - 1] || 0}`;
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; runBtn.textContent = 'Run \u25b6'; } }
+  function reset() {
+    stop();
+    direct = makeAgent(false, 12345);
+    curric = makeAgent(true, 12345);
+    render();
+  }
+  runBtn.addEventListener('click', () => {
+    if (timer) { stop(); return; }
+    runBtn.textContent = 'Pause';
+    timer = setInterval(() => {
+      trainChunk(direct); trainChunk(curric); render();
+      if (direct.ep >= EP) stop();
+    }, 110);
+  });
+  resetBtn.addEventListener('click', reset);
+  reset();
+}
+
+/* =====================================================================
+   06 — Safety budget: car with a collision budget
+   ===================================================================== */
+function initBudget() {
+  const svg = $('#budgetSvg'), dsl = $('#budgetD'), dval = $('#budgetDVal');
+  const eqEl = $('#budgetEq'), info = $('#budgetInfo');
+  const barV = $('#budV'), valV = $('#budVVal'), barL = $('#budL'), valL = $('#budLVal');
+  const TH = 40, KAP = 0.05, LAM_MAX = 70;
+  const W = 400, H = 190, x0 = 30, x1 = 372, ry = 112;
+  const vOf = lam => clamp(1 / (2 * KAP * lam), 0, 1);
+  let d = parseFloat(dsl.value), lam = 1;
+  let tripStep = 0, tripColl = 0, trips = 0, totalColl = 0, marks = [], tick = 0;
+
+  svg.innerHTML = '';
+  const g = el('g', {}, svg);
+  el('rect', { x: 0, y: 74, width: W, height: 76, fill: '#fafafa', stroke: '#f0f0f0' }, g);
+  el('line', { x1: 0, y1: ry, x2: W, y2: ry, stroke: '#e5e5e5', 'stroke-width': 2, 'stroke-dasharray': '14 12' }, g);
+  el('line', { x1: x0, y1: 74, x2: x0, y2: 150, stroke: '#c2c9d4', 'stroke-width': 2 }, g);
+  el('line', { x1: x1, y1: 74, x2: x1, y2: 150, stroke: '#2563eb', 'stroke-width': 2 }, g);
+  el('text', { x: x0, y: 66, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af' }, g).textContent = 'start';
+  el('text', { x: x1, y: 66, 'text-anchor': 'middle', 'font-size': 11, fill: '#2563eb' }, g).textContent = 'goal';
+  const marksG = el('g', {}, g);
+  const car = el('g', {}, g);
+  el('rect', { x: -15, y: -8, width: 30, height: 16, rx: 4, fill: '#111' }, car);
+  el('rect', { x: -10, y: -5, width: 9, height: 10, rx: 2, fill: '#fff' }, car);
+  const traj = el('line', { x1: x0, y1: 150, x2: x0, y2: 150, stroke: '#2563eb', 'stroke-width': 1.4 }, g);
+  const pctLab = el('text', { x: x0, y: 166, 'font-size': 11, fill: '#2563eb' }, g);
+
+  function drawMarks() {
+    marksG.innerHTML = '';
+    marks.forEach(mk => {
+      const a = Math.max(0, 1 - mk.age / 9);
+      el('circle', { cx: mk.x, cy: ry - 24, r: 4 + 8 * (1 - a), fill: 'none', stroke: '#dc2626', 'stroke-width': 2, opacity: a.toFixed(2) }, marksG);
+      el('circle', { cx: mk.x, cy: ry - 24, r: 3, fill: '#dc2626', opacity: a.toFixed(2) }, marksG);
+    });
+  }
+
+  function updateEq() {
+    const v = vOf(lam), c = KAP * v * v * TH;
+    T(eqEl, `\\begin{aligned}
+      \\hat J_c&=\\kappa T v^2=${c.toFixed(3)}\\;\\le\\;d=${d.toFixed(2)}\\\\
+      v&=\\frac{1}{2\\kappa\\lambda}=${v.toFixed(3)},\\qquad \\lambda=${lam.toFixed(2)}\\end{aligned}`, true);
+  }
+  function render() {
+    const v = vOf(lam), c = KAP * v * v * TH;
+    const prog = (tripStep * v) / TH;
+    const carX = x0 + prog * (x1 - x0);
+    car.setAttribute('transform', `translate(${carX},${ry})`);
+    traj.setAttribute('x2', carX);
+    pctLab.setAttribute('x', carX);
+    pctLab.textContent = Math.round(prog * 100) + '%';
+    barV.style.width = (v * 100).toFixed(1) + '%';
+    valV.textContent = v.toFixed(3);
+    barL.style.width = (clamp(lam / LAM_MAX, 0, 1) * 100).toFixed(1) + '%';
+    valL.textContent = lam.toFixed(2);
+    info.textContent = `trip step ${tripStep}/${TH}   collisions this trip=${tripColl}   budget=${d.toFixed(2)}   trips=${trips}   avg=${trips ? (totalColl / trips).toFixed(2) : '\u2014'}`;
+    drawMarks();
+  }
+  function loop() {
+    tick++;
+    for (let i = 0; i < 2; i++) {
+      const v = vOf(lam), c = KAP * v * v * TH;
+      const denom = Math.max(d, c, 1e-9);
+      lam = Math.max(1e-6, lam * Math.exp(0.5 * (c - d) / denom));
+    }
+    const v = vOf(lam);
+    if (tripStep < TH) {
+      tripStep++;
+      const carX = x0 + ((tripStep * v) / TH) * (x1 - x0);
+      if (Math.random() < KAP * v * v) { tripColl++; marks.push({ x: carX, age: 0 }); }
+    } else {
+      trips++; totalColl += tripColl; tripStep = 0; tripColl = 0; marks = [];
+    }
+    marks.forEach(mk => mk.age++);
+    marks = marks.filter(mk => mk.age < 9);
+    render();
+    if (tick % 5 === 0) updateEq();
+  }
+  dsl.addEventListener('input', () => {
+    d = parseFloat(dsl.value); dval.textContent = d.toFixed(2);
+    lam = 1; tripStep = 0; tripColl = 0; marks = [];
+    updateEq(); render();
+  });
+  updateEq(); render();
+  setInterval(loop, 90);
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initFrontier();
+  initDual();
+  initPD();
+  initShield();
+  initCurriculum();
+  initBudget();
+  initScroll();
+});
+</script>
+</body>
+</html>

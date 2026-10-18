@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<!--
+  Chapter 22 · Reinforcement Learning from Human Feedback & LLM Alignment
+  Assumptions (per prompt.md):
+   - The brief's quizzes are skipped. The DPO-from-RLHF derivation and the
+     GRPO "no critic" argument are deepened in prose instead.
+   - Three visualizers: Bradley–Terry sigmoid, the Preference Landscape, and
+     GRPO group-relative advantages. Each live-updates a .eqbox and exposes a
+     real parameter (margin / beta / group size).
+   - The Preference Landscape renders the DPO analytic optimum
+     pi*(y) ∝ pi_ref(y) e^{r/β}. The implicit reward β log(pi*/pi_ref) equals
+     the reward model's r up to the prompt-only constant β log Z(x), which the
+     panel reports live — that constant is the whole DPO trick.
+   - No prev/next links (the reference has none).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reinforcement Learning from Human Feedback &amp; LLM Alignment</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- chain diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">RLHF &amp; Alignment</a>
+    <nav class="nav">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#prefs">Preferences</a>
+      <a href="#objective">Objective</a>
+      <a href="#dpo">DPO</a>
+      <a href="#landscape">Landscape</a>
+      <a href="#grpo">GRPO</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Alignment</p>
+    <h1>Reinforcement Learning from Human Feedback<br>&amp; LLM Alignment</h1>
+    <p class="lede">How a language model learns to prefer what humans prefer — from pairwise judgments to the DPO loss you can derive in five lines.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="pipeline">
+  <div class="wrap">
+    <h2><span class="num">01</span>The RLHF pipeline</h2>
+    <p>A pretrained language model predicts the next token. It has no idea which completions humans prefer. <b>Reinforcement learning from human feedback</b> (RLHF) turns pairwise human judgments into a training signal in three stages.</p>
+    <div class="traj" aria-label="RLHF pipeline">
+      <span class="chip">&#960;_base</span><span class="arw">&#8594;</span>
+      <span class="chip">SFT</span><span class="arw">&#8594;</span>
+      <span class="chip">r_&#966;</span><span class="arw">&#8594;</span>
+      <span class="chip">PPO</span><span class="arw">&#8594;</span>
+      <span class="chip now">&#960;_&#952;</span>
+    </div>
+    <p><b>Stage 1 — supervised fine-tuning.</b> Clone demonstrations to get a fluent starting policy $\pi_{\mathrm{SFT}}$. It imitates, but imitation has no notion of <em>better</em>.</p>
+    <p><b>Stage 2 — reward modeling.</b> Show labelers pairs of answers and ask which they prefer. Fit a scalar network $r_\phi(x,y)$ whose differences reproduce those choices.</p>
+    <p><b>Stage 3 — reinforcement learning.</b> Treat $r_\phi$ as the reward, sample completions from the policy, and optimize it — with a leash back to the reference policy:</p>
+    <div class="eqbox">
+      $$\max_{\pi_\theta}\ \mathbb{E}_{x\sim\mathcal{D}}\ \mathbb{E}_{y\sim\pi_\theta(\cdot\mid x)}\big[r_\phi(x,y)\big]\;-\;\beta\,D_{\mathrm{KL}}\!\big(\pi_\theta(\cdot\mid x)\,\big\|\,\pi_{\mathrm{ref}}(\cdot\mid x)\big)$$
+    </div>
+    <p>$\pi_{\mathrm{ref}}$ is the frozen SFT model; $\beta$ prices every nat of divergence from it.</p>
+    <div class="note">
+      <b>Why the KL term is not optional.</b> The reward model is fit on a narrow slice of text and is wrong almost everywhere else. Without the leash, the policy finds the errors — degenerate strings that score absurdly high — and fluency collapses. The KL term keeps the policy inside the region where $r_\phi$ was ever calibrated.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="prefs">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>Preferences: the Bradley&#8211;Terry model</h2>
+      <p>Labelers rarely give a numeric score; they pick the better of two answers. The <b>Bradley&#8211;Terry</b> model turns that comparison into a probability over rewards:</p>
+      <div class="eqbox">
+        $$P\big(y_w\succ y_l\mid x\big)=\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big),\qquad \sigma(z)=\frac{1}{1+e^{-z}}$$
+      </div>
+      <p>The reward model is trained by maximum likelihood — push the preferred answer's score above the rejected one's:</p>
+      <div class="eqbox">
+        $$\mathcal{L}_{\mathrm{RM}}(\phi)=-\mathbb{E}_{(x,y_w,y_l)\sim\mathcal{D}}\Big[\log\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big)\Big]$$
+      </div>
+      <p><b>Read that back:</b> the log-odds of a preference is exactly the reward gap. Only <em>differences</em> of reward are identified — add any function $c(x)$ to every score and no probability changes.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · a preference is a reward gap</span>
+        <div class="slider-row" style="width:250px">
+          <span class="small muted">$\Delta=r_w-r_l$</span>
+          <input type="range" id="btMargin" min="-5" max="5" step="0.1" value="1.5" aria-label="reward margin delta">
+          <span class="val" id="btMarginVal">1.50</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="btSvg" role="img" aria-label="Bradley-Terry sigmoid curve" style="width:100%;max-width:360px;margin:0 auto"></svg>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="eqbox" id="btEq" style="margin-top:0;min-height:92px"></div>
+          <p class="small muted" style="margin-bottom:0">Drag the margin. Near $\Delta=0$ the sigmoid is nearly flat: a near-tie is a single bit of information. Large $|\Delta|$ saturates the loss and the pair stops teaching the model anything.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="objective">
+  <div class="wrap">
+    <h2><span class="num">03</span>The KL-regularized objective has a closed form</h2>
+    <p>The RL stage is a per-prompt optimization. Drop the outer expectation, fix $x$, and write the objective as a single expectation:</p>
+    <div class="eqbox">
+      $$\max_{\pi}\ \mathbb{E}_{y\sim\pi}\Big[r(x,y)-\beta\log\frac{\pi(y\mid x)}{\pi_{\mathrm{ref}}(y\mid x)}\Big]$$
+    </div>
+    <p>Exponentiate the bracket and divide by a normalizer. Completing the square turns the objective into $-\beta\,D_{\mathrm{KL}}\!\big(\pi\,\Vert\,\pi^*\big)+\beta\log Z(x)$, whose optimum is the <b>Gibbs distribution</b>:</p>
+    <div class="eqbox">
+      $$\pi^*(y\mid x)=\frac{1}{Z(x)}\,\pi_{\mathrm{ref}}(y\mid x)\exp\!\Big(\frac{r(x,y)}{\beta}\Big),\qquad Z(x)=\sum_{y}\pi_{\mathrm{ref}}(y\mid x)\exp\!\Big(\frac{r(x,y)}{\beta}\Big)$$
+    </div>
+    <p>This step is exactly where the KL is spent: a KL is non-negative and hits zero only at $\pi=\pi^*$, so the first term vanishes and the second does not depend on $\pi$.</p>
+    <p>Now solve that identity for the reward. Rearranging — the single load-bearing line of the whole chapter —</p>
+    <div class="eqbox">
+      $$r(x,y)=\underbrace{\beta\log\frac{\pi^*(y\mid x)}{\pi_{\mathrm{ref}}(y\mid x)}}_{\text{implicit reward }\hat r_\theta(x,y)}+\;\beta\log Z(x)$$
+    </div>
+    <p>Any policy can be read as a reward function, up to the prompt-only constant $\beta\log Z(x)$. That is the identical trick DPO is built on.</p>
+    <div class="note">
+      <b>The exponent is the whole story.</b> The optimal aligned policy is not a new object — it is the reference policy reweighted by its reward, with $\beta$ setting how hard the reweighting pushes. Hold onto that form: it collapses a reinforcement-learning problem into a supervised one.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="dpo">
+  <div class="wrap">
+    <h2><span class="num">04</span>DPO: the reward model you never train</h2>
+    <p>Substitute the implicit reward back into Bradley&#8211;Terry. The reward model never appears:</p>
+    <div class="eqbox">
+      $$P\big(y_w\succ y_l\mid x\big)=\sigma\Big(\hat r_\theta(x,y_w)-\hat r_\theta(x,y_l)\Big)=\sigma\Big(\beta\log\frac{\pi_\theta(y_w\mid x)}{\pi_{\mathrm{ref}}(y_w\mid x)}-\beta\log\frac{\pi_\theta(y_l\mid x)}{\pi_{\mathrm{ref}}(y_l\mid x)}\Big)$$
+    </div>
+    <p>The two $\beta\log Z(x)$ terms are identical and cancel — that cancellation is the whole story. Where the reward model used to sit, we now have the policy's own log-ratios.</p>
+    <p>So train the policy directly by maximum likelihood on preferences. This is <b>direct preference optimization</b> (DPO):</p>
+    <div class="eqbox">
+      $$\mathcal{L}_{\mathrm{DPO}}(\theta)=-\mathbb{E}_{(x,y_w,y_l)\sim\mathcal{D}}\Big[\log\sigma\Big(\beta\log\frac{\pi_\theta(y_w\mid x)}{\pi_{\mathrm{ref}}(y_w\mid x)}-\beta\log\frac{\pi_\theta(y_l\mid x)}{\pi_{\mathrm{ref}}(y_l\mid x)}\Big)\Big]$$
+    </div>
+    <p>Its gradient is a single supervised step with a learned weight:</p>
+    <div class="eqbox">
+      $$\nabla_\theta\mathcal{L}_{\mathrm{DPO}}=-\beta\,\mathbb{E}\Big[\underbrace{\sigma\big(\hat r_\theta(x,y_l)-\hat r_\theta(x,y_w)\big)}_{\text{how wrong the model still is}}\big(\nabla_\theta\log\pi_\theta(y_w\mid x)-\nabla_\theta\log\pi_\theta(y_l\mid x)\big)\Big]$$
+    </div>
+    <p><b>Read the gradient back:</b> it raises the log-probability of the winning answer and lowers the loser's, scaled by how badly the implicit reward currently ranks the pair. Pairs the model already separates get ignored.</p>
+    <div class="note">
+      <b>No reward model, no sampling, no RL loop.</b> DPO is one classification loss over a fixed preference dataset — the same shape as stage&nbsp;2 of RLHF, applied to the policy instead of to a reward head. At its optimum $r_\phi$ equals $\hat r_\theta$ and the two pipelines coincide.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="landscape">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>The preference landscape</h2>
+      <p>Fix a prompt and split the output space by two reward-relevant latent features. Let $\pi_{\mathrm{ref}}$ be a broad prior and $r(x,\cdot)$ the reward model's score over the same outputs. The DPO optimum is $\pi_\theta(y)\propto\pi_{\mathrm{ref}}(y)\,e^{r/\beta}$ — a tilted, sharpened version of the prior.</p>
+      <p>Each dot below is an output; its colour is the reward $r$, its size is the policy's mass $\pi_\theta(y)$. Drag $\beta$: small $\beta$ concentrates the mass on the best outputs, large $\beta$ leaves the policy near the reference.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the preference landscape</span>
+        <div class="slider-row" style="width:220px">
+          <span class="small muted">$\beta$</span>
+          <input type="range" id="landBeta" min="0.2" max="2" step="0.05" value="0.8" aria-label="inverse temperature beta">
+          <span class="val" id="landBetaVal">0.80</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="landSvg" role="img" aria-label="Reward landscape with policy mass" style="width:100%;max-width:360px;margin:0 auto"></svg>
+          <div class="legend"><span>$-1$</span><span class="grad"></span><span>$+1$</span><span style="margin-left:10px">area &prop; $\pi_\theta(y)$</span></div>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <p class="small muted" style="margin-top:0">The rings mark a held-out pair $(x,y_w,y_l)$; the panel reports the implicit reward on each and the constant that connects it to $r$.</p>
+          <p class="small muted" id="landStats" style="font-family:ui-monospace,monospace;font-size:12.5px;margin-top:0"></p>
+          <h4 style="margin-bottom:4px">Implicit reward</h4>
+          <div class="eqbox" id="landEq" style="margin-top:6px;min-height:140px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="grpo">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>GRPO and verifiable rewards</h2>
+      <p>PPO optimizes the objective of section&nbsp;01 with an <b>actor&#8211;critic</b> setup: a value network $V_\psi$ estimates the baseline $A=r-\gamma V_\psi$ and must be trained alongside the policy, doubling the memory. <b>Group relative policy optimization</b> (GRPO) deletes the critic. For each prompt it samples a <b>group</b> of $G$ completions, scores them, and uses the group's own statistics as the baseline:</p>
+      <div class="eqbox">
+        $$\hat A_i=\frac{r_i-\operatorname{mean}(r)}{\operatorname{std}(r)},\qquad i=1,\dots,G$$
+      </div>
+      <p>The group mean replaces the learned value function; dividing by the group standard deviation makes the scale irrelevant. Everything else is PPO's clipped ratio with a KL leash:</p>
+      <div class="eqbox">
+        $$\mathcal{J}_{\mathrm{GRPO}}(\theta)=\mathbb{E}\Big[\frac{1}{G}\sum_{i=1}^{G}\min\big(\rho_i\hat A_i,\ \operatorname{clip}(\rho_i,\,1-\epsilon,\,1+\epsilon)\,\hat A_i\big)\Big]-\beta\,D_{\mathrm{KL}}\!\big(\pi_\theta\,\Vert\,\pi_{\mathrm{ref}}\big),\quad \rho_i=\frac{\pi_\theta(o_i\mid x)}{\pi_{\theta_{\text{old}}}(o_i\mid x)}$$
+      </div>
+      <p>When rewards are <b>verifiable</b> — a unit test passes, a math answer matches, a proof checks — no reward model is needed at all. <b>RL with verifiable rewards</b> (RLVR) feeds a programmatic 0/1 checker straight into GRPO, and it is the workhorse behind reasoning models.</p>
+      <div class="note">
+        <b>A group is a free critic.</b> The baseline you need to reduce variance is just the mean of the group you already sampled. No value network, no bootstrapping, no separate critic loss — the advantage is a statistic of the samples, not a learned prediction.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · group-relative advantages</span>
+        <div class="slider-row" style="width:200px">
+          <span class="small muted">$G$</span>
+          <input type="range" id="grpoG" min="2" max="12" step="1" value="8" aria-label="group size G">
+          <span class="val" id="grpoGVal">8</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <p class="small muted" style="margin-top:0">Group rewards drawn live; the bars are the normalized advantages $\hat A_i=(r_i-\mu)/\sigma$. Shrink $G$ to a pair and watch the advantage collapse to $\pm 1$.</p>
+          <div id="grpoRows"></div>
+          <div class="btnrow" style="margin-top:12px"><button id="grpoResample">Resample group</button></div>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <h4 style="margin-bottom:4px">Group statistics</h4>
+          <div class="eqbox" id="grpoEq" style="margin-top:6px;min-height:128px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="hacking">
+  <div class="wrap">
+    <h2><span class="num">07</span>Reward hacking, KL drift, evaluation</h2>
+    <h3>Reward hacking</h3>
+    <p><b>Reward hacking</b> is the policy maximizing the proxy $r_\phi$ instead of the goal. The reward model is trained on a finite, biased slice of human preference and is smooth in exactly the wrong places: it rewards length, confident phrasing, and agreement. Optimize it hard enough and you get verbose, sycophantic, confidently-wrong answers that score beautifully. This is Goodhart's law with a gradient.</p>
+    <h3>KL drift</h3>
+    <p>As training proceeds, $\pi_\theta$ drifts away from $\pi_{\mathrm{ref}}$. The KL term limits the drift but does not remove it, and past some distance $r_\phi$ is extrapolating. Track the KL every step and stop when it climbs: reward curves that rise while the KL explodes are the signature of a policy exploiting the proxy, not improving.</p>
+    <h3>Evaluation</h3>
+    <p>Measure both the proxy and the goal. Report win rate against the SFT and reference policies, use a <em>length-controlled</em> win rate to strip verbosity bias, and hold out a preference set to score $r_\phi$ itself. Plot reward against KL — the frontier — because a single reward number without its KL is uninterpretable.</p>
+    <div class="note">
+      <b>The reward model is a proxy, and proxies get gamed.</b> Every alignment method on this page is only as good as the preferences that define it, which is why the field keeps moving from a trained $r_\phi$ toward rewards you can <em>verify</em>: a checker cannot be sweet-talked into high scores.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">08</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>RLHF with a reward model</th><th>DPO (implicit reward)</th></tr>
+      <tr><td>Extra network</td><td>A reward model $r_\phi$ (+ a PPO critic, or a GRPO group)</td><td>None — the policy is its own reward</td></tr>
+      <tr><td>Training signal</td><td>Freshly sampled completions scored by $r_\phi$</td><td>A fixed offline set of pairs $(x,y_w,y_l)$</td></tr>
+      <tr><td>Objective</td><td>$\max_\pi \mathbb{E}[r_\phi]-\beta D_{\mathrm{KL}}$ via PPO&nbsp;/&nbsp;GRPO</td><td>Cross-entropy on the log-ratio margin</td></tr>
+      <tr><td>Reward at the end</td><td>$r_\phi$, kept separate from $\pi_\theta$</td><td>Implicit $\hat r_\theta=\beta\log(\pi_\theta/\pi_{\mathrm{ref}})$</td></tr>
+      <tr><td>Compute</td><td>Online sampling + RM + an RL loop</td><td>Offline, one supervised pass</td></tr>
+      <tr><td>Failure mode</td><td>Reward hacking; unstable RL; critic cost</td><td>Overfitting preferred pairs; length&nbsp;/&nbsp;verbosity bias</td></tr>
+      <tr><td>What you tune</td><td>$\beta$, reward-model data, clip $\epsilon$</td><td>$\beta$, pair data, the reference policy</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      P(y_w\succ y_l\mid x) &= \sigma\big(r(x,y_w)-r(x,y_l)\big)\\[2pt]
+      \pi^*(y\mid x) &= \frac{1}{Z(x)}\,\pi_{\mathrm{ref}}(y\mid x)\exp\!\Big(\frac{r(x,y)}{\beta}\Big)\\[2pt]
+      \hat r_\theta(x,y) &= \beta\log\frac{\pi_\theta(y\mid x)}{\pi_{\mathrm{ref}}(y\mid x)}\\[2pt]
+      \mathcal{L}_{\mathrm{DPO}} &= -\mathbb{E}\Big[\log\sigma\big(\hat r_\theta(x,y_w)-\hat r_\theta(x,y_l)\big)\Big]\\[2pt]
+      \hat A_i &= \frac{r_i-\operatorname{mean}(r)}{\operatorname{std}(r)}
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream — iterative and online DPO, judge-based RLAIF, process reward models, and the full alignment pipeline in Project&nbsp;5 — is a way of steering one of these five lines.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="21-safe-and-constrained-rl.html"><span class="pg-k">Previous</span><span class="pg-t">Safe &amp; Constrained RL</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" aria-disabled="true"><span class="pg-k">Next</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gauss(rng) {
+  let u = 0, v = 0;
+  while (!u) u = rng();
+  while (!v) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function colorFor(v) {
+  const t = Math.max(-1, Math.min(1, v));
+  const a = Math.min(0.88, Math.abs(t) * 0.92);
+  return t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
+}
+
+/* =====================================================================
+   02 — Bradley–Terry preference probability
+   ===================================================================== */
+function initBT() {
+  const svg = $('#btSvg');
+  const eqEl = $('#btEq');
+  const slider = $('#btMargin');
+  const valEl = $('#btMarginVal');
+  const W = 340, H = 200, PAD = 18;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  const X = d => PAD + ((d + 5) / 10) * (W - 2 * PAD);
+  const Y = p => (H - PAD) - p * (H - 2 * PAD);
+
+  const gl = el('g', {}, svg);
+  el('line', { x1: PAD, y1: Y(0.5), x2: W - PAD, y2: Y(0.5), stroke: '#e5e5e5', 'stroke-width': 1, 'stroke-dasharray': '4 4' }, gl);
+  el('line', { x1: X(0), y1: PAD, x2: X(0), y2: H - PAD, stroke: '#e5e5e5', 'stroke-width': 1, 'stroke-dasharray': '4 4' }, gl);
+  el('text', { x: X(0) + 5, y: PAD + 11, 'font-size': 11, fill: '#9ca3af' }, gl).textContent = '\u0394 = 0';
+  el('text', { x: PAD, y: Y(0.5) - 6, 'font-size': 11, fill: '#9ca3af' }, gl).textContent = 'P = 0.5';
+
+  let dstr = '';
+  for (let i = 0; i <= 140; i++) {
+    const d = -5 + (10 * i) / 140;
+    const p = 1 / (1 + Math.exp(-d));
+    dstr += (i ? ' L ' : 'M ') + X(d) + ' ' + Y(p);
+  }
+  el('path', { d: dstr, fill: 'none', stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+  const mk = el('circle', { cx: X(0), cy: Y(0.5), r: 6, fill: '#2563eb', stroke: '#fff', 'stroke-width': 2 }, svg);
+
+  function update() {
+    const d = parseFloat(slider.value);
+    valEl.textContent = d.toFixed(2);
+    const p = 1 / (1 + Math.exp(-d));
+    mk.setAttribute('cx', X(d));
+    mk.setAttribute('cy', Y(p));
+    T(eqEl,
+      `\\begin{aligned}
+        P(y_w\\succ y_l\\mid x) &= \\sigma\\big(r_\\phi(x,y_w)-r_\\phi(x,y_l)\\big) = \\sigma(${d.toFixed(2)}) = \\mathbf{${p.toFixed(3)}}\\\\[2pt]
+        \\mathcal{L}_{\\mathrm{RM}} &= -\\log\\sigma(${d.toFixed(2)}) = ${(-Math.log(p)).toFixed(3)}
+      \\end{aligned}`, true);
+  }
+  slider.addEventListener('input', update);
+  update();
+}
+
+/* =====================================================================
+   05 — Preference landscape (DPO optimum)
+   ===================================================================== */
+function initLandscape() {
+  const svg = $('#landSvg');
+  const eqEl = $('#landEq');
+  const statsEl = $('#landStats');
+  const slider = $('#landBeta');
+  const valEl = $('#landBetaVal');
+
+  const W = 340, H = 340, PAD = 12, D = 1.15, RMAX = 2.4;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const ux = u => PAD + ((u + D) / (2 * D)) * (W - 2 * PAD);
+  const uy = v => (H - PAD) - ((v + D) / (2 * D)) * (H - 2 * PAD);
+
+  const reward = (u, v) =>
+    2.0 * Math.exp(-((u - 0.45) * (u - 0.45) + (v - 0.25) * (v - 0.25)) / 0.5) + 0.8 * u - 0.6 * v;
+  const logref = (u, v) => -((u * u + v * v) / 0.8);
+
+  /* reward field */
+  const NU = 26, cw = (W - 2 * PAD) / NU, ch = (H - 2 * PAD) / NU;
+  const gHeat = el('g', {}, svg);
+  for (let i = 0; i < NU; i++) {
+    for (let j = 0; j < NU; j++) {
+      const u = -D + ((i + 0.5) / NU) * 2 * D;
+      const v = D - ((j + 0.5) / NU) * 2 * D;
+      el('rect', { x: PAD + i * cw, y: PAD + j * ch, width: cw + 0.6, height: ch + 0.6, fill: colorFor(reward(u, v) / RMAX) }, gHeat);
+    }
+  }
+
+  /* output points */
+  const pts = [];
+  for (let i = 0; i < 6; i++) {
+    for (let j = 0; j < 6; j++) {
+      const u = -0.9 + (1.8 * i) / 5;
+      const v = -0.9 + (1.8 * j) / 5;
+      pts.push({ u, v, r: reward(u, v), lr: logref(u, v) });
+    }
+  }
+  const lrs = pts.map(p => p.lr);
+  const m0 = Math.max(...lrs);
+  const logZ0 = m0 + Math.log(lrs.reduce((a, b) => a + Math.exp(b - m0), 0));
+  pts.forEach(p => { p.pref = Math.exp(p.lr - logZ0); });
+
+  /* a held-out preference pair, chosen by reward percentile */
+  const order = pts.map((p, i) => i).sort((a, b) => pts[a].r - pts[b].r);
+  const wi = order[Math.floor(order.length * 0.78)];
+  const li = order[Math.floor(order.length * 0.42)];
+
+  const gPt = el('g', {}, svg);
+  pts.forEach(p => {
+    p.g = el('g', {}, gPt);
+    p.circ = el('circle', { cx: ux(p.u), cy: uy(p.v), r: 3, fill: colorFor(p.r / RMAX), stroke: '#fff', 'stroke-width': 1 }, p.g);
+  });
+  [wi, li].forEach((idx, k) => {
+    const p = pts[idx];
+    p.ring = el('circle', { cx: ux(p.u), cy: uy(p.v), r: 9, fill: 'none', stroke: '#111', 'stroke-width': 1.6 }, p.g);
+    p.tag = el('text', {
+      x: ux(p.u) + 11, y: uy(p.v) - 9, 'font-size': 11, 'font-weight': 650, fill: '#111',
+      style: 'paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round'
+    }, p.g);
+    p.tag.textContent = k === 0 ? 'y_w' : 'y_l';
+  });
+
+  /* displayed mass, animated toward the DPO optimum */
+  let disp = pts.map(p => p.pref);
+  let target = pts.map(p => p.pref);
+  let raf = null;
+
+  function renderRadii() {
+    const maxd = Math.max(...disp);
+    pts.forEach((p, i) => p.circ.setAttribute('r', (2.5 + 13 * (disp[i] / maxd)).toFixed(2)));
+  }
+  function tick() {
+    let d = 0;
+    pts.forEach((p, i) => {
+      const nd = disp[i] + (target[i] - disp[i]) * 0.22;
+      d = Math.max(d, Math.abs(nd - target[i]));
+      disp[i] = nd;
+    });
+    renderRadii();
+    raf = d > 1e-4 ? requestAnimationFrame(tick) : null;
+  }
+
+  function update() {
+    const beta = parseFloat(slider.value);
+    valEl.textContent = beta.toFixed(2);
+
+    const z = pts.map(p => p.lr + p.r / beta);
+    const mz = Math.max(...z);
+    const logZx = mz + Math.log(z.reduce((a, b) => a + Math.exp(b - mz), 0));
+    const pi = z.map(v => Math.exp(v - logZx));
+    const offset = beta * (logZx - logZ0);
+
+    target = pi.slice();
+    if (!raf) raf = requestAnimationFrame(tick);
+
+    let KL = 0, Er = 0;
+    pts.forEach((p, i) => {
+      const q = pi[i];
+      if (q > 0) KL += q * ((z[i] - logZx) - (p.lr - logZ0));
+      Er += q * p.r;
+    });
+
+    const rw = pts[wi].r, rl = pts[li].r;
+    const rhatw = rw - offset, rhatl = rl - offset;
+    const dm = rhatw - rhatl;
+    const prob = 1 / (1 + Math.exp(-dm));
+
+    statsEl.innerHTML =
+      `&beta; = ${beta.toFixed(2)} &nbsp; KL(&pi;<sub>&theta;</sub>&#8214;&pi;<sub>ref</sub>) = ${KL.toFixed(3)}<br>` +
+      `E<sub>&pi;</sub>[r] = ${Er.toFixed(3)} &nbsp; &beta;&middot;log Z(x) = ${offset.toFixed(3)}`;
+
+    T(eqEl,
+      `\\begin{aligned}
+        \\hat r_\\theta(x,y) &= \\beta\\log\\frac{\\pi_\\theta(y\\mid x)}{\\pi_{\\mathrm{ref}}(y\\mid x)} = r(x,y) - \\underbrace{\\beta\\log Z(x)}_{${offset.toFixed(3)}}\\\\[2pt]
+        y_w &:\\ r = ${rw.toFixed(2)},\\quad \\hat r = ${rhatw.toFixed(3)}\\\\
+        y_l &:\\ r = ${rl.toFixed(2)},\\quad \\hat r = ${rhatl.toFixed(3)}\\\\[2pt]
+        \\hat r_w-\\hat r_l &= ${dm.toFixed(3)}\\ \\Rightarrow\\ \\sigma(\\hat r_w-\\hat r_l) = ${prob.toFixed(3)}
+      \\end{aligned}`, true);
+  }
+
+  slider.addEventListener('input', update);
+  update();
+}
+
+/* =====================================================================
+   06 — GRPO group-relative advantages
+   ===================================================================== */
+function initGRPO() {
+  const rowsEl = $('#grpoRows');
+  const eqEl = $('#grpoEq');
+  const slider = $('#grpoG');
+  const valEl = $('#grpoGVal');
+  let seed = 7;
+
+  function draw() {
+    const G = parseInt(slider.value, 10);
+    valEl.textContent = G;
+    const rng = mulberry32(seed);
+
+    const r = [];
+    for (let i = 0; i < G; i++) r.push(0.6 + 0.9 * gauss(rng));
+    const mu = r.reduce((a, b) => a + b, 0) / G;
+    const sd = Math.sqrt(r.reduce((a, b) => a + (b - mu) * (b - mu), 0) / G);
+    const A = r.map(x => (sd > 1e-6 ? (x - mu) / sd : 0));
+    const maxAbs = Math.max(0.5, ...A.map(Math.abs));
+
+    rowsEl.innerHTML = r.map((_, i) => `
+      <div class="vrow">
+        <span class="vlabel">${i + 1}</span>
+        <div class="vtrack"><div class="vzero"></div><div class="vbar ${A[i] >= 0 ? 'pos' : 'neg'}" style="width:0%"></div></div>
+        <span class="vval">0.00</span>
+      </div>`).join('');
+
+    $$('#grpoRows .vrow').forEach((row, i) => {
+      const bar = row.querySelector('.vbar');
+      bar.style.width = (Math.abs(A[i]) / maxAbs) * 50 + '%';
+      bar.style.left = '50%';
+      bar.style.transform = A[i] >= 0 ? 'none' : 'translateX(-100%)';
+      row.querySelector('.vval').textContent = A[i].toFixed(2);
+    });
+
+    const rf = r.map(x => x.toFixed(2)).join(',\\,');
+    const Af = A.map(x => x.toFixed(2)).join(',\\,');
+    T(eqEl,
+      `\\begin{aligned}
+        G &= ${G},\\quad \\mu = \\tfrac1G \\textstyle\\sum_i r_i = ${mu.toFixed(3)},\\quad \\sigma = ${sd.toFixed(3)}\\\\[2pt]
+        r &= [\\,${rf}\\,]\\\\[2pt]
+        \\hat A_i &= \\frac{r_i-\\mu}{\\sigma} = [\\,${Af}\\,]
+      \\end{aligned}`, true);
+  }
+
+  slider.addEventListener('input', draw);
+  $('#grpoResample').addEventListener('click', () => {
+    seed = ((seed * 1103515245 + 12345) >>> 0) || 1;
+    draw();
+  });
+  draw();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initBT();
+  initLandscape();
+  initGRPO();
+  initScroll();
+});
+</script>
+</body>
+</html>

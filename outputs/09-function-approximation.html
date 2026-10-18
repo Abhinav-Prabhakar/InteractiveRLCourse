@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<!--
+  Chapter 9 — Function Approximation.
+  Assumptions / adaptations (per prompt.md):
+   1. The brief's "Value Surface Fitting" visualizer is realized as a 1-D continuous-state
+      value CURVE (the "surface" is a curve over the state continuum) — cleaner and fully
+      legible in programmatic SVG, matching the reference's visual idiom.
+   2. The requested quiz (Baird's counterexample) is SKIPPED per prompt.md's "no quizzes"
+      rule; it is replaced with a second, fully interactive visualizer (Baird divergence)
+      and a deepened prose treatment.
+   3. Feature basis for the value-fit demo is θᵀx(u), u = 2s−1, so the TD fixed point
+      θ_TD = A⁻¹b can be computed with the shared `inv` helper and drawn as a reference.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Function Approximation</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- chain diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+/* ---------------- value-fit plot ---------------- */
+.plot{width:100%;height:auto;display:block}
+.plotcap{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:11.5px;color:#6b7280;margin-top:8px}
+.plotcap .sw{display:inline-block;width:14px;height:0;border-top-width:2px;border-top-style:solid;margin-right:6px;vertical-align:middle}
+.mono{font-family:ui-monospace,monospace;font-size:12.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .plotcap{font-size:10.5px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Function Approximation</a>
+    <nav class="nav">
+      <a href="#wall">Why tables fail</a>
+      <a href="#param">Parametric values</a>
+      <a href="#semigrad">Semi-gradient TD</a>
+      <a href="#triad">Deadly triad</a>
+      <a href="#linear">Linear FA</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Function Approximation</p>
+    <h1>Function Approximation</h1>
+    <p class="lede">When there are more states than you can ever visit, the value function stops being a table and becomes a function — and every guarantee you got for free has to be earned back.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="wall">
+  <div class="wrap">
+    <h2><span class="num">01</span>Why tables fail</h2>
+    <p>Every method so far stored one number per state. Tabular <b>value iteration</b>, Monte Carlo, TD, Q-learning — all of them wrote $V(s)$ into a slot indexed by $s$. That is exact, and it never generalizes.</p>
+    <div class="eqbox">
+      $$\big|\,\text{table}\,\big| \;=\; |\mathcal{S}|, \qquad
+        V:\mathcal{S}\to\mathbb{R},\qquad \text{one free parameter per state.}$$
+    </div>
+    <p>A $5\times5$ grid is $25$ numbers. Swap the grid for a raw observation and the count explodes: an $84\times84$ RGB frame has $256^{3\cdot84\cdot84}\approx 10^{16{,}000}$ distinct images. Store a pointer per state and there is not enough matter in the universe.</p>
+    <p>The deeper problem is not memory. Even given infinite memory you could never <em>visit</em> $10^{16{,}000}$ states enough times to estimate each one. What you need is <b>generalization</b>: a change to one parameter must change the value of many <em>similar</em> states at once.</p>
+    <div class="note">
+      <b>The table is an assumption, not an algorithm.</b> Tabular TD and Q-learning are just function approximation with one independent parameter per state, and the independence is what made every convergence proof work. Relax it and you are in new territory.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="param">
+  <div class="wrap">
+    <h2><span class="num">02</span>Parametric value functions</h2>
+    <p>Replace the table with a function of a small parameter vector $\theta\in\mathbb{R}^{d}$ and a fixed <b>feature vector</b> $x(s)$:</p>
+    <div class="eqbox">
+      $$v_\theta(s)\;\approx\;v_\pi(s), \qquad v_\theta(s)=\theta^\top x(s)=\sum_{i=1}^{d}\theta_i\,x_i(s), \qquad d\ll|\mathcal{S}| .$$
+    </div>
+    <p>Read that back: a state is no longer a row in an array, it is a point in $\mathbb{R}^d$, and states with similar features are forced to share a value. For control the same move gives $q_\theta(s,a)$.</p>
+    <p>The target is to minimize the error, weighted by how often each state is visited:</p>
+    <div class="eqbox">
+      $$\overline{VE}(\theta)\;=\;\sum_{s}\mu(s)\,\big[\,v_\pi(s)-v_\theta(s)\,\big]^2,$$
+    </div>
+    <p>where $\mu$ is the <b>state distribution</b> under the policy. The awkward part is that $v_\pi(s)$ is unknown — we only ever see samples of it, and the samples themselves depend on $\theta$.</p>
+    <div class="note">
+      <b>This is supervised learning with a moving target.</b> If someone handed you the true values $v_\pi(s)$ on a stream of states, this would be ordinary regression. Nobody does. The target is assembled from rewards and the current estimate, so learning and the thing being learned move together.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="semigrad">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Semi-gradient TD(0)</h2>
+      <p>Take one transition $(\,S_t,\,R_{t+1},\,S_{t+1}\,)$ and form the bootstrapped target $U_t=R_{t+1}+\gamma v_\theta(S_{t+1})$. Treat it as fixed and take a stochastic-gradient step on the squared error:</p>
+      <div class="eqbox">
+        $$
+        \begin{aligned}
+        J_t(\theta) &= \tfrac12\big[\,U_t-v_\theta(S_t)\,\big]^2 \\[2pt]
+        -\nabla_\theta J_t(\theta) &= \big[\,U_t-v_\theta(S_t)\,\big]\,\nabla_\theta v_\theta(S_t)
+        \end{aligned}
+        $$
+      </div>
+      <p>The catch is that $U_t$ also contains $\theta$. Differentiating through the bootstrap is the *full* gradient; ignoring that term gives the <b>semi-gradient</b> TD(0) update:</p>
+      <div class="eqbox">
+        $$\boxed{\;\theta_{t+1}=\theta_t+\alpha\big[\,R_{t+1}+\gamma v_\theta(S_{t+1})-v_\theta(S_t)\,\big]\nabla_\theta v_\theta(S_t)\;}$$
+      </div>
+      <p>For linear features $\nabla_\theta v_\theta(s)=x(s)$, so the update is a scalar times a vector: $\theta_{t+1}=\theta_t+\alpha\,\delta_t\,x(S_t)$, with $\delta_t=R_{t+1}+\gamma\theta^\top x(S_{t+1})-\theta^\top x(S_t)$.</p>
+      <p>The third factor is exactly where function approximation is spent: $\nabla_\theta v_\theta(S_t)$ says which parameters to nudge, and because parameters are shared, nudging them moves the value of every other state too. One transition updates the whole curve.</p>
+      <div class="note">
+        <b>The moving target is the whole story.</b> True gradient descent would differentiate through $U_t$ and descend an honest loss. Semi-gradient does not — it chases a target that moves as $\theta$ moves. That shortcut is what keeps the method online and cheap, and it is exactly what forfeits the convergence guarantee.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · Value Surface Fitting</span>
+        <div class="btnrow" id="vfDegBtns">
+          <button data-d="1" class="active">Linear</button>
+          <button data-d="2">Quadratic</button>
+          <button data-d="3">Cubic</button>
+        </div>
+      </div>
+
+      <p class="small muted" style="margin-top:0">A continuous-state task: the agent drifts on $s\in[0,1]$ by a random step of half-width $0.12$, reflecting at the walls, and collects $r(s)=\sin(2\pi s)$ each visit. Semi-gradient TD(0) fits a polynomial $v_\theta(s)=\sum_k\theta_k u^k$, $u=2s-1$, and the TD error shrinks toward its floor. Switch the basis and watch the fit change.</p>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 380px">
+          <svg id="vfSvg" class="plot" viewBox="0 0 470 300" role="img" aria-label="True value curve and the fitted value function"></svg>
+          <div class="plotcap">
+            <span><span class="sw" style="border-top-color:#c2c9d4;border-top-style:dashed"></span>true $v_\pi$</span>
+            <span><span class="sw" style="border-top-color:#111;border-top-style:dotted"></span>TD fixed point</span>
+            <span><span class="sw" style="border-top-color:#2563eb"></span>learned $v_\theta$</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <p class="small muted" style="margin:0 0 4px">Expected TD error $\;\mathbb{E}_\delta[\delta_t\mid S_t=s]$</p>
+          <svg id="vfErrSvg" class="plot" viewBox="0 0 470 150" role="img" aria-label="Expected TD error across the state space"></svg>
+
+          <div class="slider-row" style="margin-top:14px">
+            <span class="small muted">$\alpha$</span>
+            <input type="range" id="vfAlpha" min="0.002" max="0.05" step="0.002" value="0.012" aria-label="learning rate alpha">
+            <span class="val" id="vfAlphaVal">0.012</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$\gamma$</span>
+            <input type="range" id="vfGamma" min="0" max="0.99" step="0.01" value="0.9" aria-label="discount factor gamma">
+            <span class="val" id="vfGammaVal">0.90</span>
+          </div>
+
+          <div class="btnrow" style="margin-top:12px">
+            <button id="vfStep">Step</button>
+            <button id="vfRun" class="primary">Run ▶</button>
+            <button id="vfReset">Reset</button>
+          </div>
+          <p class="small muted mono" id="vfInfo" style="margin:12px 0 0"></p>
+
+          <div class="eqbox" id="vfEq" style="min-height:58px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="triad">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>The deadly triad</h2>
+      <p>Three ingredients now sit in the same loop. Any <em>two</em> of them are safe. All three together can, and do, blow up:</p>
+      <div class="eqbox">
+        $$\underbrace{\text{function approximation}}_{\text{shared }\theta}
+          \;+\;\underbrace{\text{bootstrapping}}_{\text{targets use } v_\theta}
+          \;+\;\underbrace{\text{off-policy data}}_{\mu_b\neq\mu_\pi}
+          \;\Longrightarrow\;\text{possible divergence}.$$
+      </div>
+      <p>Delete a leg and stability returns. A table instead of shared weights: tabular off-policy Q-learning converges. No bootstrapping: Monte Carlo with function approximation is ordinary SGD on real returns. On-policy data: linear semi-gradient TD converges, and we prove it in the next section. Keep all three and the update operator's matrix can lose the property that made every earlier proof a contraction.</p>
+
+      <h3>Baird's counterexample</h3>
+      <p>The minimal witness has seven states and two actions. Call states $1$–$6$ the upper ring and state $7$ the lower hub. The <em>dashed</em> action jumps uniformly to one of states $1$–$6$; the <em>solid</em> action goes to state $7$. The behavior policy $b$ plays dashed with probability $6/7$, and therefore lands uniformly on all seven states; the target policy $\pi$ always plays solid. Every reward is $0$, so $v_\pi(s)=0$ for all $s$ — the easiest function imaginable, and one the features can represent <em>exactly</em>.</p>
+      <div class="eqbox">
+        $$\text{state } i\in\{1,\dots,6\}:\; v_\theta(s_i)=2\theta_i+\theta_8, \qquad
+          \text{state } 7:\; v_\theta(s_7)=\theta_7+2\theta_8,$$
+      </div>
+      <p>with eight weights for seven states — deliberately <b>dependent</b> features. Run off-policy semi-gradient TD(0) with the importance ratio $\rho_t=\pi(A_t\mid S_t)/b(A_t\mid S_t)$ and $\|v_\theta\|_\infty$ does not merely fail to reach zero: it grows without bound.</p>
+      <p>The mechanism is a feedback loop. The behavior spends almost all its time on states $1$–$6$, whose target is always $\gamma v_\theta(s_7)$; a positive $v_\theta(s_7)$ pushes all six upward, including the shared $\theta_8$. But $\theta_8$ appears in $v_\theta(s_7)$ with coefficient $2$, so the target rises faster than the values chasing it, and the one state that could correct it — state $7$ — is almost never updated.</p>
+      <div class="note">
+        <b>No step size saves you.</b> Shrinking $\alpha$ only slows the exponential; it never changes its sign. Even the exact <em>expected</em> update — no sampling noise at all — diverges here, because the instability lives in the operator, not the noise.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:24px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · Baird's counterexample</span>
+        <div class="btnrow">
+          <button id="bairdStep">Step</button>
+          <button id="bairdRun" class="primary">Run ▶</button>
+          <button id="bairdReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <svg id="bairdSvg" class="diagram" viewBox="0 0 400 360" role="img" aria-label="Seven-state star of Baird's counterexample with live values"></svg>
+          <p class="small muted" style="text-align:center;margin:8px 0 0">Click a state to plug it into the update. Solid → state 7; dashed → uniform over 1–6.</p>
+        </div>
+
+        <div class="col" style="flex:1 1 320px">
+          <p class="small muted" style="margin:0 0 4px">Running $\|v_\theta\|_\infty$ — same features, same $\gamma$, only the data distribution changes</p>
+          <svg id="bairdChart" class="plot" viewBox="0 0 470 220" role="img" aria-label="Value magnitude for on-policy versus off-policy semi-gradient TD"></svg>
+          <div class="plotcap">
+            <span><span class="sw" style="border-top-color:#dc2626"></span>off-policy · diverges</span>
+            <span><span class="sw" style="border-top-color:#2563eb"></span>on-policy · bounded</span>
+          </div>
+
+          <div class="slider-row" style="margin-top:14px">
+            <span class="small muted">$\alpha$</span>
+            <input type="range" id="bairdAlpha" min="0.002" max="0.05" step="0.002" value="0.01" aria-label="learning rate alpha">
+            <span class="val" id="bairdAlphaVal">0.010</span>
+          </div>
+          <p class="small muted mono" id="bairdInfo" style="margin:10px 0 0"></p>
+          <div class="eqbox" id="bairdEq" style="min-height:52px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="linear">
+  <div class="wrap">
+    <h2><span class="num">05</span>Linear function approximation</h2>
+    <p>With linear features the whole analysis collapses to a linear system. Take the expectation of the semi-gradient update under the state distribution $\mu$ and everything becomes affine in $\theta$:</p>
+    <div class="eqbox">
+      $$\mathbb{E}_\mu[\Delta\theta]=\alpha\,(\mathbf{b}-A\theta),\qquad
+        A=\mathbb{E}_\mu\!\Big[\,x(S_t)\big(x(S_t)-\gamma x(S_{t+1})\big)^\top\Big],\qquad
+        \mathbf{b}=\mathbb{E}_\mu\big[R_{t+1}\,x(S_t)\big].$$
+    </div>
+    <p>If the iteration settles anywhere it settles at the <b>TD fixed point</b>:</p>
+    <div class="eqbox">
+      $$A\theta_{\text{TD}}=\mathbf{b}\quad\Longrightarrow\quad \theta_{\text{TD}}=A^{-1}\mathbf{b}.$$
+    </div>
+
+    <h3>Why on-policy is safe</h3>
+    <p>Under on-policy sampling the states $S_t$ and $S_{t+1}$ share the same marginal $\mu$, so Cauchy–Schwarz gives the key contraction:</p>
+    <div class="eqbox">
+      $$\theta^\top A\theta=\mathbb{E}\big[v(S_t)^2\big]-\gamma\,\mathbb{E}\big[v(S_t)v(S_{t+1})\big]
+        \;\ge\;(1-\gamma)\,\mathbb{E}\big[v(S_t)^2\big]>0,$$
+    </div>
+    <p>with $v(s)=\theta^\top x(s)$. Positive definiteness means the iteration is a contraction, $A$ is invertible, and TD converges. This is the load-bearing step: <em>the third line above is exactly where off-policy learning is spent</em> — drop the shared marginal and the Cauchy–Schwarz bound fails.</p>
+    <div class="eqbox">
+      $$\overline{VE}(\theta_{\text{TD}})\;\le\;\frac{1}{1-\gamma}\;\min_\theta \overline{VE}(\theta).$$
+    </div>
+    <p class="small muted">Read it back: TD cannot do better than the best value function in the span of the features, and it pays a factor $1/(1-\gamma)$ for the privilege of bootstrapping. As $\gamma\to1$ that penalty grows without bound — the price of a target that is allowed to move.</p>
+
+    <div class="note">
+      <b>Linear TD is the only TD method with this guarantee.</b> Nonlinear approximation gives no such fixed-point theorem. Off-policy linear TD repairs the objective instead: <b>gradient-TD</b> methods (GTD, TDC) minimize a different, well-behaved loss and converge again — at the cost of a second set of parameters and slower updates.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">06</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Tabular</th><th>Function approximation</th></tr>
+      <tr><td>Value stored as</td><td>one number per state</td><td>weights $\theta\in\mathbb{R}^d$ over features $x(s)$</td></tr>
+      <tr><td>Parameters</td><td>$|\mathcal{S}|$</td><td>$d\ll|\mathcal{S}|$</td></tr>
+      <tr><td>Generalizes?</td><td>No — every state independent</td><td>Yes — similar states share a value</td></tr>
+      <tr><td>Update</td><td>$V(S_t)\leftarrow V(S_t)+\alpha\delta_t$</td><td>$\theta\leftarrow\theta+\alpha\,\delta_t\,\nabla_\theta v_\theta(S_t)$</td></tr>
+      <tr><td>Convergence</td><td>On- and off-policy</td><td>On-policy linear, guaranteed; otherwise the triad looms</td></tr>
+      <tr><td>Failure mode</td><td>Too many states to visit</td><td>Divergence (Baird) when all three legs are present</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      v_\theta(s) &= \theta^\top x(s), \qquad \nabla_\theta v_\theta(s)=x(s)\\[2pt]
+      \delta_t &= R_{t+1}+\gamma\,v_\theta(S_{t+1})-v_\theta(S_t)\\[2pt]
+      \theta_{t+1} &= \theta_t+\alpha\,\delta_t\,\nabla_\theta v_\theta(S_t)\\[2pt]
+      \theta_{\text{TD}} &= A^{-1}\mathbf{b}, \qquad
+        A=\mathbb{E}_\mu\big[x(S_t)(x(S_t)-\gamma x(S_{t+1}))^\top\big]\\[2pt]
+      \overline{VE}(\theta_{\text{TD}}) &\le \tfrac{1}{1-\gamma}\min_\theta \overline{VE}(\theta)
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything from here on — DQN's replay buffer, PPO's clipped ratio, DPO's implicit reward — is one more answer to the same two questions: which $v_\theta$ do you choose, and how do you keep the deadly triad from biting.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="08-planning-and-learning-with-tabular-methods.html"><span class="pg-k">Previous</span><span class="pg-t">Planning and Learning</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="10-deep-q-networks.html"><span class="pg-k">Next</span><span class="pg-t">Deep Q-Networks</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+/* =====================================================================
+   03 — Value Surface Fitting (continuous-state MRP)
+   ===================================================================== */
+function initValueFit() {
+  const Hs = 0.12;          // half-width of the random step
+  const M = 201;            // grid resolution for truth / metrics
+  const K = 61;             // quadrature points for a step expectation
+  const xs = [];
+  for (let i = 0; i < M; i++) xs.push(i / (M - 1));
+  const ds = [];
+  for (let j = 0; j < K; j++) ds.push(-Hs + 2 * Hs * j / (K - 1));
+
+  function reflect(y) { y = Math.abs(y); y = y % 2; return y > 1 ? 2 - y : y; }
+  function interp(v, y) {
+    let t = y * (M - 1), i0 = Math.floor(t);
+    const f = t - i0;
+    if (i0 < 0) i0 = 0;
+    if (i0 > M - 2) i0 = M - 2;
+    return v[i0] * (1 - f) + v[i0 + 1] * f;
+  }
+  function feat(x, d) { const u = 2 * x - 1, f = [1]; for (let k = 1; k <= d; k++) f.push(f[k - 1] * u); return f; }
+  function rfun(x) { return Math.sin(2 * Math.PI * x); }
+
+  const svg = $('#vfSvg');
+  const errSvg = $('#vfErrSvg');
+  const eqEl = $('#vfEq');
+  const infoEl = $('#vfInfo');
+  const alphaS = $('#vfAlpha'), alphaVal = $('#vfAlphaVal');
+  const gammaS = $('#vfGamma'), gammaVal = $('#vfGammaVal');
+
+  let degree = 1, alpha = 0.012, gamma = 0.9;
+  let theta = [0, 0, 0, 0];
+  let thetaTD = [0, 0, 0, 0];
+  let trueV = null;
+  let s = Math.random();
+  let steps = 0, lastDelta = 0, last = null;
+  let emaD = 1, prevEma = 1, running = null, plateau = 0;
+
+  /* true value by value iteration on the continuous transition */
+  function computeTrue(g) {
+    let v = new Array(M).fill(0);
+    for (let it = 0; it < 3000; it++) {
+      const nv = new Array(M);
+      let delta = 0;
+      for (let i = 0; i < M; i++) {
+        const x = xs[i];
+        let acc = 0;
+        for (let j = 0; j < K; j++) acc += g * interp(v, reflect(x + ds[j]));
+        nv[i] = rfun(x) + acc / K;
+        delta = Math.max(delta, Math.abs(nv[i] - v[i]));
+      }
+      v = nv;
+      if (delta < 1e-11) break;
+    }
+    return v;
+  }
+
+  /* A, b under the uniform update distribution; theta_TD = A^{-1} b */
+  function computeTD(d, g) {
+    const n = d + 1;
+    const A = Array.from({ length: n }, () => new Array(n).fill(0));
+    const b = new Array(n).fill(0);
+    for (let ix = 0; ix < M; ix++) {
+      const x = xs[ix], fs = feat(x, d);
+      const fsp = new Array(n).fill(0);
+      for (let j = 0; j < K; j++) {
+        const fy = feat(reflect(x + ds[j]), d);
+        for (let k = 0; k < n; k++) fsp[k] += fy[k] / K;
+      }
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) A[i][j] += fs[i] * (fs[j] - g * fsp[j]) / M;
+        b[i] += rfun(x) * fs[i] / M;
+      }
+    }
+    let th;
+    try {
+      const Ai = inv(A);
+      th = Ai.map(row => row.reduce((acc, v, j) => acc + v * b[j], 0));
+    } catch (e) { th = new Array(n).fill(0); }
+    if (th.some(v => !isFinite(v))) th = new Array(n).fill(0);
+    return th;
+  }
+
+  function vtheta(x) { const f = feat(x, degree); let s = 0; for (let k = 0; k < f.length; k++) s += theta[k] * f[k]; return s; }
+  function vTD(x) { const f = feat(x, degree); let s = 0; for (let k = 0; k < f.length; k++) s += thetaTD[k] * f[k]; return s; }
+
+  function drawValue() {
+    svg.innerHTML = '';
+    const W = 470, Hh = 300, padL = 46, padR = 16, padT = 18, padB = 34;
+    let vmax = 0.5;
+    trueV.forEach(v => vmax = Math.max(vmax, Math.abs(v)));
+    for (let i = 0; i < M; i++) { vmax = Math.max(vmax, Math.abs(vtheta(xs[i])), Math.abs(vTD(xs[i]))); }
+    vmax = Math.ceil(vmax * 2) / 2;
+    const X = x => padL + x * (W - padL - padR);
+    const Y = v => padT + (vmax - v) / (2 * vmax) * (Hh - padT - padB);
+
+    el('line', { x1: X(0), y1: Y(0), x2: X(1), y2: Y(0), stroke: '#e5e5e5', 'stroke-width': 1 }, svg);
+    el('line', { x1: padL, y1: padT, x2: padL, y2: Hh - padB, stroke: '#e5e5e5', 'stroke-width': 1 }, svg);
+    for (const g of [-vmax, -vmax / 2, vmax / 2, vmax]) {
+      el('line', { x1: X(0), y1: Y(g), x2: X(1), y2: Y(g), stroke: '#f4f4f5', 'stroke-width': 1 }, svg);
+    }
+    el('text', { x: X(0.5), y: Hh - 12, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, svg).textContent = 's';
+    el('text', { x: padL - 8, y: Y(0) + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, svg).textContent = '0';
+
+    const ptsT = trueV.map((v, i) => X(xs[i]) + ',' + Y(v)).join(' ');
+    el('polyline', { points: ptsT, fill: 'none', stroke: '#c2c9d4', 'stroke-width': 2, 'stroke-dasharray': '5 4' }, svg);
+
+    const ptsTD = xs.map((x, i) => X(x) + ',' + Y(vTD(x))).join(' ');
+    el('polyline', { points: ptsTD, fill: 'none', stroke: '#111', 'stroke-width': 1.4, 'stroke-dasharray': '1 3' }, svg);
+
+    const pts = xs.map(x => X(x) + ',' + Y(Math.max(-vmax, Math.min(vmax, vtheta(x))))).join(' ');
+    el('polyline', { points: pts, fill: 'none', stroke: '#2563eb', 'stroke-width': 2.4 }, svg);
+  }
+
+  function drawErr() {
+    errSvg.innerHTML = '';
+    const W = 470, Hh = 150, padL = 14, padR = 14, padT = 12, padB = 26;
+    const midY = padT + (Hh - padT - padB) / 2;
+    const prof = new Array(M);
+    let mx = 0.03;
+    for (let i = 0; i < M; i++) {
+      const x = xs[i], v = vtheta(x);
+      let acc = 0;
+      for (let j = 0; j < K; j++) acc += (rfun(x) + gamma * vtheta(reflect(x + ds[j])) - v);
+      prof[i] = acc / K;
+      mx = Math.max(mx, Math.abs(prof[i]));
+    }
+    el('line', { x1: padL, y1: midY, x2: W - padR, y2: midY, stroke: '#e5e5e5', 'stroke-width': 1 }, errSvg);
+    const bw = (W - padL - padR) / M;
+    for (let i = 0; i < M; i++) {
+      const d = prof[i];
+      const h = (Math.abs(d) / mx) * ((Hh - padT - padB) / 2);
+      el('rect', {
+        x: padL + i * bw, y: d >= 0 ? midY - h : midY,
+        width: Math.max(bw + 0.3, 0.7), height: Math.max(h, 0.4),
+        fill: d >= 0 ? '#2563eb' : '#dc2626'
+      }, errSvg);
+    }
+  }
+
+  function renderEq() {
+    let tex;
+    if (last) {
+      const yl = last.terminal ? '\\text{terminal}' : last.y.toFixed(2);
+      tex =
+        '\\begin{aligned}' +
+        '\\delta_t &= R_{t+1}+\\gamma\\,v_\\theta(S_{t+1})-v_\\theta(S_t)\\\\' +
+        '&= ' + last.r.toFixed(2) + (last.terminal ? '' : ' + ' + gamma.toFixed(2) + '\\,v_\\theta(' + yl + ')') +
+        ' - v_\\theta(' + last.s.toFixed(2) + ') = \\mathbf{' + last.delta.toFixed(3) + '}\\\\[2pt]' +
+        '\\theta &\\leftarrow \\theta + ' + alpha.toFixed(3) + '\\cdot(' + last.delta.toFixed(3) + ')\\;x(' + last.s.toFixed(2) + ')' +
+        '\\end{aligned}';
+    } else {
+      tex = '\\theta_{t+1}=\\theta_t+\\alpha\\,\\delta_t\\,\\nabla_\\theta v_\\theta(S_t)';
+    }
+    T(eqEl, tex, true);
+  }
+
+  function render() {
+    drawValue();
+    drawErr();
+    renderEq();
+    const d = degree;
+    const dist = Math.sqrt(theta.slice(0, d + 1).reduce((a, v, k) => a + (v - thetaTD[k]) * (v - thetaTD[k]), 0));
+    infoEl.textContent = 'steps = ' + steps + '   ‖θ − θ_TD‖ = ' + dist.toFixed(3) +
+      '   θ = (' + theta.slice(0, d + 1).map(v => v.toFixed(2)).join(', ') + ')';
+  }
+
+  function update() {
+    s = Math.random();
+    const dd = (Math.random() * 2 - 1) * Hs;
+    const y = reflect(s + dd);
+    const v = vtheta(s);
+    const delta = rfun(s) + gamma * vtheta(y) - v;
+    const f = feat(s, degree);
+    for (let k = 0; k < f.length; k++) theta[k] += alpha * delta * f[k];
+    steps++;
+    emaD = emaD * 0.998 + Math.abs(delta) * 0.002;
+    last = { s: s, y: y, r: rfun(s), terminal: false, delta: delta };
+  }
+
+  function reset() {
+    stop();
+    theta = [0, 0, 0, 0];
+    steps = 0; emaD = 1; prevEma = 1; plateau = 0; last = null;
+    s = Math.random();
+    trueV = computeTrue(gamma);
+    thetaTD = computeTD(degree, gamma);
+    render();
+  }
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  $('#vfStep').addEventListener('click', () => { for (let i = 0; i < 200; i++) update(); render(); });
+  $('#vfRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(() => {
+      for (let i = 0; i < 200; i++) update();
+      render();
+      if (Math.abs(emaD - prevEma) / (prevEma + 1e-9) < 1e-3 && steps > 4000) { plateau++; } else { plateau = 0; }
+      prevEma = emaD;
+      if (plateau > 5) stop();
+    }, 110);
+  });
+  $('#vfReset').addEventListener('click', reset);
+
+  $$('#vfDegBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      $$('#vfDegBtns button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      degree = parseInt(b.dataset.d, 10);
+      reset();
+    });
+  });
+  alphaS.addEventListener('input', () => { alpha = parseFloat(alphaS.value); alphaVal.textContent = alpha.toFixed(3); });
+  gammaS.addEventListener('input', () => { gamma = parseFloat(gammaS.value); gammaVal.textContent = gamma.toFixed(2); reset(); });
+
+  alphaVal.textContent = alpha.toFixed(3);
+  gammaVal.textContent = gamma.toFixed(2);
+  reset();
+}
+
+/* =====================================================================
+   04 — Baird's counterexample
+   ===================================================================== */
+function initBaird() {
+  const gamma = 0.99;
+  /* features: 7 states x 8 features */
+  const Phi = [];
+  for (let i = 0; i < 6; i++) { const f = new Array(8).fill(0); f[i] = 2; f[7] = 1; Phi.push(f); }
+  { const f = new Array(8).fill(0); f[6] = 1; f[7] = 2; Phi.push(f); }
+  const m = new Array(8).fill(0);
+  for (let s = 0; s < 7; s++) for (let k = 0; k < 8; k++) m[k] += Phi[s][k] / 7;
+
+  function buildA(tgt) {
+    const A = Array.from({ length: 8 }, () => new Array(8).fill(0));
+    for (let s = 0; s < 7; s++)
+      for (let i = 0; i < 8; i++)
+        for (let j = 0; j < 8; j++) A[i][j] += Phi[s][i] * Phi[s][j] / 7;
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) A[i][j] -= gamma * m[i] * tgt[j];
+    return A;
+  }
+  const Aoff = buildA(Phi[6]);   // importance-weighted, target π → state 7
+  const Aon = buildA(m);         // on-policy under the (uniform) behavior distribution
+
+  const svg = $('#bairdSvg');
+  const chart = $('#bairdChart');
+  const eqEl = $('#bairdEq');
+  const infoEl = $('#bairdInfo');
+  const alphaS = $('#bairdAlpha'), alphaVal = $('#bairdAlphaVal');
+
+  let alpha = 0.01;
+  let thOff = [1, 1, 1, 1, 1, 1, 10, 1];
+  let thOn = [1, 1, 1, 1, 1, 1, 10, 1];
+  const histOff = [], histOn = [];
+  let iter = 0, running = null, sel = 0;
+
+  const valOf = (th, s) => Phi[s].reduce((acc, x, k) => acc + x * th[k], 0);
+  const maxV = th => Math.max(...Phi.map((_, s) => Math.abs(valOf(th, s))));
+  const cap = 1e6;
+
+  function matvec(A, v) {
+    const out = new Array(8).fill(0);
+    for (let i = 0; i < 8; i++) { let s = 0; for (let j = 0; j < 8; j++) s += A[i][j] * v[j]; out[i] = s; }
+    return out;
+  }
+  function stepOnce(A, th) {
+    const At = matvec(A, th);
+    for (let i = 0; i < 8; i++) th[i] += alpha * (0 - At[i]);
+  }
+  function spectralRadius(A) {
+    let v = [1, 1.1, 0.9, 1.2, 0.8, 1.3, 0.7, 1.4];
+    let lam = 0;
+    for (let it = 0; it < 300; it++) {
+      const w = new Array(8).fill(0);
+      for (let i = 0; i < 8; i++) {
+        let s = v[i];
+        for (let j = 0; j < 8; j++) s -= alpha * A[i][j] * v[j];
+        w[i] = s;
+      }
+      const nrm = Math.hypot.apply(null, w);
+      if (!nrm || !isFinite(nrm)) break;
+      lam = nrm;
+      for (let i = 0; i < 8; i++) w[i] /= nrm;
+      v = w;
+    }
+    return lam;
+  }
+
+  /* ---- star diagram ---- */
+  const NODES = [];
+  const R = 150, cx = 200, cyc = 300;
+  for (let i = 0; i < 6; i++) {
+    const deg = 150 - i * 24;
+    const rad = deg * Math.PI / 180;
+    NODES.push({ x: cx + R * Math.cos(rad), y: cyc - R * Math.sin(rad), r: 24 });
+  }
+  NODES.push({ x: cx, y: cyc, r: 26 });
+
+  function drawStar() {
+    svg.innerHTML = '';
+    const defs = el('defs', {}, svg);
+    const mk = (id, color) => {
+      const mm = el('marker', { id, viewBox: '0 0 10 10', refX: 10, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto', markerUnits: 'userSpaceOnUse' }, defs);
+      el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: color }, mm);
+      return 'url(#' + id + ')';
+    };
+    const arSolid = mk('b-solid', '#111'), arDash = mk('b-dash', '#2563eb');
+    const gEdges = el('g', {}, svg), gNodes = el('g', {}, svg);
+
+    const hub = NODES[6];
+    for (let i = 0; i < 6; i++) {
+      const n = NODES[i];
+      const dx = hub.x - n.x, dy = hub.y - n.y, len = Math.hypot(dx, dy);
+      const ux = dx / len, uy = dy / len;
+      el('path', {
+        d: 'M ' + (n.x + ux * n.r) + ' ' + (n.y + uy * n.r) + ' L ' + (hub.x - ux * (hub.r + 8)) + ' ' + (hub.y - uy * (hub.r + 8)),
+        fill: 'none', stroke: '#111', 'stroke-width': 1.3, 'stroke-linecap': 'round', 'marker-end': arSolid
+      }, gEdges);
+      el('path', {
+        d: 'M ' + (hub.x - ux * (hub.r + 6)) + ' ' + (hub.y - uy * (hub.r + 6)) + ' L ' + (n.x + ux * (n.r + 8)) + ' ' + (n.y + uy * (n.r + 8)),
+        fill: 'none', stroke: '#2563eb', 'stroke-width': 1.1, 'stroke-dasharray': '5 4', 'stroke-linecap': 'round', 'marker-end': arDash
+      }, gEdges);
+    }
+    /* hub self-loop (solid) */
+    const th = (40 * Math.PI) / 180;
+    const p0 = { x: hub.x + hub.r * Math.cos(th - 0.7), y: hub.y + hub.r * Math.sin(th - 0.7) };
+    const p3 = { x: hub.x + hub.r * Math.cos(th + 0.7), y: hub.y + hub.r * Math.sin(th + 0.7) };
+    const c1 = { x: hub.x + 2.4 * hub.r * Math.cos(th - 0.4), y: hub.y + 2.4 * hub.r * Math.sin(th - 0.4) };
+    const c2 = { x: hub.x + 2.4 * hub.r * Math.cos(th + 0.4), y: hub.y + 2.4 * hub.r * Math.sin(th + 0.4) };
+    el('path', { d: 'M ' + p0.x + ' ' + p0.y + ' C ' + c1.x + ' ' + c1.y + ', ' + c2.x + ' ' + c2.y + ', ' + p3.x + ' ' + p3.y, fill: 'none', stroke: '#111', 'stroke-width': 1.3, 'stroke-linecap': 'round', 'marker-end': arSolid }, gEdges);
+
+    NODES.forEach((n, i) => {
+      const g = el('g', { style: 'cursor:pointer' }, gNodes);
+      const isHub = i === 6;
+      el('circle', { cx: n.x, cy: n.y, r: n.r, fill: '#fff', stroke: '#111', 'stroke-width': i === sel ? 3 : 1.6, style: 'transition:stroke-width .12s' }, g);
+      el('text', { x: n.x, y: n.y - 2, 'text-anchor': 'middle', class: 'node-label', 'font-size': 13 }, g).textContent = isHub ? '7' : String(i + 1);
+      el('text', { x: n.x, y: n.y + 12, 'text-anchor': 'middle', 'font-size': 10, fill: '#6b7280', 'font-family': 'ui-monospace, monospace' }, g).textContent = valOf(thOff, i).toFixed(1);
+      g.addEventListener('click', () => { sel = i; drawStar(); renderEq(); });
+    });
+  }
+
+  function drawChart() {
+    chart.innerHTML = '';
+    const W = 470, Hh = 220, padL = 46, padR = 14, padT = 14, padB = 30;
+    const n = Math.max(histOff.length, 2);
+    let ymax = 1;
+    histOff.forEach(v => ymax = Math.max(ymax, v));
+    histOn.forEach(v => ymax = Math.max(ymax, v));
+    const X = i => padL + (n > 1 ? i / (n - 1) : 0) * (W - padL - padR);
+    const Y = v => padT + (1 - Math.min(v, ymax) / ymax) * (Hh - padT - padB);
+    el('line', { x1: padL, y1: Hh - padB, x2: W - padR, y2: Hh - padB, stroke: '#e5e5e5', 'stroke-width': 1 }, chart);
+    el('line', { x1: padL, y1: padT, x2: padL, y2: Hh - padB, stroke: '#e5e5e5', 'stroke-width': 1 }, chart);
+    el('text', { x: 6, y: padT + 6, 'font-size': 10.5, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, chart).textContent = ymax.toFixed(0);
+    el('text', { x: 6, y: Hh - padB + 4, 'font-size': 10.5, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, chart).textContent = '0';
+    el('text', { x: W - padR, y: Hh - 10, 'text-anchor': 'end', 'font-size': 10.5, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, chart).textContent = 'iteration';
+    const line = (h, color) => {
+      if (h.length < 2) return;
+      const pts = h.map((v, i) => X(i) + ',' + Y(v)).join(' ');
+      el('polyline', { points: pts, fill: 'none', stroke: color, 'stroke-width': 2 }, chart);
+    };
+    line(histOn, '#2563eb');
+    line(histOff, '#dc2626');
+  }
+
+  function renderEq() {
+    const s = sel;
+    const f = Phi[s].map(v => v === 0 ? '0' : String(v));
+    const fx = f.map((v, k) => v === '0' ? '' : v + '\\theta_' + (k + 1)).filter(x => x).join('+');
+    const v = valOf(thOff, s);
+    T(eqEl, '\\begin{aligned}' +
+      'v_\\theta(s_{' + (s + 1) + '}) &= ' + fx + ' = \\mathbf{' + v.toFixed(3) + '}\\\\[2pt]' +
+      '\\theta &\\leftarrow \\theta + \\alpha\\,\\rho_t\\,\\delta_t\\,\\nabla_\\theta v_\\theta(S_t),\\qquad \\rho_t=\\tfrac{\\pi(A_t\\mid S_t)}{b(A_t\\mid S_t)}' +
+      '\\end{aligned}', true);
+  }
+
+  function render() {
+    drawStar();
+    drawChart();
+    renderEq();
+    const rhoOff = spectralRadius(Aoff), rhoOn = spectralRadius(Aon);
+    infoEl.textContent = '‖v‖∞ off = ' + maxV(thOff).toFixed(1) + '   ‖v‖∞ on = ' + maxV(thOn).toFixed(1) +
+      '   ρ(I−αA) off = ' + rhoOff.toFixed(4) + '   on = ' + rhoOn.toFixed(4);
+  }
+
+  function advance(k) {
+    for (let i = 0; i < k; i++) {
+      stepOnce(Aoff, thOff);
+      stepOnce(Aon, thOn);
+      iter++;
+      histOff.push(Math.min(maxV(thOff), cap));
+      histOn.push(maxV(thOn));
+    }
+    if (histOff.length > 4000) { histOff.splice(0, histOff.length - 4000); histOn.splice(0, histOn.length - 4000); }
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+  function reset() {
+    stop();
+    thOff = [1, 1, 1, 1, 1, 1, 10, 1];
+    thOn = [1, 1, 1, 1, 1, 1, 10, 1];
+    histOff.length = 0; histOn.length = 0; iter = 0;
+    advance(1); render();
+  }
+
+  $('#bairdStep').addEventListener('click', () => { advance(20); render(); });
+  $('#bairdRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(() => {
+      advance(15); render();
+      if (maxV(thOff) > cap) stop();
+    }, 110);
+  });
+  $('#bairdReset').addEventListener('click', reset);
+  alphaS.addEventListener('input', () => { alpha = parseFloat(alphaS.value); alphaVal.textContent = alpha.toFixed(3); reset(); });
+
+  alphaVal.textContent = alpha.toFixed(3);
+  reset();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initValueFit();
+  initBaird();
+  initScroll();
+});
+</script>
+</body>
+</html>

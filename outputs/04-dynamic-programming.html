@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic Programming</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<!--
+  Assumptions made while writing this chapter:
+  1. Math case follows the book's Chapter 3 and the chapter brief (lowercase v, q, pi,
+     as in Sutton & Barto) rather than RL.html's uppercase V, to stay consistent with
+     the index and the surrounding chapters. Design tokens, class names, typography,
+     and voice are copied from RL.html verbatim.
+  2. The quiz in the brief is skipped per prompt.md. The requested result — that the
+     Bellman optimality operator is a gamma-contraction in the sup norm — is instead
+     developed in full in section 06.
+  3. Two visualizers are included (iterative policy evaluation in section 01, the
+     policy-iteration sandbox in section 03) because the brief's single named sandbox
+     only covers the control half of the topic.
+-->
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg,#sandboxSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- convergence chart ---------------- */
+.convchart{width:100%;max-width:440px;margin:6px auto 0;display:block}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:26%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Dynamic Programming</a>
+    <nav class="nav">
+      <a href="#eval">Evaluation</a>
+      <a href="#improve">Improvement</a>
+      <a href="#pi">Iteration</a>
+      <a href="#vi">Value iteration</a>
+      <a href="#gpi">GPI</a>
+      <a href="#contract">Contraction</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Exact Tabular Methods</p>
+    <h1>Dynamic Programming</h1>
+    <p class="lede">When you know the model, you can compute the optimal policy exactly — by turning the Bellman equations into fixed-point iterations you can literally watch converge.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="eval">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>Iterative policy evaluation</h2>
+      <p>Chapter 3 gave us the Bellman expectation equation. For a fixed policy it is a linear system, solvable in closed form — but inverting a matrix once per policy is wasteful, and it breaks the moment the model is large. <b>Dynamic programming</b> replaces the solve with a repeated update.</p>
+      <div class="eqbox">
+        $$v_{k+1}(s)=\sum_a \pi(a\mid s)\sum_{s',r}p(s',r\mid s,a)\big[r+\gamma\, v_k(s')\big]$$
+      </div>
+      <p>This is the <b>Bellman expectation backup</b>. The right-hand side reads the <em>current</em> estimate $v_k$, never the true $v_\pi$ — that substitution is the entire trick. Stacking states into a vector makes a full sweep one matrix operation:</p>
+      <div class="eqbox">
+        $$\mathbf{v}_{k+1}=\mathbf{r}_\pi+\gamma P_\pi\mathbf{v}_k$$
+      </div>
+      <p class="small muted">Read that last line back: one sweep replaces every state's value with a one-step lookahead, evaluated using the stale values still sitting on the right-hand side.</p>
+      <div class="note">
+        <b>Why it must converge.</b> The update is affine, with linear part $\gamma P_\pi$. Because every row of $P_\pi$ sums to one, $\|\gamma P_\pi\|_\infty=\gamma<1$, so the operator is a $\gamma$-contraction. Iterating from any starting $v_0$ converges geometrically to the unique fixed point — and the fixed point is exactly the $v_\pi$ that Chapter 3 defined.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · iterative policy evaluation</span>
+        <div class="btnrow" id="evalPolicyBtns">
+          <button data-p="right" class="active">Policy: always →</button>
+          <button data-p="left">always ←</button>
+          <button data-p="random">random</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <p class="small muted" style="margin-top:0">A five-cell corridor, state $s_4$ terminal. Reward $+1$ on the step that enters $s_4$. Click a state to plug its numbers into the backup.</p>
+          <div id="evalBars"></div>
+          <div class="slider-row" style="margin-top:14px">
+            <span class="small muted">$\gamma$</span>
+            <input type="range" id="evalGamma" min="0" max="0.99" step="0.01" value="0.9" aria-label="discount factor">
+            <span class="val" id="evalGammaVal">0.90</span>
+          </div>
+          <div class="btnrow" style="margin-top:6px">
+            <button id="evalStep">Sweep $k\to k+1$</button>
+            <button id="evalRun" class="primary">Run ▶</button>
+            <button id="evalReset">Reset</button>
+          </div>
+          <p class="small muted" id="evalInfo" style="margin:12px 0 0;font-family:ui-monospace,monospace"></p>
+        </div>
+
+        <div class="col" style="flex:1 1 320px">
+          <p class="small muted" style="margin-top:0">Sup-norm change per sweep, on a log scale.</p>
+          <svg id="evalConv" class="convchart" viewBox="0 0 440 150" role="img" aria-label="Convergence of the sup-norm value change per sweep"></svg>
+          <h4 style="margin-bottom:4px">Bellman backup</h4>
+          <div class="eqbox" id="evalEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="improve">
+  <div class="wrap">
+    <h2><span class="num">02</span>Policy improvement</h2>
+    <p>Suppose we trust $v_\pi$. At each state, ask whether a <em>different</em> first action would do better, holding the policy fixed thereafter. That question is answered by the <b>action-value</b> function:</p>
+    <div class="eqbox">
+      $$q_\pi(s,a)=\sum_{s',r}p(s',r\mid s,a)\big[r+\gamma\, v_\pi(s')\big]$$
+    </div>
+    <p>Act greedily on it and you get a new policy:</p>
+    <div class="eqbox">
+      $$\pi'(s)=\arg\max_a\, q_\pi(s,a)$$
+    </div>
+    <p>The <b>policy improvement theorem</b> says this can only help. If $q_\pi(s,\pi'(s))\ge v_\pi(s)$ at every state, then $v_{\pi'}(s)\ge v_\pi(s)$ everywhere, and strictly wherever the first bound is strict. The proof is an inequality you keep re-reading one step further down the trajectory:</p>
+    <div class="eqbox">
+      $$
+      \begin{aligned}
+      v_\pi(s) &\le q_\pi(s,\pi'(s))\\[2pt]
+      &= \mathbb{E}\!\big[R_{t+1}+\gamma\, v_\pi(S_{t+1})\mid S_t=s,\,A_t=\pi'(s)\big]\\[2pt]
+      &\le \mathbb{E}\!\big[R_{t+1}+\gamma\, q_\pi(S_{t+1},\pi'(S_{t+1}))\mid S_t=s,\,A_t=\pi'(s)\big]\\[2pt]
+      &\le \mathbb{E}_{\pi'}\!\big[R_{t+1}+\gamma R_{t+2}+\gamma^2 v_\pi(S_{t+2})\mid S_t=s\big]\\[2pt]
+      &\;\;\vdots\\[2pt]
+      &\le \mathbb{E}_{\pi'}\!\left[\sum_{k=0}^{\infty}\gamma^{k}R_{t+k+1}\;\middle|\;S_t=s\right]=v_{\pi'}(s)
+      \end{aligned}
+      $$
+    </div>
+    <p>The third line is exactly where the bound is spent: the same inequality is reapplied to the next state, then the next, until every action on the path is greedy and the expectation <em>is</em> the return of $\pi'$ itself.</p>
+    <div class="note">
+      <b>Improvement is monotone but not immediately optimal.</b> A single greedy step never lowers any value, yet it can stop short of $\pi_*$ when the underlying $v_\pi$ was itself inaccurate. The cure is to iterate the two halves — which is the next section.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="pi">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Policy iteration</h2>
+      <p>Chain the two operations. Evaluate a policy, improve it greedily, evaluate the new one, and repeat. Every improvement step yields a strictly better policy unless the old one was already optimal, so the sequence strictly increases at each change and cannot cycle; a finite MDP has only finitely many deterministic policies.</p>
+      <div class="eqbox">
+        $$\pi_0 \xrightarrow{\;E\;} v_{\pi_0} \xrightarrow{\;I\;} \pi_1 \xrightarrow{\;E\;} v_{\pi_1} \xrightarrow{\;I\;} \cdots \xrightarrow{\;I\;} \pi_* \xrightarrow{\;E\;} v_*$$
+      </div>
+      <p><b>Policy iteration</b> therefore terminates in a finite number of outer loops, at a policy whose value satisfies the Bellman optimality equation — meaning at $\pi_*$ and $v_*$.</p>
+      <div class="note">
+        <b>The evaluation is the expensive half.</b> Each exact evaluation is a full MRP solve, and the loop may run it many times. In practice the policy stops changing after a handful of outer loops, so the wall-clock is dominated by the inner solves — not by the number of policies.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · policy iteration sandbox</span>
+        <div class="btnrow" id="sbModeBtns">
+          <button data-mode="policy" class="active">Policy iteration</button>
+          <button data-mode="value">Value iteration</button>
+        </div>
+      </div>
+
+      <div class="gridwrap">
+        <div class="gw-left">
+          <svg id="sandboxSvg" viewBox="0 0 320 320" role="img" aria-label="Gridworld value heatmap with the current policy as arrows"></svg>
+          <div class="legend"><span>$v_\pi$</span><span class="grad"></span><span>low</span></div>
+          <div class="btnrow" style="margin-top:16px;justify-content:center">
+            <button id="sbStep">Sweep</button>
+            <button id="sbImprove">Improve $\pi$</button>
+            <button id="sbRun" class="primary">Run ▶</button>
+            <button id="sbReset">Reset</button>
+          </div>
+          <p class="small muted" id="sbInfo" style="text-align:center;margin-top:12px;font-family:ui-monospace,monospace"></p>
+        </div>
+
+        <div class="gw-right">
+          <div class="slider-row">
+            <span class="small muted">$\gamma$</span>
+            <input type="range" id="sbGamma" min="0" max="0.99" step="0.01" value="0.9" aria-label="discount factor">
+            <span class="val" id="sbGammaVal">0.90</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$\theta$</span>
+            <input type="range" id="sbTheta" min="2" max="7" step="1" value="4" aria-label="convergence threshold exponent">
+            <span class="val" id="sbThetaVal">1e-4</span>
+          </div>
+
+          <p class="small muted" style="margin:14px 0 0">Sup-norm change per sweep, on a log scale.</p>
+          <svg id="sandboxConv" class="convchart" viewBox="0 0 440 150" role="img" aria-label="Convergence of the sup-norm value change per sweep"></svg>
+
+          <p class="small muted" style="margin-top:14px">Click a cell for its backup.</p>
+          <div class="eqbox" id="sandboxEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="vi">
+  <div class="wrap">
+    <h2><span class="num">04</span>Value iteration</h2>
+    <p>Do we really need to evaluate all the way to convergence before improving? No. Truncate the evaluation at a single sweep and fold the improvement into the same update, replacing the policy average by a max:</p>
+    <div class="eqbox">
+      $$v_{k+1}(s)=\max_a\sum_{s',r}p(s',r\mid s,a)\big[r+\gamma\, v_k(s')\big]$$
+    </div>
+    <p><b>Value iteration</b> is policy iteration with the inner loop cut to length one. It is nothing more than the Bellman optimality equation used as an assignment rather than as a system to solve.</p>
+    <div class="note">
+      <b>One sweep is enough.</b> Waiting for $v_\pi$ to be accurate is unnecessary: the $\max$ pulls the estimate toward optimality on every single pass, and the operator that does the pulling is the same $\gamma$-contraction — so the iterates land on $v_*$.
+    </div>
+    <p>Read the update once more: take a one-step lookahead under <em>every</em> action, keep the best, and use the old estimate of the successor. When the largest change $\|v_{k+1}-v_k\|_\infty$ drops below your threshold, stop and harvest the greedy policy.</p>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="gpi">
+  <div class="wrap">
+    <h2><span class="num">05</span>Asynchronous DP and GPI</h2>
+    <p>Synchronous sweeps update every state from a snapshot of the previous sweep. <b>Asynchronous DP</b> updates states one at a time, in any order, using whatever values happen to be current. Both converge; asynchronous variants usually converge faster, because fresh information propagates the moment it is produced.</p>
+    <p>Two flavours earn their names. <b>In-place</b> DP overwrites each value as it walks the sweep, instead of writing into a copy. <b>Prioritized sweeping</b> maintains a queue ordered by how much each state's value would change, and backs up the most wrong state first.</p>
+    <p>Step back and the two halves reveal one machine. Evaluation drives $v$ toward $v_\pi$; improvement drives $\pi$ toward greedy with respect to $v$. Each disturbs the other, and they settle only when both are mutually consistent — at the fixed point of the Bellman optimality equation. This is <b>generalized policy iteration (GPI)</b>:</p>
+
+    <svg viewBox="0 0 480 200" role="img" aria-label="Generalized policy iteration: evaluation and improvement cycle to a fixed point" style="width:100%;max-width:480px;display:block;margin:10px auto">
+      <defs>
+        <marker id="gpiArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 Z" fill="#c2c9d4"/>
+        </marker>
+      </defs>
+      <path d="M173 60 Q 240 18 307 60" fill="none" stroke="#c2c9d4" stroke-width="1.6" marker-end="url(#gpiArrow)"/>
+      <text x="240" y="16" text-anchor="middle" class="edge-label on">improvement · π ← greedy(v)</text>
+      <path d="M307 140 Q 240 182 173 140" fill="none" stroke="#c2c9d4" stroke-width="1.6" marker-end="url(#gpiArrow)"/>
+      <text x="240" y="196" text-anchor="middle" class="edge-label on">evaluation · v ← v_π</text>
+      <circle cx="140" cy="100" r="52" fill="#fff" stroke="#111" stroke-width="1.6"/>
+      <text x="140" y="95" text-anchor="middle" font-size="13" font-weight="650" fill="#111">evaluation</text>
+      <text x="140" y="114" text-anchor="middle" font-size="10.5" fill="#6b7280" font-family="ui-monospace,monospace">v → v_π</text>
+      <circle cx="340" cy="100" r="52" fill="#fff" stroke="#111" stroke-width="1.6"/>
+      <text x="340" y="95" text-anchor="middle" font-size="13" font-weight="650" fill="#111">improvement</text>
+      <text x="340" y="114" text-anchor="middle" font-size="10.5" fill="#6b7280" font-family="ui-monospace,monospace">π → greedy(v)</text>
+    </svg>
+
+    <div class="note">
+      <b>Everything tabular is GPI.</b> Policy iteration, value iteration, and the model-free methods of the next chapters are the same two arrows — they differ only in how far each arrow is driven before the other takes over, and in whether the lookahead uses the true model or a sample.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="contract">
+  <div class="wrap">
+    <h2><span class="num">06</span>Why it converges</h2>
+    <p>Write the value-iteration update as an operator on value functions,</p>
+    <div class="eqbox">
+      $$(\mathcal{T}v)(s)=\max_a\sum_{s',r}p(s',r\mid s,a)\big[r+\gamma\, v(s')\big]$$
+    </div>
+    <p>and let $u$ be any other value function. We claim $\mathcal{T}$ is a <b>$\gamma$-contraction</b> in the sup norm. Fix a state $s$ and, for each action $a$, abbreviate the two lookaheads as $f_a=\sum_{s',r}p\,[r+\gamma v(s')]$ and $g_a=\sum_{s',r}p\,[r+\gamma u(s')]$. The $\max$ is <em>non-expansive</em>, which is the one fact the whole argument rests on:</p>
+    <div class="eqbox">
+      $$\big|\max_a f_a-\max_a g_a\big|\le\max_a|f_a-g_a|$$
+    </div>
+    <p>Apply it, then push the absolute value inside and use the triangle inequality:</p>
+    <div class="eqbox">
+      $$
+      \begin{aligned}
+      \big|(\mathcal{T}v)(s)-(\mathcal{T}u)(s)\big|
+        &\le \max_a\Big|\sum_{s',r}p(s',r\mid s,a)\,\gamma\big[v(s')-u(s')\big]\Big|\\[2pt]
+        &\le \gamma\max_a\sum_{s'}p(s'\mid s,a)\,\big|v(s')-u(s')\big|\\[2pt]
+        &\le \gamma\max_{s'}\big|v(s')-u(s')\big|=\gamma\|v-u\|_\infty
+      \end{aligned}
+      $$
+    </div>
+    <p>The second line is exactly where the triangle inequality is spent: the immediate reward and the $\gamma$ factor appear in both $f_a$ and $g_a$, so they cancel, and only the value difference survives inside the absolute value. Taking the max over $s$ gives the contraction:</p>
+    <div class="eqbox">
+      $$\|\mathcal{T}v-\mathcal{T}u\|_\infty\le\gamma\,\|v-u\|_\infty$$
+    </div>
+    <div class="note">
+      <b>Contraction buys everything.</b> By Banach's fixed-point theorem a $\gamma$-contraction on a complete space has a unique fixed point $v_*$, and iteration from any $v_0$ obeys $\|\mathcal{T}^{k}v_0-v_*\|_\infty\le\gamma^{k}\|v_0-v_*\|_\infty$ — geometric convergence at rate $\gamma$. Uniqueness does double duty: it forces $v_*$ to be the optimal value function and the greedy policy to be $\pi_*$.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">07</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Policy iteration</th><th>Value iteration</th></tr>
+      <tr><td>Update</td><td>Full evaluation $\sum_a\pi q$, then greedy improvement</td><td>Single optimality backup $\max_a q$ per sweep</td></tr>
+      <tr><td>Loop</td><td>Evaluate to $\|\Delta\|_\infty<\theta$, then improve $\pi$</td><td>No outer loop — the $\max$ improves implicitly</td></tr>
+      <tr><td>Cost / iteration</td><td>High: each loop is a full MRP solve</td><td>Low: one sweep over the state space</td></tr>
+      <tr><td>Iterations</td><td>Few — policies change rarely</td><td>Many — often hundreds of sweeps</td></tr>
+      <tr><td>Fixed point</td><td>A policy greedy w.r.t. its own value</td><td>$v_*$ directly</td></tr>
+      <tr><td>Guarantee</td><td>$\mathcal{T}$ is a $\gamma$-contraction; both converge at rate $\gamma$</td><td>Same operator, same bound</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      v_{k+1}(s) &= \sum_a\pi(a\mid s)\sum_{s',r}p(s',r\mid s,a)\big[r+\gamma v_k(s')\big]\\[2pt]
+      q_\pi(s,a) &= \sum_{s',r}p(s',r\mid s,a)\big[r+\gamma v_\pi(s')\big]\\[2pt]
+      \pi'(s) &= \arg\max_a q_\pi(s,a)\\[2pt]
+      v_{k+1}(s) &= \max_a\sum_{s',r}p(s',r\mid s,a)\big[r+\gamma v_k(s')\big]\\[2pt]
+      \|\mathcal{T}v-\mathcal{T}u\|_\infty &\le \gamma\|v-u\|_\infty
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything that removes the model — Monte Carlo, TD learning, Q-learning, and the function-approximation methods beyond — is a way of estimating one of these five lines from samples instead of from $p(s',r\mid s,a)$.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="03-markov-decision-processes.html"><span class="pg-k">Previous</span><span class="pg-t">Markov Decision Processes</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="05-monte-carlo-methods.html"><span class="pg-k">Next</span><span class="pg-t">Monte Carlo Methods</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+/* =====================================================================
+   Shared: log-scale convergence line chart
+   ===================================================================== */
+function renderConv(svg, deltas) {
+  svg.innerHTML = '';
+  const W = 440, H = 150, L = 46, R = 12, TP = 16, B = 24;
+  const pw = W - L - R, ph = H - TP - B;
+
+  el('line', { x1: L, y1: TP, x2: L, y2: TP + ph, stroke: '#e5e5e5' }, svg);
+  el('line', { x1: L, y1: TP + ph, x2: W - R, y2: TP + ph, stroke: '#e5e5e5' }, svg);
+  el('text', {
+    x: L, y: 11, 'text-anchor': 'start', 'font-size': 10,
+    fill: '#9ca3af', 'font-family': 'ui-monospace, monospace'
+  }, svg).textContent = '‖v_{k+1} − v_k‖∞ (log)';
+  el('text', {
+    x: (L + W - R) / 2, y: H - 6, 'text-anchor': 'middle', 'font-size': 10,
+    fill: '#9ca3af', 'font-family': 'ui-monospace, monospace'
+  }, svg).textContent = 'sweep k';
+
+  if (!deltas.length) {
+    el('text', {
+      x: (L + W - R) / 2, y: TP + ph / 2, 'text-anchor': 'middle',
+      'font-size': 12, fill: '#c2c9d4'
+    }, svg).textContent = 'run a sweep';
+    return;
+  }
+
+  const logs = deltas.map(d => Math.log10(Math.max(d, 1e-12)));
+  let lo = Math.min(...logs), hi = Math.max(...logs);
+  if (hi - lo < 1) { const m = (hi + lo) / 2; lo = m - 0.5; hi = m + 0.5; }
+
+  const n = deltas.length;
+  const x = i => L + (n === 1 ? 0 : (i / (n - 1)) * pw);
+  const y = v => TP + (1 - (v - lo) / (hi - lo)) * ph;
+
+  for (let e = Math.ceil(lo); e <= Math.floor(hi); e++) {
+    const yy = y(e);
+    el('line', { x1: L, y1: yy, x2: W - R, y2: yy, stroke: '#f0f0f0' }, svg);
+    el('text', {
+      x: L - 6, y: yy + 3, 'text-anchor': 'end', 'font-size': 9.5,
+      fill: '#9ca3af', 'font-family': 'ui-monospace, monospace'
+    }, svg).textContent = '1e' + e;
+  }
+
+  const pts = deltas.map((d, i) => `${x(i).toFixed(1)},${y(logs[i]).toFixed(1)}`).join(' ');
+  el('polyline', {
+    points: pts, fill: 'none', stroke: '#2563eb', 'stroke-width': 2,
+    'stroke-linejoin': 'round', 'stroke-linecap': 'round'
+  }, svg);
+  const li = n - 1;
+  el('circle', { cx: x(li), cy: y(logs[li]), r: 2.8, fill: '#111' }, svg);
+}
+
+/* =====================================================================
+   01 — Iterative policy evaluation on a corridor
+   ===================================================================== */
+function initEval() {
+  const N = 5, TERM = 4;
+  const barsEl = $('#evalBars');
+  const eqEl = $('#evalEq');
+  const convEl = $('#evalConv');
+  const infoEl = $('#evalInfo');
+  const gammaSlider = $('#evalGamma');
+  const gammaVal = $('#evalGammaVal');
+
+  const POL = {
+    right: { dist: () => [{ a: 1, p: 1 }] },
+    left: { dist: () => [{ a: 0, p: 1 }] },
+    random: { dist: () => [{ a: 0, p: 0.5 }, { a: 1, p: 0.5 }] }
+  };
+
+  let gamma = 0.9;
+  let policy = 'right';
+  let v = new Array(N).fill(0);
+  let deltas = [];
+  let k = 0;
+  let lastDelta = 0;
+  let selected = 0;
+  let running = null;
+
+  const step = (i, a) => (a === 1 ? Math.min(i + 1, TERM) : Math.max(i - 1, 0));
+  const reward = (i, j) => (j === TERM && i !== TERM ? 1 : 0);
+
+  function backup(i) {
+    const terms = POL[policy].dist().map(({ a, p }) => {
+      const j = step(i, a);
+      const r = reward(i, j);
+      return { a, p, j, r, q: r + gamma * v[j] };
+    });
+    const sum = terms.reduce((s, t) => s + t.p * t.q, 0);
+    return { terms, sum };
+  }
+
+  barsEl.innerHTML = Array.from({ length: N }, (_, i) => `
+    <div class="vrow" data-i="${i}">
+      <span class="vlabel">s${i}</span>
+      <div class="vtrack"><div class="vzero"></div><div class="vbar pos" style="width:0%"></div></div>
+      <span class="vval">0.000</span>
+    </div>`).join('');
+
+  $$('#evalBars .vrow').forEach(row => {
+    row.addEventListener('click', () => { selected = parseInt(row.dataset.i, 10); render(); });
+  });
+
+  function render() {
+    const maxAbs = Math.max(0.05, ...v.map(Math.abs));
+    $$('#evalBars .vrow').forEach((row, i) => {
+      const bar = row.querySelector('.vbar');
+      const val = row.querySelector('.vval');
+      const frac = (Math.abs(v[i]) / maxAbs) * 50;
+      bar.style.width = frac + '%';
+      bar.style.left = '50%';
+      bar.style.transform = v[i] >= 0 ? 'none' : 'translateX(-100%)';
+      bar.className = 'vbar ' + (v[i] >= 0 ? 'pos' : 'neg');
+      val.textContent = v[i].toFixed(3);
+      row.classList.toggle('sel', i === selected);
+    });
+
+    if (selected >= TERM) {
+      T(eqEl, `\\text{terminal state } s_4:\\quad v(s_4)=0`, true);
+    } else {
+      const b = backup(selected);
+      const termsTxt = b.terms.map(t =>
+        `${t.p === 1 ? '' : t.p.toFixed(2) + '\\,\\cdot\\,'}` +
+        `\\big(${t.r.toFixed(2)}+${gamma.toFixed(2)}\\cdot ${v[t.j].toFixed(3)}\\big)`
+      ).join(' + ');
+      T(eqEl,
+        `\\begin{aligned}
+          v_{k+1}(s_{${selected}})
+            &= \\sum_a\\pi(a\\mid s_{${selected}})\\Big[r(s,a)+\\gamma v_k(s')\\Big]\\\\
+            &= ${termsTxt}\\\\
+            &= \\mathbf{${b.sum.toFixed(3)}}
+        \\end{aligned}`, true);
+    }
+
+    infoEl.textContent = `k = ${k}   ‖v_{k+1} − v_k‖∞ = ${lastDelta.toFixed(5)}`;
+    renderConv(convEl, deltas);
+  }
+
+  function doStep() {
+    const nv = v.slice();
+    let d = 0;
+    for (let i = 0; i < TERM; i++) {
+      const val = backup(i).sum;
+      d = Math.max(d, Math.abs(val - v[i]));
+      nv[i] = val;
+    }
+    v = nv;
+    k++;
+    lastDelta = d;
+    deltas.push(d);
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+  function reset() {
+    stop();
+    v = new Array(N).fill(0);
+    k = 0; lastDelta = 0; deltas = [];
+    render();
+  }
+
+  $('#evalStep').addEventListener('click', () => { stop(); doStep(); render(); });
+  $('#evalRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(() => {
+      doStep(); render();
+      if (lastDelta < 1e-5) stop();
+    }, 110);
+  });
+  $('#evalReset').addEventListener('click', reset);
+
+  gammaSlider.addEventListener('input', () => {
+    gamma = parseFloat(gammaSlider.value);
+    gammaVal.textContent = gamma.toFixed(2);
+    reset();
+  });
+
+  $$('#evalPolicyBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      $$('#evalPolicyBtns button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      policy = b.dataset.p;
+      reset();
+    });
+  });
+
+  render();
+}
+
+/* =====================================================================
+   03 — Policy iteration sandbox
+   ===================================================================== */
+function initSandbox() {
+  const N = 5, CELL = 64;
+  const GOAL = [0, 4], PIT = [2, 2];
+  const STEP = -0.04;
+  const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; // up right down left
+  const ACTION_NAMES = ['↑', '→', '↓', '←'];
+  const ACTION_SYM = ['\\uparrow', '\\rightarrow', '\\downarrow', '\\leftarrow'];
+
+  const svg = $('#sandboxSvg');
+  const eqEl = $('#sandboxEq');
+  const convEl = $('#sandboxConv');
+  const infoEl = $('#sbInfo');
+  const gammaSlider = $('#sbGamma');
+  const gammaVal = $('#sbGammaVal');
+  const thetaSlider = $('#sbTheta');
+  const thetaVal = $('#sbThetaVal');
+  const improveBtn = $('#sbImprove');
+
+  let gamma = 0.9, theta = 1e-4, mode = 'policy';
+  let V = [], pi = [];
+  let sel = { r: 1, c: 1 };
+  let deltas = [], k = 0, improves = 0, lastDelta = 0, stable = false;
+  let running = null;
+
+  const isTerminal = (r, c) =>
+    (r === GOAL[0] && c === GOAL[1]) || (r === PIT[0] && c === PIT[1]);
+  const isGoal = (r, c) => r === GOAL[0] && c === GOAL[1];
+
+  function trans(r, c, a) {
+    const out = new Map();
+    const moves = [[a, 0.8], [(a + 3) % 4, 0.1], [(a + 1) % 4, 0.1]];
+    for (const [act, p] of moves) {
+      let nr = r + DIRS[act][0], nc = c + DIRS[act][1];
+      if (nr < 0 || nr >= N || nc < 0 || nc >= N) { nr = r; nc = c; }
+      const key = nr * N + nc;
+      out.set(key, (out.get(key) || 0) + p);
+    }
+    return out;
+  }
+
+  function colorFor(v) {
+    const t = Math.max(-1, Math.min(1, v));
+    const a = Math.min(0.88, Math.abs(t) * 0.92);
+    return t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
+  }
+  function textColorFor(v) { return Math.abs(v) > 0.5 ? '#fff' : '#111'; }
+
+  function initState() {
+    V = new Array(N * N).fill(0);
+    V[GOAL[0] * N + GOAL[1]] = 1;
+    V[PIT[0] * N + PIT[1]] = -1;
+    pi = new Array(N * N).fill(1);
+    deltas = []; k = 0; improves = 0; lastDelta = 0; stable = false;
+  }
+
+  function qv(r, c, a) {
+    const d = trans(r, c, a);
+    let s = 0;
+    for (const [idx, p] of d) s += p * V[idx];
+    return STEP + gamma * s;
+  }
+  const qsAt = (r, c) => [0, 1, 2, 3].map(a => qv(r, c, a));
+  const argmaxAt = (r, c) => { const qs = qsAt(r, c); return qs.indexOf(Math.max(...qs)); };
+
+  function sweepEval() {
+    const nv = V.slice();
+    let d = 0;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (isTerminal(r, c)) continue;
+      const i = r * N + c;
+      const val = qv(r, c, pi[i]);
+      d = Math.max(d, Math.abs(val - V[i]));
+      nv[i] = val;
+    }
+    V = nv; lastDelta = d; k++; deltas.push(d);
+    return d;
+  }
+
+  function sweepValue() {
+    const nv = V.slice();
+    let d = 0;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (isTerminal(r, c)) continue;
+      const i = r * N + c;
+      const val = Math.max(...qsAt(r, c));
+      d = Math.max(d, Math.abs(val - V[i]));
+      nv[i] = val;
+    }
+    V = nv; lastDelta = d; k++; deltas.push(d);
+    return d;
+  }
+
+  function improve() {
+    let changes = 0;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (isTerminal(r, c)) continue;
+      const i = r * N + c;
+      const best = argmaxAt(r, c);
+      if (best !== pi[i]) { pi[i] = best; changes++; }
+    }
+    improves++;
+    stable = changes === 0;
+    return changes;
+  }
+
+  /* ---- build grid once ---- */
+  svg.innerHTML = '';
+  const cellLayer = el('g', {}, svg);
+  el('g', {}, svg); // overlay reserved, unused
+  const cellEls = [];
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const g = el('g', { class: 'cell', 'data-r': r, 'data-c': c }, cellLayer);
+    const rect = el('rect', {
+      x: c * CELL + 1.5, y: r * CELL + 1.5,
+      width: CELL - 3, height: CELL - 3, rx: 6, fill: '#fff', stroke: 'none'
+    }, g);
+    const vt = el('text', {
+      x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 5,
+      'text-anchor': 'middle', 'font-size': 13,
+      'font-family': 'ui-monospace, monospace', 'font-weight': 600, fill: '#111'
+    }, g);
+    const at = el('text', {
+      x: c * CELL + CELL - 13, y: r * CELL + 17,
+      'text-anchor': 'middle', 'font-size': 12, fill: '#111', opacity: 0.9
+    }, g);
+    cellEls.push({ rect, vt, at, r, c });
+    g.addEventListener('click', () => { sel = { r, c }; renderGrid(); renderEq(); });
+  }
+
+  function renderGrid() {
+    cellEls.forEach(({ rect, vt, at, r, c }) => {
+      const i = r * N + c;
+      const term = isTerminal(r, c);
+      rect.setAttribute('fill', term ? (isGoal(r, c) ? '#1e40af' : '#991b1b') : colorFor(V[i]));
+      if (term) {
+        vt.textContent = isGoal(r, c) ? '+1' : '−1';
+        vt.setAttribute('fill', '#fff');
+        at.textContent = '';
+      } else {
+        const vv = V[i];
+        vt.textContent = vv.toFixed(2);
+        vt.setAttribute('fill', textColorFor(vv));
+        at.textContent = ACTION_NAMES[mode === 'value' ? argmaxAt(r, c) : pi[i]];
+        at.setAttribute('fill', textColorFor(vv));
+      }
+      const on = sel.r === r && sel.c === c;
+      rect.setAttribute('stroke', on ? '#111' : 'none');
+      rect.setAttribute('stroke-width', on ? 2.6 : 0);
+    });
+  }
+
+  function renderEq() {
+    const { r, c } = sel;
+    const i = r * N + c;
+    if (isTerminal(r, c)) {
+      T(eqEl, `\\text{terminal: } v= ${(isGoal(r, c) ? 1 : -1).toFixed(1)}`, true);
+      return;
+    }
+    const qs = qsAt(r, c);
+    const qRows = [0, 1, 2, 3].map(a => `q(s_{${r},${c}},${ACTION_SYM[a]})&= ${qs[a].toFixed(3)}`);
+    if (mode === 'value') {
+      const best = qs.indexOf(Math.max(...qs));
+      T(eqEl,
+        `\\begin{aligned}
+          ${qRows.join('\\\\')}\\\\
+          v_{k+1}(s_{${r},${c}})&=\\max_a q(s,a)=\\mathbf{${Math.max(...qs).toFixed(3)}}\\\\
+          \\pi(s_{${r},${c}})&=\\arg\\max_a q(s,a)=${ACTION_SYM[best]}
+        \\end{aligned}`, true);
+    } else {
+      const a = pi[i];
+      T(eqEl,
+        `\\begin{aligned}
+          ${qRows.join('\\\\')}\\\\
+          v_{k+1}(s_{${r},${c}})&=\\sum_a\\pi(a\\mid s)\\,q(s,a)=q(s,${ACTION_SYM[a]})=\\mathbf{${qs[a].toFixed(3)}}\\\\
+          \\text{policy: } a&=${ACTION_SYM[a]}
+        \\end{aligned}`, true);
+    }
+  }
+
+  function render() {
+    renderGrid();
+    renderEq();
+    let msg = `sweeps = ${k}   ‖Δ‖∞ = ${lastDelta.toFixed(6)}   π-updates = ${improves}`;
+    if (mode === 'value' && lastDelta < theta && k > 0) msg += '   ✓ converged';
+    if (mode === 'policy' && stable) msg += '   ✓ π stable';
+    infoEl.textContent = msg;
+    renderConv(convEl, deltas);
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  function tick() {
+    if (mode === 'value') {
+      sweepValue();
+      render();
+      if (lastDelta < theta) stop();
+    } else {
+      const d = sweepEval();
+      if (d < theta) {
+        improve();
+        if (stable) { render(); stop(); return; }
+      }
+      render();
+    }
+  }
+
+  $('#sbStep').addEventListener('click', () => {
+    stop();
+    if (mode === 'value') sweepValue(); else sweepEval();
+    render();
+  });
+  improveBtn.addEventListener('click', () => { stop(); improve(); render(); });
+  $('#sbRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(tick, 110);
+  });
+  $('#sbReset').addEventListener('click', () => { stop(); initState(); render(); });
+
+  gammaSlider.addEventListener('input', () => {
+    gamma = parseFloat(gammaSlider.value);
+    gammaVal.textContent = gamma.toFixed(2);
+    stop(); initState(); render();
+  });
+  thetaSlider.addEventListener('input', () => {
+    const e = parseInt(thetaSlider.value, 10);
+    theta = Math.pow(10, -e);
+    thetaVal.textContent = '1e-' + e;
+    stop(); initState(); render();
+  });
+
+  $$('#sbModeBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      $$('#sbModeBtns button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      mode = b.dataset.mode;
+      improveBtn.style.display = mode === 'value' ? 'none' : '';
+      stop(); initState(); render();
+    });
+  });
+
+  initState();
+  render();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initEval();
+  initSandbox();
+  initScroll();
+});
+</script>
+</body>
+</html>

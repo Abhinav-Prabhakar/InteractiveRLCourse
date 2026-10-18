@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 8 · Planning and Learning with Tabular Methods</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- svg ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+
+/* ---------------- grid ---------------- */
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#dynaSvg,#swSvg,#covSvg,#mdlSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- priority queue ---------------- */
+.pq{font-family:ui-monospace,monospace;font-size:12.5px;margin:0}
+.pq .pqrow{display:flex;justify-content:space-between;gap:10px;padding:5px 9px;border-radius:7px;background:#fafafa;margin:4px 0;transition:background .12s}
+.pq .pqrow.top{background:#eef2ff;color:#1e3a8a;font-weight:600}
+.pq .pqrow .k{color:#6b7280}
+.pq .pqrow.top .k{color:#1e3a8a}
+
+/* ---------------- bar experiment ---------------- */
+.bars{display:flex;align-items:flex-end;gap:14px;height:140px;padding:8px 2px 0;border-bottom:1px solid #ececec}
+.bcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.bbar{background:#111;border-radius:5px 5px 0 0;width:62%;min-height:3px;transition:height .35s cubic-bezier(.4,0,.2,1)}
+.bval{font-family:ui-monospace,monospace;font-size:11px;font-weight:600;margin-bottom:3px}
+.bcap{font-family:ui-monospace,monospace;font-size:11px;color:#6b7280;margin-top:6px;text-align:center}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:30%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+.phase{font-family:ui-monospace,monospace;font-size:12.5px;color:#6b7280;min-height:18px}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .bars{gap:8px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Ch. 08 · Planning &amp; Learning</a>
+    <nav class="nav">
+      <a href="#model">Models</a>
+      <a href="#dyna">Dyna</a>
+      <a href="#sweeping">Prioritized sweeping</a>
+      <a href="#sampling">Trajectory sampling</a>
+      <a href="#mcts">MCTS</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Part II · Chapter 8</p>
+    <h1>Planning and Learning<br>with Tabular Methods</h1>
+    <p class="lede">A model turns experience into a cheap, replayable simulator — and planning is just learning from that simulator. Dyna runs acting, learning and planning in one loop, squeezing far more out of every real step.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="model">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>Models and planning</h2>
+      <p>A <b>model</b> is the agent's guess at the environment's dynamics — a map from $(s,a)$ to what comes next:</p>
+      <div class="eqbox">
+        $$\hat P(s'\mid s,a)\approx\mathbb P\!\left(S_{t+1}=s'\mid S_t=s,A_t=a\right),\qquad
+          \hat R(s,a)\approx\mathbb E\!\left[R_{t+1}\mid S_t=s,A_t=a\right].$$
+      </div>
+      <p>A <b>distribution model</b> stores all of $\hat P$. A <b>sample model</b> stores only one observed successor $(s',r)$ per $(s,a)$ and replays it. The sample model is cheaper and pairs naturally with the value-based updates we already have.</p>
+      <p><b>Planning</b> means improving a policy with experience generated by the model instead of the environment. Feed a sample of $\hat M$ into a Q-learning update and you have planned — without taking a real step.</p>
+      <div class="note">
+        <b>The model is the agent's imagination, and planning is learning in it.</b> Anything that learns from real experience can learn from imagined experience, because the update rule does not care where the transition came from.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · building a sample model</span>
+        <span class="small muted">coverage <span id="mdlCov">0 / 32</span></span>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 290px">
+          <svg id="mdlSvg" viewBox="0 0 258 258" role="img" aria-label="A 3 by 3 grid whose per-action transitions the model learns by sampling"></svg>
+          <p class="small muted" style="text-align:center;margin:10px 0 0">Click a cell, then an action. The arrow is the last sampled $(s',r)$ the model stored for that $(s,a)$; a red arrow means the world slipped an inch.</p>
+        </div>
+        <div class="col" style="flex:1 1 260px">
+          <div class="btnrow" id="mdlActs" style="justify-content:center">
+            <button class="actbtn" data-a="0" aria-label="action up">↑</button>
+            <button class="actbtn" data-a="1" aria-label="action right">→</button>
+            <button class="actbtn" data-a="2" aria-label="action down">↓</button>
+            <button class="actbtn" data-a="3" aria-label="action left">←</button>
+          </div>
+          <p class="small muted" id="mdlInfo" style="text-align:center;margin:12px 0 0;font-family:ui-monospace,monospace"></p>
+          <div class="eqbox" id="mdlEq" style="margin-top:14px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="dyna">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>The Dyna architecture</h2>
+      <p>Dyna-Q does all three jobs on every real step: act in the environment, learn from the real transition, and plan from $n$ simulated transitions. The update is the same Q-learning rule throughout:</p>
+      <div class="eqbox">
+        $$Q(S,A)\;\leftarrow\;Q(S,A)+\alpha\Big[\,R+\gamma\max_{a}Q(S',a)-Q(S,A)\,\Big].$$
+      </div>
+      <p>One line, applied $n+1$ times per step: once to the real $(S,A,R,S')$ the agent just saw, and $n$ times to pairs drawn from its model.</p>
+      <div class="eqbox">
+        $$\underbrace{\text{act}}_{\text{real}}\;\longrightarrow\;
+          \underbrace{\text{learn}}_{\text{real}}\;\longrightarrow\;
+          \underbrace{\text{plan}\times n}_{\text{simulated}}$$
+      </div>
+      <p><b>The real update and the simulated update are the same line of code.</b> Planning is not a new algorithm; it is the same algorithm pointed at the model. Turn $n$ up and Dyna converts cheap computation into scarce real experience; turn it to zero and Dyna decays into plain Q-learning.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · Dyna-Q gridworld</span>
+        <div class="slider-row" style="width:240px">
+          <span class="small muted">planning steps $n$</span>
+          <input type="range" id="dynaN" min="0" max="50" step="1" value="10" aria-label="planning steps per real step">
+          <span class="val" id="dynaNVal">10</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:0 1 300px">
+          <svg id="dynaSvg" viewBox="0 0 300 300" role="img" aria-label="Dyna-Q gridworld: learned greedy policy and state values"></svg>
+          <div class="legend"><span>low</span><span class="grad"></span><span>high $Q$</span></div>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <p class="small muted" style="margin-top:0">Two agents run on the same grid, compared at equal <em>real</em> environment steps. Blue is Dyna-Q with $n$ planning steps; red is Q-learning ($n=0$). Reward is $-1$ per step, so a shorter episode is a better policy. The shortest path is $8$ moves.</p>
+          <div class="btnrow" style="margin-top:6px">
+            <button id="dynaRun" class="primary">Run ▶</button>
+            <button id="dynaReset">Reset</button>
+          </div>
+          <div class="eqbox" id="dynaEq" style="margin-top:14px"></div>
+          <p class="small muted" id="dynaStats" style="margin:8px 0 0;font-family:ui-monospace,monospace"></p>
+        </div>
+      </div>
+
+      <svg id="dynaChart" viewBox="0 0 900 250" role="img" aria-label="Steps per episode versus real environment steps for Dyna-Q and Q-learning" style="margin-top:18px"></svg>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="sweeping">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Prioritized sweeping</h2>
+      <p>Uniform Dyna spends planning on $(s,a)$ pairs whose values are already right. Spend it where the error is large — and the size of the error is something you already compute: the TD error.</p>
+      <div class="eqbox">
+        $$p(s,a)=\Big|\;R+\gamma\max_{a'}Q(s',a')-Q(s,a)\;\Big|.$$
+      </div>
+      <p><b>The priority is exactly the absolute TD error.</b> Keep a queue keyed by $p$. Repeatedly pop the largest, back that pair up, then recompute $p$ for every predecessor pair whose target depends on the state you just changed. Sweeping in priority order drags information backward from reward along the paths that matter.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · a prioritized backup queue</span>
+        <div class="btnrow">
+          <button id="swReal">Real step</button>
+          <button id="swStep" class="primary">Backup ×1</button>
+          <button id="swStep10">Backup ×10</button>
+          <button id="swReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 300px">
+          <svg id="swSvg" viewBox="0 0 300 300" role="img" aria-label="Gridworld state values under prioritized sweeping"></svg>
+          <p class="small muted" id="swInfo" style="text-align:center;margin:10px 0 0;font-family:ui-monospace,monospace"></p>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <h4 style="margin-top:0">Priority queue <span class="small muted" id="swBackups" style="text-transform:none;letter-spacing:0"></span></h4>
+          <div class="pq" id="swQueue"></div>
+          <h4>Backup equation</h4>
+          <div class="eqbox" id="swEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="sampling">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Trajectory sampling</h2>
+      <p>Which pairs should planning visit? Two extremes: back up every pair — an <b>exhaustive</b> sweep — or back up one sampled pair. Dyna-Q samples. A sample backup is cheaper, and unlike a sweep it still works when the state space is far too big to enumerate.</p>
+      <p><b>Trajectory sampling</b> pushes the idea further: start at a state and follow the model's greedy policy for several steps, backing up each pair on the way. Computation then concentrates on the states the policy actually reaches instead of spreading across the whole grid.</p>
+      <div class="note">
+        On an episodic task only a sliver of the state space is ever visited under any sensible policy. Trajectory sampling buys accuracy exactly there and ignores the rest — which is why the local picture sharpens so much faster than it would under uniform sweeps.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · where the backups land</span>
+        <div class="btnrow" id="covModes">
+          <button data-mode="uniform" class="active">Uniform pairs</button>
+          <button data-mode="traj">Trajectory sampling</button>
+          <button id="covRun" class="primary">Plan ×50</button>
+          <button id="covReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 300px">
+          <svg id="covSvg" viewBox="0 0 300 300" role="img" aria-label="Heatmap of how many times planning backed up each state"></svg>
+        </div>
+        <div class="col" style="flex:1 1 260px">
+          <p class="small muted" style="margin-top:0">Both modes perform the same number of backups; only the choice of <em>which</em> state differs. Press <b>Plan ×50</b> a few times and compare where the colour pools. Total backups: <span id="covCount" style="font-family:ui-monospace,monospace">0</span>.</p>
+          <div class="eqbox" id="covEq"></div>
+          <p class="small muted" id="covInfo" style="margin:0"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="mcts">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Monte Carlo tree search</h2>
+      <p>MCTS plans without a value table at all. From the current state it grows a search tree by simulating trajectories, spending rollouts where the tree currently looks most promising. Each iteration has four phases — <b>selection</b>, <b>expansion</b>, <b>simulation</b>, <b>backup</b> — and selection is steered by UCT:</p>
+      <div class="eqbox">
+        $$a^{*}=\arg\max_{a}\left[\,Q(s,a)+c\sqrt{\frac{\ln N(s)}{N(s,a)}}\;\right].$$
+      </div>
+      <p>Read it back: $Q(s,a)$ exploits the action that has paid off; the $\sqrt{\cdot}$ term buys a trial for actions visited too rarely. As $N(s)$ grows the bonus shrinks, so the tree stops exploring and converges onto the best line of play.</p>
+      <div class="note">
+        MCTS needs only a simulator, not a value function — which is why it powers game engines, and, wrapped around a learned model, why it is the planner inside MuZero (Chapter 13).
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · one MCTS iteration</span>
+        <div class="btnrow">
+          <button id="mctsStep" class="primary">Step ▶</button>
+          <button id="mctsRun">Run ▶▶</button>
+          <button id="mctsReset">Reset</button>
+        </div>
+      </div>
+      <svg id="mctsSvg" viewBox="0 0 640 340" role="img" aria-label="A binary decision tree with MCTS visit counts and action values" style="max-width:640px"></svg>
+      <div class="row" style="margin-top:12px;align-items:center">
+        <div class="col" style="flex:1 1 320px">
+          <p class="phase" id="mctsPhase" aria-live="polite"></p>
+          <p class="small muted" id="mctsStats" style="font-family:ui-monospace,monospace;margin:8px 0 0"></p>
+        </div>
+        <div class="col" style="flex:0 1 240px">
+          <div class="slider-row">
+            <span class="small muted">explore $c$</span>
+            <input type="range" id="mctsC" min="0" max="2" step="0.05" value="1" aria-label="UCT exploration constant">
+            <span class="val" id="mctsCval">1.00</span>
+          </div>
+          <p class="small muted" style="margin:0">Edge labels show $(N,Q)$; nodes show $N$. Every iteration ends by playing the most-visited root action.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="budget">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>How much planning is enough?</h2>
+      <p>Planning trades computation for real experience. The obvious question — how many planning steps $n$ should each real step buy? — has no clean formula, so measure it: run Dyna-Q on the gridworld above and record how many real steps it takes to reach a near-optimal policy, for growing $n$.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · real steps to solve vs planning depth</span>
+        <div class="btnrow">
+          <button id="budRun" class="primary">Run the experiment</button>
+        </div>
+      </div>
+      <div class="bars" id="budBars"></div>
+      <p class="small muted" id="budInfo" style="font-family:ui-monospace,monospace;margin:14px 0 0">Press run — bar height is the number of real steps to reach a near-optimal policy (shorter is better); each bar averages three seeded Dyna-Q runs on the 5×5 grid.</p>
+      <p class="small muted" style="margin-top:10px">Balanced against its cost, a handful of planning steps captures almost all of the benefit; beyond that the curve flattens and extra planning is nearly free of value.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">07</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Model-free Q-learning</th><th>Dyna-style planning</th><th>MCTS</th></tr>
+      <tr><td>Needs</td><td>Experience only</td><td>A model, learned from experience</td><td>A simulator (or learned model) and a rollout policy</td></tr>
+      <tr><td>Real step buys</td><td>$1$ update</td><td>$1+n$ updates (real $+$ simulated)</td><td>$k$ rollouts from the current state</td></tr>
+      <tr><td>What it samples</td><td>Real transitions</td><td>Model transitions — uniform or prioritized</td><td>Trajectories through a search tree</td></tr>
+      <tr><td>Scales with state space</td><td>Terminal — needs a table</td><td>Sample backups scale; sweeps do not</td><td>Yes — no value table required</td></tr>
+      <tr><td>Best when</td><td>Simulation is impossible</td><td>Simulation is cheap and the state space is tabular</td><td>Decisions are trees — games, planning under a model</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      \text{sample model: } & \hat M(s,a)=(s',r)\ \text{ — one stored successor per pair}\\[3pt]
+      \text{Dyna-Q: } & Q(S,A)\leftarrow Q(S,A)+\alpha\big[R+\gamma\max_{a}Q(S',a)-Q(S,A)\big]\quad\text{applied }n{+}1\text{ times}\\[3pt]
+      \text{priority: } & p(s,a)=\big|\,R+\gamma\max_{a'}Q(s',a')-Q(s,a)\,\big|\\[3pt]
+      \text{UCT: } & a^{*}=\arg\max_{a}\Big[\,Q(s,a)+c\sqrt{\tfrac{\ln N(s)}{N(s,a)}}\,\Big]
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Next: when the value table itself becomes the bottleneck — function approximation rewrites these same updates as gradients and lets $Q_\theta$ live in a continuous state space (Chapter 9).</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="07-n-step-bootstrapping-and-eligibility-traces.html"><span class="pg-k">Previous</span><span class="pg-t">n-Step Bootstrapping</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="09-function-approximation.html"><span class="pg-k">Next</span><span class="pg-t">Function Approximation</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* =====================================================================
+   Shared 5x5 gridworld  (deterministic moves, -1 per step, goal ends)
+   ===================================================================== */
+const GN = 5;
+const GDIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; // up right down left
+const GSTART = [4, 0], GGOAL = [0, 4];
+const GAMMA = 0.95, ALPHA = 0.5, EPS = 0.1;
+
+function gStep(r, c, a) {
+  let nr = r + GDIRS[a][0], nc = c + GDIRS[a][1];
+  if (nr < 0 || nr >= GN || nc < 0 || nc >= GN) { nr = r; nc = c; }
+  const done = (nr === GGOAL[0] && nc === GGOAL[1]);
+  return { nr, nc, r: -1, done };
+}
+function gMaxQ(Q, r, c) {
+  const i = (r * GN + c) * 4;
+  return Math.max(Q[i], Q[i + 1], Q[i + 2], Q[i + 3]);
+}
+function gGreedy(Q, r, c) {
+  const i = (r * GN + c) * 4;
+  let best = 0, bv = Q[i];
+  for (let a = 1; a < 4; a++) if (Q[i + a] > bv) { bv = Q[i + a]; best = a; }
+  return best;
+}
+function gEps(Q, r, c, eps) {
+  if (Math.random() < eps) return (Math.random() * 4) | 0;
+  return gGreedy(Q, r, c);
+}
+function isGoal(r, c) { return r === GGOAL[0] && c === GGOAL[1]; }
+
+const ARROW_GLYPH = ['↑', '→', '↓', '←'];
+
+/* =====================================================================
+   01 — sample-model explorer (3x3, stochastic)
+   ===================================================================== */
+function initModel() {
+  const N = 3, CELL = 84, GOAL = [0, 2];
+  const svg = $('#mdlSvg');
+  const eqEl = $('#mdlEq');
+  const covEl = $('#mdlCov');
+  const infoEl = $('#mdlInfo');
+  const model = new Map();
+  let sel = { r: 2, c: 1 };
+
+  function env(r, c, a) {
+    const moves = [[a, 0.8], [(a + 1) % 4, 0.1], [(a + 3) % 4, 0.1]];
+    const roll = Math.random();
+    let act = a;
+    if (roll > 0.9) act = (a + 1) % 4;
+    else if (roll > 0.8) act = (a + 3) % 4;
+    let nr = r + GDIRS[act][0], nc = c + GDIRS[act][1];
+    if (nr < 0 || nr >= N || nc < 0 || nc >= N) { nr = r; nc = c; }
+    return { nr, nc, r: -1, intended: act === a };
+  }
+
+  let last = null;
+
+  function render() {
+    svg.innerHTML = '';
+    const defs = el('defs', {}, svg);
+    const mk = (id, color) => {
+      const m = el('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto', markerUnits: 'userSpaceOnUse' }, defs);
+      el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: color }, m);
+      return `url(#${id})`;
+    };
+    const blue = mk('mdlB', '#2563eb'), red = mk('mdlR', '#dc2626');
+
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const g = el('g', { class: 'cell', style: 'cursor:pointer' }, svg);
+      const term = (r === GOAL[0] && c === GOAL[1]);
+      const on = sel.r === r && sel.c === c;
+      el('rect', {
+        x: c * CELL + 2, y: r * CELL + 2, width: CELL - 4, height: CELL - 4, rx: 7,
+        fill: term ? '#1e40af' : (on ? '#f4f4f5' : '#fff'),
+        stroke: term ? 'none' : (on ? '#111' : '#ececec'), 'stroke-width': on ? 2.4 : 1
+      }, g);
+      if (term) el('text', { x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 5, 'text-anchor': 'middle', 'font-size': 14, fill: '#fff', 'font-weight': 650 }, g).textContent = '+';
+      g.addEventListener('click', () => { if (!term) { sel = { r, c }; last = null; render(); } });
+    }
+
+    // model arrows for selected cell
+    const gArrows = el('g', {}, svg);
+    const cx = sel.c * CELL + CELL / 2, cy = sel.r * CELL + CELL / 2;
+    for (let a = 0; a < 4; a++) {
+      const m = model.get(sel.r + ',' + sel.c + ',' + a);
+      if (!m) continue;
+      const dx = (m.nc - sel.c), dy = (m.nr - sel.r);
+      const len = Math.hypot(dx, dy);
+      let ux, uy, x2, y2;
+      if (len < 0.5) { // stayed put: tiny loop
+        ux = Math.cos(-0.6); uy = Math.sin(-0.6);
+        const p0 = { x: cx + 16 * Math.cos(-0.9), y: cy + 16 * Math.sin(-0.9) };
+        const p3 = { x: cx + 16 * Math.cos(-0.3), y: cy + 16 * Math.sin(-0.3) };
+        const c1 = { x: cx + 40 * Math.cos(-0.95), y: cy + 40 * Math.sin(-0.95) };
+        const c2 = { x: cx + 40 * Math.cos(-0.25), y: cy + 40 * Math.sin(-0.25) };
+        el('path', { d: `M ${p0.x} ${p0.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p3.x} ${p3.y}`, fill: 'none', stroke: m.intended ? '#2563eb' : '#dc2626', 'stroke-width': 2, 'marker-end': m.intended ? blue : red }, gArrows);
+        continue;
+      }
+      ux = dx / len; uy = dy / len;
+      const x1 = cx + ux * 18, y1 = cy + uy * 18;
+      x2 = cx + ux * (CELL / 2 - 8); y2 = cy + uy * (CELL / 2 - 8);
+      el('path', { d: `M ${x1} ${y1} L ${x2} ${y2}`, fill: 'none', stroke: m.intended ? '#2563eb' : '#dc2626', 'stroke-width': 2.2, 'marker-end': m.intended ? blue : red }, gArrows);
+      el('text', { x: x2, y: y2 - 5, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: m.intended ? '#2563eb' : '#dc2626', 'font-family': 'ui-monospace,monospace' }, gArrows).textContent = 'r=' + m.r;
+    }
+    el('circle', { cx, cy, r: 4, fill: '#111' }, gArrows);
+
+    covEl.textContent = `${model.size} / ${(N * N - 1) * 4}`;
+    if (last) {
+      const { r, c, a, m } = last;
+      infoEl.textContent = `sampled (${r},${c}) with ${ARROW_GLYPH[a]} → s' = (${m.nr},${m.nc}), r = ${m.r}`;
+      T(eqEl, `\\hat M\\big((\\text{${r},${c}}),\\text{${ARROW_GLYPH[a]}}\\big)=(\\text{${m.nr},${m.nc}},\\;${m.r})`, true);
+    } else {
+      infoEl.textContent = 'no sample yet';
+      T(eqEl, `\\hat M(s,a)=(s',r)\\quad\\text{— pick a cell and an action}`, true);
+    }
+  }
+
+  $$('#mdlActs button').forEach(b => {
+    b.addEventListener('click', () => {
+      const a = parseInt(b.dataset.a, 10);
+      const m = env(sel.r, sel.c, a);
+      model.set(sel.r + ',' + sel.c + ',' + a, m);
+      last = { r: sel.r, c: sel.c, a, m };
+      render();
+    });
+  });
+
+  render();
+}
+
+/* =====================================================================
+   02 — Dyna-Q sandbox (two agents in lockstep)
+   ===================================================================== */
+function initDyna() {
+  const CELL = 60, MAXSTEPS = 2000, CAP = 250;
+  const svg = $('#dynaSvg'), chart = $('#dynaChart');
+  const nSlider = $('#dynaN'), nVal = $('#dynaNVal');
+  const statsEl = $('#dynaStats'), eqEl = $('#dynaEq');
+
+  let running = null;
+
+  function makeAgent(n) {
+    return { n, Q: new Float64Array(GN * GN * 4), model: new Map(), pairs: [], r: GSTART[0], c: GSTART[1], steps: 0, recent: [] };
+  }
+  function agentStep(ag) {
+    const a = gEps(ag.Q, ag.r, ag.c, EPS);
+    const o = gStep(ag.r, ag.c, a);
+    const qi = (ag.r * GN + ag.c) * 4 + a;
+    ag.Q[qi] += ALPHA * (o.r + GAMMA * (o.done ? 0 : gMaxQ(ag.Q, o.nr, o.nc)) - ag.Q[qi]);
+    const key = ag.r + ',' + ag.c + ',' + a;
+    if (!ag.model.has(key)) { ag.model.set(key, o); ag.pairs.push(key); }
+    ag.r = o.nr; ag.c = o.nc; ag.steps++;
+    for (let k = 0; k < ag.n && ag.pairs.length; k++) {
+      const k2 = ag.pairs[(Math.random() * ag.pairs.length) | 0];
+      const p = k2.split(',').map(Number);
+      const m = ag.model.get(k2);
+      const qi2 = (p[0] * GN + p[1]) * 4 + p[2];
+      ag.Q[qi2] += ALPHA * (m.r + GAMMA * gMaxQ(ag.Q, m.nr, m.nc) - ag.Q[qi2]);
+    }
+    let ended = false;
+    if (o.done || ag.steps > CAP) {
+      ag.recent.push(ag.steps);
+      if (ag.recent.length > 20) ag.recent.shift();
+      ag.r = GSTART[0]; ag.c = GSTART[1]; ag.steps = 0; ended = true;
+    }
+    return ended;
+  }
+
+  let dyna, ql, realSteps, curveD, curveQ;
+  function reset() {
+    stop();
+    dyna = makeAgent(parseInt(nSlider.value, 10));
+    ql = makeAgent(0);
+    realSteps = 0; curveD = []; curveQ = [];
+    renderGrid(); drawChart(); renderStats(); renderEq();
+  }
+  const mean = arr => arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : NaN;
+
+  function renderGrid() {
+    svg.innerHTML = '';
+    for (let r = 0; r < GN; r++) for (let c = 0; c < GN; c++) {
+      const i = r * GN + c;
+      const term = isGoal(r, c);
+      const v = term ? 0 : gMaxQ(dyna.Q, r, c);
+      const t = Math.max(-1, Math.min(1, v / 12));
+      const a = Math.min(0.9, Math.abs(t) * 0.95);
+      const fill = term ? '#1e40af' : (t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`);
+      el('rect', { x: c * CELL + 2, y: r * CELL + 2, width: CELL - 4, height: CELL - 4, rx: 6, fill, stroke: 'none' }, svg);
+      if (term) {
+        el('text', { x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 5, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 650, fill: '#fff' }, svg).textContent = '+1';
+      } else {
+        const tc = Math.abs(t) > 0.5 ? '#fff' : '#111';
+        el('text', { x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 4, 'text-anchor': 'middle', 'font-size': 15, fill: tc, opacity: 0.95 }, svg).textContent = ARROW_GLYPH[gGreedy(dyna.Q, r, c)];
+      }
+      if (r === GSTART[0] && c === GSTART[1]) el('circle', { cx: c * CELL + CELL / 2, cy: r * CELL + CELL / 2, r: 4, fill: '#fff', stroke: '#111', 'stroke-width': 1.4 }, svg);
+    }
+  }
+
+  function drawChart() {
+    chart.innerHTML = '';
+    const W = 900, H = 250, ml = 48, mr = 14, mt = 14, mb = 30, YMAX = 60;
+    const px = s => ml + (s / MAXSTEPS) * (W - ml - mr);
+    const py = y => H - mb - (Math.min(YMAX, y) / YMAX) * (H - mt - mb);
+    for (let y = 0; y <= YMAX; y += 20) {
+      el('line', { x1: ml, x2: W - mr, y1: py(y), y2: py(y), stroke: '#f0f0f0' }, chart);
+      el('text', { x: ml - 8, y: py(y) + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, chart).textContent = y;
+    }
+    for (let x = 0; x <= MAXSTEPS; x += 500) {
+      el('text', { x: px(x), y: H - 10, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, chart).textContent = x;
+    }
+    el('text', { x: (ml + W - mr) / 2, y: H - 10, 'text-anchor': 'middle', 'font-size': 11, fill: '#6b7280', 'font-family': 'ui-monospace,monospace' }, chart).textContent = 'real environment steps';
+    el('text', { x: 14, y: (mt + H - mb) / 2, 'text-anchor': 'middle', 'font-size': 11, fill: '#6b7280', 'font-family': 'ui-monospace,monospace', transform: `rotate(-90 14 ${(mt + H - mb) / 2})` }, chart).textContent = 'steps / episode';
+    const line = (pts, color) => {
+      if (pts.length < 2) return;
+      el('polyline', { points: pts.map(p => `${px(p[0])},${py(p[1])}`).join(' '), fill: 'none', stroke: color, 'stroke-width': 2.4, 'stroke-linejoin': 'round' }, chart);
+    };
+    line(curveD, '#2563eb'); line(curveQ, '#dc2626');
+    el('line', { x1: W - 220, x2: W - 200, y1: mt + 8, y2: mt + 8, stroke: '#2563eb', 'stroke-width': 2.4 }, chart);
+    el('text', { x: W - 192, y: mt + 12, 'font-size': 12, fill: '#4b5563', 'font-family': 'ui-monospace,monospace' }, chart).textContent = 'Dyna-Q';
+    el('line', { x1: W - 110, x2: W - 90, y1: mt + 8, y2: mt + 8, stroke: '#dc2626', 'stroke-width': 2.4 }, chart);
+    el('text', { x: W - 82, y: mt + 12, 'font-size': 12, fill: '#4b5563', 'font-family': 'ui-monospace,monospace' }, chart).textContent = 'Q-learning';
+  }
+
+  function renderStats() {
+    const md = mean(dyna.recent), mq = mean(ql.recent);
+    statsEl.textContent =
+      `real steps ${realSteps}   ·   Dyna steps/ep ${isNaN(md) ? '—' : md.toFixed(1)}   ·   Q steps/ep ${isNaN(mq) ? '—' : mq.toFixed(1)}`;
+  }
+
+  function renderEq() {
+    T(eqEl, `n=${parseInt(nSlider.value, 10)}\\;\\Rightarrow\\;\\text{updates per real step}=n+1=${parseInt(nSlider.value, 10) + 1}`, true);
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; $('#dynaRun').textContent = 'Run ▶'; } }
+
+  function batch(k) {
+    for (let s = 0; s < k && realSteps < MAXSTEPS; s++) {
+      agentStep(dyna); agentStep(ql); realSteps++;
+      if (realSteps % 50 === 0) {
+        const md = mean(dyna.recent), mq = mean(ql.recent);
+        curveD.push([realSteps, isNaN(md) ? 60 : md]);
+        curveQ.push([realSteps, isNaN(mq) ? 60 : mq]);
+      }
+    }
+  }
+
+  $('#dynaRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    $('#dynaRun').textContent = 'Pause';
+    running = setInterval(() => {
+      batch(25);
+      renderGrid(); drawChart(); renderStats();
+      if (realSteps >= MAXSTEPS) stop();
+    }, 110);
+  });
+  $('#dynaReset').addEventListener('click', reset);
+  nSlider.addEventListener('input', () => {
+    nVal.textContent = nSlider.value;
+    dyna.n = parseInt(nSlider.value, 10);
+    renderEq();
+  });
+
+  reset();
+}
+
+/* =====================================================================
+   03 — prioritized sweeping
+   ===================================================================== */
+function initPriority() {
+  const CELL = 60;
+  const svg = $('#swSvg'), qEl = $('#swQueue'), eqEl = $('#swEq'), infoEl = $('#swInfo'), bEl = $('#swBackups');
+  let Q, model, pairs, queue, cur, backups, last;
+
+  function reset() {
+    Q = new Float64Array(GN * GN * 4);
+    model = new Map(); pairs = []; queue = [];
+    cur = { r: GSTART[0], c: GSTART[1] };
+    backups = 0; last = null;
+    render();
+  }
+  function key2rc(k) { const p = k.split(',').map(Number); return { r: p[0], c: p[1], a: p[2] }; }
+  function priority(k) {
+    const { r, c, a } = key2rc(k);
+    const m = model.get(k);
+    const target = m.r + GAMMA * gMaxQ(Q, m.nr, m.nc);
+    return Math.abs(target - Q[(r * GN + c) * 4 + a]);
+  }
+  function raise(kfmt, p) {
+    const ex = queue.find(e => e.k === kfmt);
+    if (ex) { if (p > ex.p) ex.p = p; return; }
+    queue.push({ k: kfmt, p });
+  }
+  function raisePreds(sr, sc) {
+    for (const k of pairs) {
+      const m = model.get(k);
+      if (m.nr === sr && m.nc === sc) raise(k, priority(k));
+    }
+  }
+  function popMax() {
+    if (!queue.length) return null;
+    let bi = 0;
+    for (let i = 1; i < queue.length; i++) if (queue[i].p > queue[bi].p) bi = i;
+    return queue.splice(bi, 1)[0];
+  }
+  function backUp(k) {
+    const { r, c, a } = key2rc(k);
+    const m = model.get(k);
+    const qi = (r * GN + c) * 4 + a;
+    const target = m.r + GAMMA * gMaxQ(Q, m.nr, m.nc);
+    const td = target - Q[qi];
+    Q[qi] += ALPHA * td;
+    last = { k, r, c, a, s2r: m.nr, s2c: m.nc, rw: m.r, target, td, p: Math.abs(td) };
+    backups++;
+    raisePreds(r, c);
+  }
+  function realStep() {
+    const a = gEps(Q, cur.r, cur.c, 0.2);
+    const o = gStep(cur.r, cur.c, a);
+    const qi = (cur.r * GN + cur.c) * 4 + a;
+    const old = Q[qi];
+    const tdFull = o.r + GAMMA * (o.done ? 0 : gMaxQ(Q, o.nr, o.nc)) - old;
+    Q[qi] += ALPHA * tdFull;
+    const k = cur.r + ',' + cur.c + ',' + a;
+    if (!model.has(k)) { model.set(k, o); pairs.push(k); }
+    raise(k, Math.abs(tdFull));
+    raisePreds(cur.r, cur.c);
+    if (!o.done) { cur = { r: o.nr, c: o.nc }; }
+    else { cur = { r: GSTART[0], c: GSTART[1] }; }
+    render();
+  }
+  function backupTimes(n) {
+    for (let i = 0; i < n; i++) {
+      const e = popMax();
+      if (!e) break;
+      backUp(e.k);
+    }
+    render();
+  }
+
+  function render() {
+    svg.innerHTML = '';
+    for (let r = 0; r < GN; r++) for (let c = 0; c < GN; c++) {
+      const term = isGoal(r, c);
+      const v = term ? 0 : gMaxQ(Q, r, c);
+      const t = Math.max(-1, Math.min(1, v / 12));
+      const a = Math.min(0.9, Math.abs(t) * 0.95);
+      const fill = term ? '#1e40af' : (t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`);
+      el('rect', { x: c * CELL + 2, y: r * CELL + 2, width: CELL - 4, height: CELL - 4, rx: 6, fill, stroke: 'none' }, svg);
+      const tc = Math.abs(t) > 0.5 ? '#fff' : '#111';
+      el('text', { x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 4, 'text-anchor': 'middle', 'font-size': 11, fill: tc, 'font-family': 'ui-monospace,monospace' }, svg).textContent = term ? '+1' : v.toFixed(1);
+      if (cur.r === r && cur.c === c) el('circle', { cx: c * CELL + CELL / 2, cy: r * CELL + CELL / 2 - 16, r: 4, fill: '#111', stroke: '#fff', 'stroke-width': 1.5 }, svg);
+    }
+
+    const sorted = queue.slice().sort((x, y) => y.p - x.p).slice(0, 6);
+    qEl.innerHTML = sorted.length ? sorted.map((e, i) => {
+      const { r, c, a } = key2rc(e.k);
+      return `<div class="pqrow ${i === 0 ? 'top' : ''}"><span>(${r},${c}) ${ARROW_GLYPH[a]}</span><span class="p">${e.p.toFixed(3)}</span></div>`;
+    }).join('') : '<div class="pqrow"><span class="k">empty — collect experience</span><span></span></div>';
+    bEl.textContent = `· ${backups} backups`;
+
+    if (last && last.p !== undefined) {
+      const r = last;
+      const maxQnext = (r.target - r.rw) / GAMMA;
+      const qBefore = Q[(r.r * GN + r.c) * 4 + r.a] - ALPHA * r.td;
+      T(eqEl, `\\begin{aligned}
+        p(\\text{(${r.r},${r.c}),${ARROW_GLYPH[r.a]}}) &= \\big|\\,R+\\gamma\\max_{a'}Q(\\text{${r.s2r},${r.s2c}},a')-Q(\\text{(${r.r},${r.c}),${ARROW_GLYPH[r.a]}})\\,\\big|\\\\
+        &= \\big|\\,${r.rw}+${GAMMA}\\cdot${maxQnext.toFixed(3)}-(${qBefore.toFixed(3)})\\,\\big|\\\\
+        &= \\mathbf{${r.p.toFixed(3)}}
+      \\end{aligned}`, true);
+    } else {
+      T(eqEl, `p(s,a)=\\big|\\,R+\\gamma\\max_{a'}Q(s',a')-Q(s,a)\\,\\big|`, true);
+    }
+    infoEl.textContent = `queue ${queue.length}   ·   agent at (${cur.r},${cur.c})`;
+  }
+
+  $('#swReal').addEventListener('click', realStep);
+  $('#swStep').addEventListener('click', () => backupTimes(1));
+  $('#swStep10').addEventListener('click', () => backupTimes(10));
+  $('#swReset').addEventListener('click', reset);
+  reset();
+}
+
+/* =====================================================================
+   04 — trajectory sampling coverage
+   ===================================================================== */
+function initCoverage() {
+  const CELL = 60;
+  const svg = $('#covSvg'), eqEl = $('#covEq'), infoEl = $('#covInfo'), cntEl = $('#covCount');
+  let counts, mode = 'uniform', total = 0, V;
+
+  function vi() {
+    let v = new Float64Array(GN * GN);
+    for (let it = 0; it < 400; it++) {
+      const nv = v.slice();
+      let d = 0;
+      for (let r = 0; r < GN; r++) for (let c = 0; c < GN; c++) {
+        if (isGoal(r, c)) continue;
+        let best = -Infinity;
+        for (let a = 0; a < 4; a++) {
+          const o = gStep(r, c, a);
+          const t = o.r + GAMMA * (o.done ? 0 : v[o.nr * GN + o.nc]);
+          if (t > best) best = t;
+        }
+        d = Math.max(d, Math.abs(best - v[r * GN + c]));
+        nv[r * GN + c] = best;
+      }
+      v = nv;
+      if (d < 1e-9) break;
+    }
+    return v;
+  }
+  V = vi();
+  function greedyAt(r, c) {
+    let best = 0, bv = -Infinity;
+    for (let a = 0; a < 4; a++) {
+      const o = gStep(r, c, a);
+      const t = o.r + GAMMA * (o.done ? 0 : V[o.nr * GN + o.nc]);
+      if (t > bv) { bv = t; best = a; }
+    }
+    return best;
+  }
+
+  function reset() { counts = new Int32Array(GN * GN); total = 0; render(); }
+  function plan(steps) {
+    for (let s = 0; s < steps; s++) {
+      if (mode === 'uniform') {
+        let r, c;
+        do { r = (Math.random() * GN) | 0; c = (Math.random() * GN) | 0; } while (isGoal(r, c));
+        counts[r * GN + c]++; total++;
+      } else {
+        let r, c;
+        do { r = (Math.random() * GN) | 0; c = (Math.random() * GN) | 0; } while (isGoal(r, c));
+        for (let k = 0; k < 5; k++) {
+          counts[r * GN + c]++; total++;
+          const a = greedyAt(r, c);
+          const o = gStep(r, c, a);
+          r = o.nr; c = o.nc;
+          if (isGoal(r, c)) break;
+        }
+      }
+    }
+    render();
+  }
+
+  function render() {
+    svg.innerHTML = '';
+    const mx = Math.max(1, ...counts);
+    for (let r = 0; r < GN; r++) for (let c = 0; c < GN; c++) {
+      const term = isGoal(r, c);
+      const n = counts[r * GN + c];
+      const t = n / mx;
+      const fill = term ? '#1e40af' : (n === 0 ? '#fff' : `rgba(17,17,17,${(0.12 + 0.8 * t).toFixed(3)})`);
+      el('rect', { x: c * CELL + 2, y: r * CELL + 2, width: CELL - 4, height: CELL - 4, rx: 6, fill, stroke: n === 0 && !term ? '#ececec' : 'none', 'stroke-width': 1 }, svg);
+      const tc = term ? '#fff' : (t > 0.55 ? '#fff' : '#111');
+      el('text', { x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 4, 'text-anchor': 'middle', 'font-size': 12, fill: tc, 'font-family': 'ui-monospace,monospace', 'font-weight': 600 }, svg).textContent = term ? '+1' : (n || '');
+    }
+    cntEl.textContent = total;
+    const mx2 = Math.max(1, ...counts);
+    T(eqEl, `\\text{max backups on any cell}=${mx2}\\quad\\text{·}\\quad\\text{cells touched}=${counts.filter(x => x > 0).length}/${GN * GN - 1}`, true);
+    infoEl.textContent = mode === 'uniform'
+      ? 'uniform: each backup picks a random (s,a); colour spreads evenly.'
+      : 'trajectory: each backup follows the greedy path; colour pools near the goal.';
+  }
+
+  $$('#covModes button[data-mode]').forEach(b => {
+    b.addEventListener('click', () => {
+      $$('#covModes button[data-mode]').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      mode = b.dataset.mode;
+      reset();
+    });
+  });
+  $('#covRun').addEventListener('click', () => plan(50));
+  $('#covReset').addEventListener('click', reset);
+  reset();
+}
+
+/* =====================================================================
+   05 — MCTS on a fixed binary tree
+   ===================================================================== */
+function initMCTS() {
+  const DEPTH = 3;
+  const LEAF_R = [0.3, 0.9, -0.4, 0.6, -0.8, 0.2, 0.7, -0.1];
+  const svg = $('#mctsSvg'), phaseEl = $('#mctsPhase'), statsEl = $('#mctsStats');
+  const cSlider = $('#mctsC'), cVal = $('#mctsCval');
+  let Nsa, Qsa, c = 1.0, iters = 0, running = null, timers = [];
+
+  const terminal = p => p.length === DEPTH;
+  const reward = p => LEAF_R[parseInt(p, 2)];
+  const kids = p => terminal(p) ? [] : [p + '0', p + '1'];
+  const ns = p => kids(p).reduce((s, ch) => s + (Nsa[p + '|' + ch.slice(-1)] || 0), 0);
+
+  function reset() {
+    stopRun();
+    Nsa = {}; Qsa = {}; iters = 0;
+    render({ edges: [], node: null });
+    phaseEl.textContent = 'ready — press Step';
+    statsEl.textContent = '';
+  }
+  function stopRun() { if (running) { clearInterval(running); running = null; $('#mctsRun').textContent = 'Run ▶▶'; } }
+  function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+  function uct(p, a) {
+    const n = Nsa[p + '|' + a] || 0;
+    if (n === 0) return Infinity;
+    return Qsa[p + '|' + a] + c * Math.sqrt(Math.log(Math.max(1, ns(p))) / n);
+  }
+  function simulate(p) {
+    let q = p;
+    while (!terminal(q)) q = q + (Math.random() < 0.5 ? '0' : '1');
+    return reward(q);
+  }
+  function iterate() {
+    let p = '';
+    const trail = [];
+    let expanded = null;
+    while (!terminal(p)) {
+      const ch = kids(p);
+      const untried = ch.find(x => (Nsa[p + '|' + x.slice(-1)] || 0) === 0);
+      if (untried !== undefined) { expanded = untried; break; }
+      let ba = '0', bv = -Infinity;
+      for (const x of ch) { const a = x.slice(-1); const u = uct(p, a); if (u > bv) { bv = u; ba = a; } }
+      trail.push(p + '|' + ba);
+      p = p + ba;
+    }
+    const from = expanded !== null ? expanded : p;
+    const R = simulate(from);
+    if (expanded !== null) trail.push(from.slice(0, -1) + '|' + from.slice(-1));
+    for (const k of trail) { Nsa[k] = (Nsa[k] || 0) + 1; Qsa[k] = (Qsa[k] || 0) + (R - (Qsa[k] || 0)) / Nsa[k]; }
+    iters++;
+    return { R, trail, expanded };
+  }
+
+  function nodeXY(p) {
+    const d = p.length, i = d === 0 ? 0 : parseInt(p, 2), total = Math.pow(2, d);
+    return { x: 320 + (i + 0.5 - total / 2) * (560 / total), y: 34 + d * 88 };
+  }
+
+  function render(hi) {
+    svg.innerHTML = '';
+    const hiEdges = new Set(hi.edges || []);
+    const hiNode = hi.node;
+    // draw all edges
+    for (let d = 0; d < DEPTH; d++) {
+      const count = Math.pow(2, d);
+      for (let i = 0; i < count; i++) {
+        const p = d === 0 ? '' : i.toString(2).padStart(d, '0');
+        for (const ch of kids(p)) {
+          const a = ch.slice(-1);
+          const A = nodeXY(p), B = nodeXY(ch);
+          const key = p + '|' + a;
+          const n = Nsa[key] || 0, q = Qsa[key] || 0;
+          const on = hiEdges.has(key);
+          const ln = el('line', { x1: A.x, y1: A.y + 16, x2: B.x, y2: B.y - 16, stroke: on ? '#2563eb' : '#d8dce2', 'stroke-width': on ? 3 : 1.3 }, svg);
+          const lx = (A.x + B.x) / 2, ly = (A.y + B.y) / 2;
+          el('text', { x: lx + (B.x - A.x) * 0.06, y: ly, 'text-anchor': 'middle', 'font-size': 10.5, fill: on ? '#1e3a8a' : '#6b7280', 'font-family': 'ui-monospace,monospace', style: 'paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round' }, svg).textContent = `${n}/${n ? q.toFixed(2) : '–'}`;
+        }
+      }
+    }
+    // draw nodes
+    function drawNode(p) {
+      const { x, y } = nodeXY(p);
+      const term = terminal(p);
+      const isHi = p === hiNode;
+      if (term) {
+        el('rect', { x: x - 15, y: y - 15, width: 30, height: 30, rx: 5, fill: '#f4f4f5', stroke: isHi ? '#2563eb' : '#c2c9d4', 'stroke-width': isHi ? 3 : 1.4 }, svg);
+        el('text', { x, y: y + 4, 'text-anchor': 'middle', 'font-size': 11, 'font-family': 'ui-monospace,monospace', fill: '#111', 'font-weight': 600 }, svg).textContent = reward(p).toFixed(1);
+      } else {
+        const n = ns(p);
+        el('circle', { cx: x, cy: y, r: 16, fill: n > 0 ? '#111' : '#fff', stroke: isHi ? '#2563eb' : '#111', 'stroke-width': isHi ? 3.5 : 1.6 }, svg);
+        el('text', { x, y: y + 4, 'text-anchor': 'middle', 'font-size': 11.5, 'font-family': 'ui-monospace,monospace', fill: n > 0 ? '#fff' : '#6b7280', 'font-weight': 650 }, svg).textContent = n;
+      }
+    }
+    drawNode('');
+    for (let d = 1; d <= DEPTH; d++) {
+      const count = Math.pow(2, d);
+      for (let i = 0; i < count; i++) drawNode(i.toString(2).padStart(d, '0'));
+    }
+  }
+
+  function step() {
+    clearTimers();
+    const res = iterate();
+    const selEdges = res.trail.slice(0, res.expanded !== null ? res.trail.length - 1 : res.trail.length);
+    render({ edges: selEdges, node: null });
+    phaseEl.textContent = `selection · ${selEdges.length} edge(s) by UCT`;
+    timers.push(setTimeout(() => {
+      render({ edges: res.trail, node: res.expanded !== null ? res.expanded : null });
+      phaseEl.textContent = res.expanded !== null ? `expansion · added node ${res.expanded}` : 'expansion · tree already expanded — reached a leaf';
+      timers.push(setTimeout(() => {
+        phaseEl.textContent = `simulation · random rollout → return R = ${res.R.toFixed(2)}`;
+        timers.push(setTimeout(() => {
+          render({ edges: res.trail, node: res.expanded });
+          phaseEl.textContent = `backup · updated N and Q on ${res.trail.length} edge(s) with R = ${res.R.toFixed(2)}`;
+          const n0 = Nsa['|0'] || 0, n1 = Nsa['|1'] || 0;
+          statsEl.textContent = `iterations ${iters}   ·   root: N=(${n0},${n1})  Q=(${(Qsa['|0'] || 0).toFixed(2)},${(Qsa['|1'] || 0).toFixed(2)})   ·   play → ${(Qsa['|0'] || 0) >= (Qsa['|1'] || 0) ? 'left' : 'right'}`;
+        }, 320));
+      }, 320));
+    }, 220));
+  }
+
+  $('#mctsStep').addEventListener('click', step);
+  $('#mctsRun').addEventListener('click', () => {
+    if (running) { stopRun(); return; }
+    $('#mctsRun').textContent = 'Pause';
+    running = setInterval(step, 700);
+  });
+  $('#mctsReset').addEventListener('click', reset);
+  cSlider.addEventListener('input', () => { c = parseFloat(cSlider.value); cVal.textContent = c.toFixed(2); });
+
+  reset();
+}
+
+/* =====================================================================
+   06 — planning-budget experiment
+   ===================================================================== */
+function initBudget() {
+  const barsEl = $('#budBars'), infoEl = $('#budInfo');
+  const NS_LIST = [0, 1, 2, 5, 10, 20, 50];
+  let done = false;
+
+  function runDyna(n, seed) {
+    const rnd = mulberry32(seed);
+    const save = Math.random;
+    Math.random = rnd;
+    const Q = new Float64Array(GN * GN * 4), model = new Map(), pairs = [];
+    let r = GSTART[0], c = GSTART[1], steps = 0;
+    const recent = [];
+    let solved = 4000;
+    for (let s = 0; s < 4000; s++) {
+      const a = gEps(Q, r, c, EPS);
+      const o = gStep(r, c, a);
+      const qi = (r * GN + c) * 4 + a;
+      Q[qi] += ALPHA * (o.r + GAMMA * (o.done ? 0 : gMaxQ(Q, o.nr, o.nc)) - Q[qi]);
+      const key = r + ',' + c + ',' + a;
+      if (!model.has(key)) { model.set(key, o); pairs.push(key); }
+      r = o.nr; c = o.nc; steps++;
+      for (let k = 0; k < n; k++) {
+        const k2 = pairs[(Math.random() * pairs.length) | 0];
+        const p = k2.split(',').map(Number);
+        const m = model.get(k2);
+        const qi2 = (p[0] * GN + p[1]) * 4 + p[2];
+        Q[qi2] += ALPHA * (m.r + GAMMA * gMaxQ(Q, m.nr, m.nc) - Q[qi2]);
+      }
+      if (o.done || steps > 250) {
+        recent.push(steps); if (recent.length > 20) recent.shift();
+        steps = 0; r = GSTART[0]; c = GSTART[1];
+        if (recent.length >= 20 && solved === 4000) {
+          const m = recent.reduce((x, y) => x + y, 0) / recent.length;
+          if (m < 11) solved = s + 1;
+        }
+      }
+    }
+    Math.random = save;
+    return solved;
+  }
+
+  function measure() {
+    if (done) return;
+    barsEl.innerHTML = `<div class="bcol"><div class="bval">…</div><div class="bbar" style="height:2px"></div><div class="bcap">running</div></div>`;
+    setTimeout(() => {
+      const results = NS_LIST.map(n => {
+        let tot = 0;
+        for (const seed of [1234, 5678, 9012]) tot += runDyna(n, seed + n * 97);
+        return tot / 3;
+      });
+      const mx = Math.max(...results);
+      barsEl.innerHTML = NS_LIST.map((n, i) => {
+        const h = Math.max(3, (results[i] / mx) * 118);
+        return `<div class="bcol"><div class="bval">${results[i].toFixed(0)}</div><div class="bbar" style="height:${h.toFixed(1)}px"></div><div class="bcap">n=${n}</div></div>`;
+      }).join('');
+      const drop = results[0] / results[results.length - 1];
+      infoEl.textContent = `n=0 needs ${results[0].toFixed(0)} real steps; n=10 needs ${results[4].toFixed(0)}; n=50 needs ${results[results.length - 1].toFixed(0)} (${drop.toFixed(1)}× fewer than n=0).`;
+      done = true;
+    }, 30);
+  }
+  $('#budRun').addEventListener('click', measure);
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initModel();
+  initDyna();
+  initPriority();
+  initCoverage();
+  initMCTS();
+  initBudget();
+  initScroll();
+});
+</script>
+</body>
+</html>

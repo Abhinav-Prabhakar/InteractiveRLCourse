@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi-Agent Reinforcement Learning</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+/* ---------------- chapter additions ---------------- */
+table.matrix.payoff td{width:96px;height:56px;font-size:13px;background:#fafafa;cursor:default;line-height:1.4}
+table.matrix.payoff td .pv{display:block}
+table.matrix.payoff td.rbr{background:#eef2ff;color:#1e3a8a}
+table.matrix.payoff td.cbr{box-shadow:inset 0 0 0 2px #2563eb}
+table.matrix.payoff td.ne{background:#111;color:#fff;font-weight:600}
+table.matrix.payoff td.ne .pv{color:#fff}
+.gridlab{font-size:11px;fill:#9ca3af;font-family:ui-monospace,monospace}
+.badge{display:inline-block;font-family:ui-monospace,monospace;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:#f4f4f5;color:#111}
+.badge.ok{background:#111;color:#fff}
+.badge.bad{background:#fee2e2;color:#991b1b}
+.eqbox.mini .katex-display{margin:.6em 0!important}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  table.matrix.payoff td{width:74px;height:50px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Multi-Agent RL</a>
+    <nav class="nav">
+      <a href="#games">Markov games</a>
+      <a href="#ctde">CTDE</a>
+      <a href="#maddpg">MADDPG</a>
+      <a href="#qmix">QMIX</a>
+      <a href="#nav">Navigation</a>
+      <a href="#nonstationary">Non-stationarity</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Many Learners</p>
+    <h1>Multi-Agent<br>Reinforcement Learning</h1>
+    <p class="lede">One agent is a decision problem. Several agents learning at once is a moving target — every policy is part of everybody else's environment.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="games">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>Markov games</h2>
+      <p>Every chapter so far assumed the world does not care what you learn. Put other learners inside it and that assumption is exactly what fails: the next state now depends on <em>everyone's</em> actions, and everyone keeps changing. A <b>Markov game</b> (or stochastic game) is the object that keeps the Markov property honest under that pressure.</p>
+      <div class="eqbox">
+        $$\mathcal{M}=\big\langle \mathcal{S},\ \{\mathcal{A}_i\}_{i=1}^{n},\ P,\ \{R_i\}_{i=1}^{n},\ \gamma\big\rangle,
+        \qquad
+        P(s'\mid s,\mathbf{a}),\quad
+        R_i(s,\mathbf{a})=\mathbb{E}\!\left[r_{i,t+1}\mid S_t=s,\ \mathbf{A}_t=\mathbf{a}\right]$$
+      </div>
+      <p>Here $\mathbf{a}=(a_1,\dots,a_n)$ is the <b>joint action</b>. Each agent maximizes its own return $G_i=\sum_{k=0}^{\infty}\gamma^{k}r_{i,t+k+1}$, and a <b>policy</b> is still local, $a_i\sim\pi_i(\cdot\mid s)$ — the coupling is entirely in the transitions and rewards. Cooperative, competitive, and mixed settings are the same tuple with different reward structure: one shared $R$, $R_1=-R_2$, or anything in between.</p>
+      <p>Where a single agent asks "which action is best," a game asks "which action is best <em>given what everyone else does</em>." A <b>best response</b> is</p>
+      <div class="eqbox">
+        $$\pi_i^{\star}\in\arg\max_{\pi_i}\ \mathbb{E}_{\pi_i,\pi_{-i}}\!\big[G_i\big] .$$
+      </div>
+      <p>A profile $(\pi_1^\star,\dots,\pi_n^\star)$ is a <b>Nash equilibrium</b> when no agent gains by deviating alone:</p>
+      <div class="eqbox">
+        $$\mathbb{E}_{\pi_i^{\star},\pi_{-i}^{\star}}\!\big[G_i\big]\ \ge\ \mathbb{E}_{\pi_i,\pi_{-i}^{\star}}\!\big[G_i\big]
+        \qquad \forall\,\pi_i,\ \forall\,i .$$
+      </div>
+      <div class="note">
+        <b>The single-agent $\max$ is gone.</b> A finite game always has at least one Nash equilibrium, but it need not be unique or good, and independent learning need not reach it. Every chapter before this one quietly assumed the argmax was well defined; here it becomes part of the problem.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · payoffs, best responses, Nash</span>
+        <div class="btnrow" id="payoffPresets">
+          <button data-t="5" data-s="0" class="active">Prisoner's dilemma</button>
+          <button data-t="2" data-s="-1">Stag hunt</button>
+          <button data-t="5" data-s="3">Chicken</button>
+          <button data-t="2" data-s="1">Harmony</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 300px">
+          <p class="small muted" style="margin-top:0">Each cell shows $(\text{row},\, \text{col})$ payoffs. Blue = row player's best response in that column; ring = column player's best response in that row; black = mutual best response, i.e. a <b>Nash equilibrium</b>.</p>
+          <div id="payoffMatrix"></div>
+          <div class="legend" style="justify-content:flex-start;margin-top:14px">
+            <span style="color:#2563eb">■ row BR</span><span style="color:#2563eb">▢ col BR</span><span style="color:#111">■ Nash</span>
+          </div>
+        </div>
+
+        <div class="col" style="flex:1 1 280px">
+          <div class="slider-row">
+            <span class="small muted">temptation $T$</span>
+            <input type="range" id="payT" min="2" max="6" step="0.1" value="5" aria-label="temptation payoff">
+            <span class="val" id="payTVal">5.0</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">sucker $S$</span>
+            <input type="range" id="payS" min="-2" max="2" step="0.1" value="0" aria-label="sucker payoff">
+            <span class="val" id="paySVal">0.0</span>
+          </div>
+          <h4 style="margin-bottom:4px">Deviation gain at $(\text{D},\text{D})$</h4>
+          <div class="eqbox mini" id="payoffEq" style="margin-top:6px"></div>
+          <p class="small muted" id="payoffInfo" style="margin:6px 0 0">—</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="ctde">
+  <div class="wrap">
+    <h2><span class="num">02</span>Centralized training, decentralized execution</h2>
+    <p>The defining constraint of the field is that at <em>execution</em> each agent must act alone — it cannot read the others' actions, and often cannot see the whole state. A <b>decentralized policy</b> is therefore a function of a local observation only:</p>
+    <div class="eqbox">
+      $$a_i\sim\pi_i(\cdot\mid o_i),\qquad o_i=\mathcal{O}_i(s).$$
+    </div>
+    <p>Centralized training, decentralized execution (<b>CTDE</b>) is the observation that this need not constrain <em>training</em>. We can learn each policy with a critic that sees privileged information — the global state $s$ and the full joint action $\mathbf{a}$ — and throw that critic away at the end. Only the actor survives deployment.</p>
+    <div class="eqbox">
+      $$\underbrace{Q_{\text{tot}}(s,\mathbf{a})}_{\text{centralized critic}}\ \longrightarrow\ \underbrace{\pi_i(a_i\mid o_i)}_{\text{decentralized actor}} .$$
+    </div>
+    <p>Parameter sharing tightens the loop: when agents are interchangeable, one network $\pi_\theta$ with the agent id appended to $o_i$ learns from every agent's experience at once. Homogeneity becomes sample efficiency.</p>
+    <div class="note">
+      <b>Why it is not cheating.</b> Nothing at execution reads the central state or the joint action: the experimenter's information is used only to shape the gradient, and $s,\mathbf{a}$ survive only inside the loss, never inside the deployed policy.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="maddpg">
+  <div class="wrap">
+    <h2><span class="num">03</span>MADDPG: a critic that sees everything</h2>
+    <p><b>MADDPG</b> is the most direct way to spend centralized training. Give each agent a deterministic actor $\mu_i(o_i;\theta_i)$ and a critic $Q_i^{\mu}(s,a_1,\dots,a_n)$ that is conditioned on <em>every</em> agent's action. The critic's regression target is then an ordinary Bellman target:</p>
+    <div class="eqbox">
+      $$y_i=r_i+\gamma\,Q_i^{\mu'}\!\big(s',a_1',\dots,a_n'\big)\Big|_{a_j'=\mu_j'(o_j')} .$$
+    </div>
+    <p>Because the target is conditioned on the other policies, it stays stationary even while those policies improve: from each critic's point of view the environment no longer moves. Each actor then ascends the deterministic policy gradient through its own critic, treating the other agents' actions as fixed inputs:</p>
+    <div class="eqbox">
+      $$\nabla_{\theta_i}J(\theta_i)=\mathbb{E}\Big[\nabla_{\theta_i}\mu_i(o_i)\;\nabla_{a_i}Q_i^{\mu}(s,a_1,\dots,a_n)\big|_{a_i=\mu_i(o_i)}\Big] .$$
+    </div>
+    <p>The critic is fit by the usual squared TD error over a replay buffer, using slowly-updated target networks $\mu'$, $Q'$ exactly as in single-agent DDPG. Drop the assumption that every agent sees $s$, and $s\to(o_1,\dots,o_n)$ is the standard partial-observability patch.</p>
+    <div class="note">
+      <b>Each critic is stationary even though the world is not.</b> That single conditioning choice — feeding the others' actions into the critic — is where CTDE pays for itself. The price is a critic whose input grows with the number of agents, one per agent.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="qmix">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>QMIX: factorizing the joint value</h2>
+      <p>MADDPG centralizes the <em>critic</em> but still learns a joint object. <b>QMIX</b> attacks the joint action space itself. Each agent keeps a small utility $Q_i(o_i,a_i)$, and a <b>mixing network</b> combines them into one joint value using weights that depend only on the global state:</p>
+      <div class="eqbox">
+        $$Q_{\text{tot}}(s,\mathbf{a})=f_{\phi}\big(Q_1(o_1,a_1),\dots,Q_n(o_n,a_n);\,s\big).$$
+      </div>
+      <p>Left unconstrained this buys nothing. The trick is a single <b>monotonicity constraint</b>: every mixing weight is non-negative, so $Q_{\text{tot}}$ is non-decreasing in each $Q_i$,</p>
+      <div class="eqbox">
+        $$\frac{\partial Q_{\text{tot}}}{\partial Q_i}\ \ge\ 0\quad\forall i
+        \qquad\Longrightarrow\qquad
+        \begin{aligned}
+        \arg\max_{\mathbf{a}}Q_{\text{tot}}(s,\mathbf{a})
+        &=\Big(\arg\max_{a_1}Q_1(o_1,a_1),\ \dots,\\
+        &\qquad\ \arg\max_{a_n}Q_n(o_n,a_n)\Big)
+        \end{aligned}$$
+      </div>
+      <p>Read that last identity back: the $\max$ over the exponential joint action space collapses to $n$ independent $\max$es, because a non-decreasing function can never trade one agent's utility off against another's. Decentralized greedy selection is therefore <em>exact</em>, not approximate. Training is off-policy TD on $Q_{\text{tot}}$ with targets from a target network:</p>
+      <div class="eqbox">
+        $$\mathcal{L}(\phi,\theta)=\mathbb{E}_{\mathcal{D}}\Big[\big(r+\gamma\max_{\mathbf{a}'}Q_{\text{tot}}(s',\mathbf{a}';\phi^-)-Q_{\text{tot}}(s,\mathbf{a};\phi)\big)^{2}\Big] .$$
+      </div>
+      <div class="note">
+        <b>Monotonicity is the whole story.</b> Non-negative weights are the entire bridge between a joint value and decentralized actors. Loosen the sign and the identity collapses — the greedy actions stop agreeing — which is exactly what the mixing weight below lets you break.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · a two-agent monotone mixer</span>
+        <div class="btnrow">
+          <button id="mixReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <svg id="mixSvg" viewBox="0 0 380 250" role="img" aria-label="QMIX mixing network"></svg>
+        </div>
+
+        <div class="col" style="flex:1 1 300px">
+          <p class="small muted" style="margin-top:0">Agent utilities are fixed; drag the mixing weights. Negative weights are unconstrained QMIX — watch decentralized greedy selection break.</p>
+          <div class="slider-row">
+            <span class="small muted">$w_1$</span>
+            <input type="range" id="mixW1" min="-1" max="2" step="0.05" value="1.2" aria-label="mixing weight one">
+            <span class="val" id="mixW1Val">1.20</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$w_2$</span>
+            <input type="range" id="mixW2" min="-1" max="2" step="0.05" value="0.8" aria-label="mixing weight two">
+            <span class="val" id="mixW2Val">0.80</span>
+          </div>
+          <div id="mixTable" style="margin:12px 0 4px"></div>
+          <div class="eqbox mini" id="mixEq"></div>
+          <p class="small muted" id="mixInfo" style="margin:6px 0 0"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="nav">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Cooperative navigation</h2>
+      <p>A $5\times5$ grid, two agents, two landmarks. The agents move simultaneously — <em>stay, up, right, down, left</em> — and both reward their own progress. Each step costs $0.1$; each landmark pays $+1$ the first time an agent covers it; the episode ends once both are covered. There is no random transition and no hidden state, only the coupling.</p>
+      <div class="eqbox">
+        $$r(s,\mathbf{a})=-0.1\ \text{(per step)}+\mathbf{1}\{\text{a new landmark is covered}\},\qquad
+        \text{end when both are covered}.$$
+      </div>
+      <p>A joint critic solves this exactly by value iteration over the joint state $s=(p_1,p_2,\text{covered})$:</p>
+      <div class="eqbox">
+        $$V(s)=\max_{\mathbf{a}}\Big[r(s,\mathbf{a})+\gamma\,V\big(s'(s,\mathbf{a})\big)\Big],\qquad
+        \gamma=0.95 .$$
+      </div>
+      <p>An <b>independent</b> agent instead solves only its own problem, $\max_{a_i}$, with the other agent invisible. Both players find the same near landmark most attractive, so both chase it and one of them is wasted. Switch the toggle and compare.</p>
+      <div class="note">
+        <b>Coordination is a property of the value function, not a tie-break.</b> Nothing in either agent's local reward says "go elsewhere"; that advice only exists in the joint value, which is why the centralized critic is the thing that has to see both positions at once.
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · joint vs. independent critics</span>
+        <div class="btnrow" id="navModeBtns">
+          <button data-mode="joint" class="active">Joint critic (CTDE)</button>
+          <button data-mode="ind">Independent critics</button>
+        </div>
+      </div>
+
+      <div class="gridwrap">
+        <div class="gw-left">
+          <svg id="navSvg" viewBox="0 0 300 300" role="img" aria-label="two agents covering landmarks on a grid"></svg>
+          <div class="legend"><span style="color:#111">● agent 1</span><span style="color:#2563eb">● agent 2</span><span style="color:#c2c9d4">■ landmark</span></div>
+          <div class="btnrow" style="margin-top:16px;justify-content:center">
+            <button id="navRun" class="primary">Run ▶</button>
+            <button id="navReset">Reset</button>
+          </div>
+          <p class="small muted" id="navInfo" style="text-align:center;margin-top:12px;font-family:ui-monospace,monospace"></p>
+        </div>
+
+        <div class="gw-right">
+          <p class="small muted" style="margin-top:0" id="navBlurb">Joint value iteration backs up over all $5\times5$ joint actions; the greedy policy splits the agents.</p>
+          <div id="navBars" style="margin:10px 0 4px"></div>
+          <div class="eqbox mini" id="navEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="nonstationary">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>Non-stationarity and equilibrium selection</h2>
+      <p>Matching pennies has no randomness, two actions per player, and no coordination problem — and it still defeats independent learning. The row player wants to match, the column player wants to mismatch, so the unique Nash equilibrium is the mixed profile $(\tfrac12,\tfrac12)$ and neither player can commit to an action. Write $p=\mathbb{P}(\text{row plays heads})$ and $q=\mathbb{P}(\text{col plays heads})$; the row player's expected payoff is</p>
+      <div class="eqbox">
+        $$u_1(p,q)=(2p-1)(2q-1),\qquad u_2(p,q)=-u_1(p,q).$$
+      </div>
+      <p>Simultaneous gradient ascent on each player's own payoff gives, since $\partial u_1/\partial p=2(2q-1)$ and $\partial u_2/\partial q=-2(2p-1)$,</p>
+      <div class="eqbox">
+        $$\Delta p_t=\eta\,(2q_t-1),\qquad \Delta q_t=-\eta\,(2p_t-1) .$$
+      </div>
+      <p>This is a rotation, not a contraction: every step turns the pair $(p,q)$ around $(\tfrac12,\tfrac12)$ by roughly $2\eta$ radians. The Nash equilibrium is the <em>centre</em> of an orbit no independent learner settles on. Run it and the strategy pair circles forever.</p>
+      <div class="note">
+        <b>Non-stationarity is the mathematical content, not a nuisance.</b> Every convergence proof in the earlier chapters assumed a fixed transition kernel $P(s'\mid s,a)$. Here the kernel <em>is</em> the other learner, and it changes with every update — so the target keeps moving under the agent's feet.
+      </div>
+      <p>In games with several equilibria the update rule does more than converge; it <em>selects</em>. Coordination games reward both payoff dominance and risk dominance, and the equilibrium independent learners drift into depends on initialization, learning rates, and the order of updates — a choice the theory leaves open and practice fixes by accident.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · gradient dynamics on matching pennies</span>
+        <div class="btnrow">
+          <button id="nsRun" class="primary">Run ▶</button>
+          <button id="nsReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <svg id="nsSvg" viewBox="0 0 300 300" role="img" aria-label="phase portrait of mixed strategies"></svg>
+          <div class="legend"><span>$p$: row plays heads</span><span>$q$: column plays heads</span></div>
+        </div>
+
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row">
+            <span class="small muted">$\eta$</span>
+            <input type="range" id="nsEta" min="0.01" max="0.3" step="0.005" value="0.06" aria-label="learning rate">
+            <span class="val" id="nsEtaVal">0.060</span>
+          </div>
+          <div id="nsBars" style="margin:14px 0 4px"></div>
+          <div class="eqbox mini" id="nsEq"></div>
+          <p class="small muted" id="nsInfo" style="margin:6px 0 0;font-family:ui-monospace,monospace"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">07</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Independent learners</th><th>CTDE (MADDPG · QMIX)</th></tr>
+      <tr><td>What is learned</td><td>One value or policy per agent, treating others as environment</td><td>A centralized critic plus decentralized actors</td></tr>
+      <tr><td>Training information</td><td>Local observation only</td><td>Global state and the full joint action</td></tr>
+      <tr><td>Execution information</td><td>Local observation only</td><td>Local observation only — the critic is discarded</td></tr>
+      <tr><td>Credit assignment</td><td>Implicit, noisy: a teammate's action looks like noise</td><td>Explicit: the critic conditions on everyone's action</td></tr>
+      <tr><td>Stationarity</td><td>Broken — the kernel moves as others learn</td><td>Restored for the critic by conditioning on $\mathbf{a}$</td></tr>
+      <tr><td>Joint action space</td><td>Avoided, at the cost of coordination</td><td>QMIX factorizes it; MADDPG keeps it in the critic</td></tr>
+      <tr><td>Failure mode</td><td>Chasing a moving target; cycles or miscoordination</td><td>Critic input grows with $n$; monotonicity restricts $f_\phi$</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      \mathcal{M} &= \big\langle \mathcal{S},\{\mathcal{A}_i\},P,\{R_i\},\gamma\big\rangle,
+        \qquad P(s'\mid s,\mathbf{a}),\quad R_i(s,\mathbf{a})\\[2pt]
+      \pi_i^{\star} &\in \arg\max_{\pi_i}\mathbb{E}_{\pi_i,\pi_{-i}}[G_i]
+        \quad\text{(Nash when it holds for every } i)\\[2pt]
+      \nabla_{\theta_i}J(\theta_i) &= \mathbb{E}\Big[\nabla_{\theta_i}\mu_i(o_i)\,\nabla_{a_i}Q_i^{\mu}(s,a_1,\dots,a_n)\big|_{a_i=\mu_i(o_i)}\Big]\\[2pt]
+      \frac{\partial Q_{\text{tot}}}{\partial Q_i}\ge 0 &\Longrightarrow
+        \arg\max_{\mathbf{a}}Q_{\text{tot}}=\big(\arg\max_{a_1}Q_1,\dots,\arg\max_{a_n}Q_n\big)\\[2pt]
+      \Delta p_t &= \eta(2q_t-1),\qquad \Delta q_t=-\eta(2p_t-1)
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything in the next part builds on this: meta-reinforcement learning makes the <em>task</em> another moving target, distributional RL makes the <em>return</em> a distribution, and imitation learning makes the <em>reward</em> come from demonstrations instead of the environment.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="16-hierarchical-reinforcement-learning.html"><span class="pg-k">Previous</span><span class="pg-t">Hierarchical RL</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="18-meta-reinforcement-learning-and-multi-task-rl.html"><span class="pg-k">Next</span><span class="pg-t">Meta-RL &amp; Multi-Task RL</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Change the payoffs and watch the equilibria move.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+/* =====================================================================
+   01 — payoff bimatrix: best responses and Nash
+   ===================================================================== */
+function initPayoff() {
+  const R = 3, P = 1;
+  const matrixEl = $('#payoffMatrix');
+  const eqEl = $('#payoffEq');
+  const infoEl = $('#payoffInfo');
+  const tSlider = $('#payT'), sSlider = $('#payS');
+  const tVal = $('#payTVal'), sVal = $('#paySVal');
+  const presetBtns = $$('#payoffPresets button');
+
+  function fmt(x) { return x.toFixed(1); }
+
+  function update() {
+    const Tt = parseFloat(tSlider.value), S = parseFloat(sSlider.value);
+    tVal.textContent = fmt(Tt); sVal.textContent = fmt(S);
+
+    const rp = { CC: R, CD: S, DC: Tt, DD: P };
+    const cp = { CC: R, CD: Tt, DC: S, DD: P };
+    const rowBR = {}, colBR = {};
+    [['C', ['CC', 'DC']], ['D', ['CD', 'DD']]].forEach(([col, opts]) => {
+      let b = opts[0]; opts.forEach(k => { if (rp[k] > rp[b]) b = k; });
+      rowBR[col] = b;
+    });
+    [['C', ['CC', 'CD']], ['D', ['DC', 'DD']]].forEach(([row, opts]) => {
+      let b = opts[0]; opts.forEach(k => { if (cp[k] > cp[b]) b = k; });
+      colBR[row] = b;
+    });
+
+    const keys = ['CC', 'CD', 'DC', 'DD'];
+    const rowOf = { CC: 'C', CD: 'C', DC: 'D', DD: 'D' };
+    const colOf = { CC: 'C', CD: 'D', DC: 'C', DD: 'D' };
+    const neat = {};
+    const nash = [];
+    keys.forEach(k => {
+      const isR = rowBR[colOf[k]] === k;
+      const isC = colBR[rowOf[k]] === k;
+      neat[k] = { isR, isC, ne: isR && isC };
+      if (isR && isC) nash.push(`(${rowOf[k]},${colOf[k]})`);
+    });
+
+    let html = '<table class="matrix payoff"><tr><th></th><th>col C</th><th>col D</th></tr>';
+    ['C', 'D'].forEach(row => {
+      html += `<tr><th>row ${row}</th>`;
+      ['C', 'D'].forEach(col => {
+        const k = row + col, st = neat[k];
+        const cls = st.ne ? 'ne' : [st.isR ? 'rbr' : '', st.isC ? 'cbr' : ''].filter(Boolean).join(' ');
+        html += `<td data-c="${k}" class="${cls}"><span class="pv">${fmt(rp[k])}</span><span class="pv">${fmt(cp[k])}</span></td>`;
+      });
+      html += '</tr>';
+    });
+    html += `<tr class="sum"><td></td><td>row, col payoffs</td><td></td></tr></table>`;
+    matrixEl.innerHTML = html;
+
+    T(eqEl,
+      `\\begin{aligned}
+        (\\text{C},\\text{C}) &:\\ T-R = \\mathbf{${fmt(Tt - R)}}\\\\
+        (\\text{D},\\text{D}) &:\\ S-P = \\mathbf{${fmt(S - P)}}
+      \\end{aligned}`, true);
+
+    infoEl.innerHTML = nash.length
+      ? `Pure-strategy Nash: <b>${nash.join(', ')}</b>`
+      : `No pure-strategy Nash — the only equilibrium is mixed.`;
+
+    presetBtns.forEach(b => {
+      const on = Math.abs(parseFloat(b.dataset.t) - Tt) < 1e-6 && Math.abs(parseFloat(b.dataset.s) - S) < 1e-6;
+      b.classList.toggle('active', on);
+    });
+  }
+
+  tSlider.addEventListener('input', update);
+  sSlider.addEventListener('input', update);
+  presetBtns.forEach(b => b.addEventListener('click', () => {
+    tSlider.value = b.dataset.t;
+    sSlider.value = b.dataset.s;
+    update();
+  }));
+  update();
+}
+
+/* =====================================================================
+   04 — QMIX monotone mixer
+   ===================================================================== */
+function initMix() {
+  const q1 = [0.2, 0.9], q2 = [0.6, 0.1];
+  const labels = ['a', 'b'];
+  const svg = $('#mixSvg');
+  const tableEl = $('#mixTable');
+  const eqEl = $('#mixEq');
+  const infoEl = $('#mixInfo');
+  const w1s = $('#mixW1'), w2s = $('#mixW2');
+  const w1v = $('#mixW1Val'), w2v = $('#mixW2Val');
+  const reset = $('#mixReset');
+
+  svg.innerHTML = '';
+  el('text', { x: 58, y: 24, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 650, fill: '#111' }, svg).textContent = 'Agent 1';
+  el('text', { x: 58, y: 238, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 650, fill: '#111' }, svg).textContent = 'Agent 2';
+
+  const n1 = el('circle', { cx: 58, cy: 66, r: 28, fill: '#fff', stroke: '#111', 'stroke-width': 1.6 }, svg);
+  const n2 = el('circle', { cx: 58, cy: 180, r: 28, fill: '#fff', stroke: '#2563eb', 'stroke-width': 1.6 }, svg);
+  const t1 = el('text', { x: 58, y: 71, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 650, fill: '#111' }, svg);
+  const t2 = el('text', { x: 58, y: 185, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 650, fill: '#2563eb' }, svg);
+  t1.textContent = 'Q₁'; t2.textContent = 'Q₂';
+  el('text', { x: 58, y: 108, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280', 'font-family': 'ui-monospace, monospace' }, svg).textContent = '0.2 · 0.9';
+  el('text', { x: 58, y: 222, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280', 'font-family': 'ui-monospace, monospace' }, svg).textContent = '0.6 · 0.1';
+
+  el('path', { d: 'M 86 66 L 188 112', stroke: '#c2c9d4', 'stroke-width': 1.5, fill: 'none', 'marker-end': 'url(#mkMix)' }, svg);
+  el('path', { d: 'M 86 180 L 188 148', stroke: '#c2c9d4', 'stroke-width': 1.5, fill: 'none', 'marker-end': 'url(#mkMix)' }, svg);
+  const defs = el('defs', {}, svg);
+  const mk = el('marker', { id: 'mkMix', viewBox: '0 0 10 10', refX: 10, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto', markerUnits: 'userSpaceOnUse' }, defs);
+  el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: '#c2c9d4' }, mk);
+
+  const wt1 = el('text', { x: 132, y: 76, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#111' }, svg);
+  const wt2 = el('text', { x: 132, y: 176, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#111' }, svg);
+
+  el('rect', { x: 188, y: 96, width: 128, height: 68, rx: 12, fill: '#fafafa', stroke: '#e8e8e8' }, svg);
+  el('text', { x: 252, y: 120, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 650, fill: '#6b7280' }, svg).textContent = 'MIXING  f';
+  el('text', { x: 252, y: 138, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#9ca3af' }, svg).textContent = 'weights ← global state s';
+  const qt = el('text', { x: 252, y: 158, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 650, fill: '#111' }, svg);
+
+  el('path', { d: 'M 316 130 L 348 130', stroke: '#111', 'stroke-width': 1.6, fill: 'none', 'marker-end': 'url(#mkMix2)' }, svg);
+  const mk2 = el('marker', { id: 'mkMix2', viewBox: '0 0 10 10', refX: 10, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto', markerUnits: 'userSpaceOnUse' }, defs);
+  el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: '#111' }, mk2);
+  el('text', { x: 352, y: 134, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 650, fill: '#111' }, svg).textContent = 'Q';
+
+  function update() {
+    const w1 = parseFloat(w1s.value), w2 = parseFloat(w2s.value);
+    w1v.textContent = w1.toFixed(2); w2v.textContent = w2.toFixed(2);
+    wt1.textContent = 'w₁=' + w1.toFixed(2);
+    wt2.textContent = 'w₂=' + w2.toFixed(2);
+    wt1.setAttribute('fill', w1 < 0 ? '#dc2626' : '#111');
+    wt2.setAttribute('fill', w2 < 0 ? '#dc2626' : '#111');
+
+    let best = -Infinity, ba1 = 0, ba2 = 0;
+    const Q = [[0, 0], [0, 0]];
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+      Q[i][j] = w1 * q1[i] + w2 * q2[j];
+      if (Q[i][j] > best) { best = Q[i][j]; ba1 = i; ba2 = j; }
+    }
+    const g1 = q1[0] >= q1[1] ? 0 : 1;
+    const g2 = q2[0] >= q2[1] ? 0 : 1;
+    const agree = (g1 === ba1 && g2 === ba2);
+
+    qt.textContent = 'Q_tot = ' + best.toFixed(2);
+    const maxAbs = Math.max(0.05, ...Q.flat().map(Math.abs));
+    let html = '<table class="matrix"><tr><th></th><th>a₂=a</th><th>a₂=b</th></tr>';
+    for (let i = 0; i < 2; i++) {
+      html += `<tr><th>a₁=${labels[i]}</th>`;
+      for (let j = 0; j < 2; j++) {
+        const isJoint = (i === ba1 && j === ba2);
+        const isDec = (i === g1 && j === g2);
+        const cls = isJoint ? 'hl' : (isDec ? 'nz' : '');
+        html += `<td class="${cls}">${Q[i][j].toFixed(2)}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</table>';
+    tableEl.innerHTML = html;
+
+    T(eqEl,
+      `Q_{\\text{tot}}=w_1Q_1(a_1)+w_2Q_2(a_2)=${w1.toFixed(2)}\\cdot${q1[ba1].toFixed(2)}+${w2.toFixed(2)}\\cdot${q2[ba2].toFixed(2)}=\\mathbf{${best.toFixed(3)}}`,
+      true);
+
+    infoEl.innerHTML = agree
+      ? `Joint <b>(${labels[ba1]},${labels[ba2]})</b> = decentralized <b>(${labels[g1]},${labels[g2]})</b> &nbsp;<span class="badge ok">agree</span>`
+      : `Joint <b>(${labels[ba1]},${labels[ba2]})</b> ≠ decentralized <b>(${labels[g1]},${labels[g2]})</b> &nbsp;<span class="badge bad">monotonicity broken</span>`;
+  }
+
+  w1s.addEventListener('input', update);
+  w2s.addEventListener('input', update);
+  reset.addEventListener('click', () => { w1s.value = '1.2'; w2s.value = '0.8'; update(); });
+  update();
+}
+/* =====================================================================
+   05 — cooperative navigation: joint vs independent critics
+   ===================================================================== */
+function initNav() {
+  const N = 5, G = 0.95, STEP = -0.1, HORIZON = 8;
+  const DIRS = [[0, 0], [-1, 0], [0, 1], [1, 0], [0, -1]];
+  const idx = (r, c) => r * N + c, rc = i => [Math.floor(i / N), i % N];
+  const L1 = idx(0, 0), L2 = idx(4, 4);
+  const move = (p, a) => {
+    const [r, c] = rc(p); let nr = r + DIRS[a][0], nc = c + DIRS[a][1];
+    if (nr < 0 || nr >= N || nc < 0 || nc >= N) { nr = r; nc = c; }
+    return idx(nr, nc);
+  };
+  function trans(s, a1, a2) {
+    const a = s % 25, b = Math.floor(s / 25) % 25, mask = Math.floor(s / 625);
+    let na = move(a, a1), nb = move(b, a2);
+    if (na === nb && a !== b) { na = a; nb = b; }
+    let nm = mask, r = STEP;
+    if (na === L1 || nb === L1) nm |= 1;
+    if (na === L2 || nb === L2) nm |= 2;
+    if ((nm & 1) && !(mask & 1)) r += 1;
+    if ((nm & 2) && !(mask & 2)) r += 1;
+    return [na + 25 * nb + 625 * nm, r, nm];
+  }
+
+  const S = 25 * 25 * 4;
+  const V = new Float64Array(S), POL = new Int16Array(S);
+  for (let it = 0; it < 400; it++) {
+    let d = 0;
+    for (let s = 0; s < S; s++) {
+      if (Math.floor(s / 625) === 3) { V[s] = 0; continue; }
+      let best = -1e9, ba = 0;
+      for (let j = 0; j < 25; j++) {
+        const q = trans(s, j % 5, Math.floor(j / 5))[1] + G * V[trans(s, j % 5, Math.floor(j / 5))[0]];
+        if (q > best) { best = q; ba = j; }
+      }
+      d = Math.max(d, Math.abs(best - V[s])); V[s] = best; POL[s] = ba;
+    }
+    if (d < 1e-9) break;
+  }
+
+  const SS = 25 * 4, Vi = new Float64Array(SS), PI = new Int16Array(SS);
+  for (let it = 0; it < 400; it++) {
+    let d = 0;
+    for (let s = 0; s < SS; s++) {
+      const m = Math.floor(s / 25);
+      if (m === 3) { Vi[s] = 0; continue; }
+      let best = -1e9, ba = 0;
+      for (let a = 0; a < 5; a++) {
+        const p = s % 25, np = move(p, a); let nm = m, r = -0.05;
+        if (np === L1) nm |= 1; if (np === L2) nm |= 2;
+        if ((nm & 1) && !(m & 1)) r += 1;
+        if ((nm & 2) && !(m & 2)) r += 1;
+        const q = r + G * Vi[np + 25 * nm];
+        if (q > best) { best = q; ba = a; }
+      }
+      d = Math.max(d, Math.abs(best - Vi[s])); Vi[s] = best; PI[s] = ba;
+    }
+    if (d < 1e-9) break;
+  }
+
+  const jp = (() => {
+    let a = idx(2, 0), b = idx(3, 0), mask = 0, s = a + 25 * b;
+    const cells = [[a, b]], cov = [[0, 0]], vs = [V[s]];
+    for (let t = 0; t < HORIZON && mask !== 3; t++) {
+      const j = POL[s], [ns] = trans(s, j % 5, Math.floor(j / 5));
+      mask = trans(s, j % 5, Math.floor(j / 5))[2]; s = ns;
+      cells.push([ns % 25, Math.floor(ns / 25) % 25]);
+      cov.push([mask & 1 ? 1 : 0, mask & 2 ? 1 : 0]);
+      vs.push(V[ns]);
+    }
+    return { cells, cov, vs };
+  })();
+
+  const ip = (() => {
+    let a = idx(2, 0), b = idx(3, 0), ma = 0, mb = 0;
+    const cells = [[a, b]], cov = [[0, 0]], qa = [Vi[a]], qb = [Vi[b]];
+    for (let t = 0; t < HORIZON; t++) {
+      let na = move(a, PI[a + 25 * ma]), nb = move(b, PI[b + 25 * mb]);
+      if (na === nb) { na = a; nb = b; }
+      if (na === L1) ma |= 1; if (na === L2) ma |= 2;
+      if (nb === L1) mb |= 1; if (nb === L2) mb |= 2;
+      a = na; b = nb;
+      cells.push([a, b]);
+      cov.push([(ma | mb) & 1 ? 1 : 0, (ma | mb) & 2 ? 1 : 0]);
+      qa.push(Vi[a + 25 * ma]); qb.push(Vi[b + 25 * mb]);
+    }
+    return { cells, cov, qa, qb };
+  })();
+
+  const svg = $('#navSvg'), bars = $('#navBars'), eqEl = $('#navEq');
+  const info = $('#navInfo'), blurb = $('#navBlurb'), runBtn = $('#navRun');
+  const PAD = 20, CELL = 52;
+  let mode = 'joint', t = 0, running = null;
+  svg.innerHTML = '';
+
+  const cx = c => PAD + c * CELL + CELL / 2, cy = r => PAD + r * CELL + CELL / 2;
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    el('rect', { x: PAD + c * CELL + 1, y: PAD + r * CELL + 1, width: CELL - 2, height: CELL - 2, rx: 7, fill: '#fafafa' }, svg);
+  }
+  const mkLand = i => {
+    const [r, c] = rc(i);
+    return el('rect', { x: cx(c) - 13, y: cy(r) - 13, width: 26, height: 26, rx: 5, fill: '#c2c9d4' }, svg);
+  };
+  const lm1 = mkLand(L1), lm2 = mkLand(L2);
+  const aDot = el('circle', { cx: cx(2), cy: cy(0), r: 13, fill: '#111' }, svg);
+  const aTxt = el('text', { x: cx(2), y: cy(0) + 4, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 650, fill: '#fff' }, svg);
+  const bDot = el('circle', { cx: cx(3), cy: cy(0), r: 13, fill: '#2563eb' }, svg);
+  const bTxt = el('text', { x: cx(3), y: cy(0) + 4, 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 650, fill: '#fff' }, svg);
+  aTxt.textContent = '1'; bTxt.textContent = '2';
+  el('text', { x: PAD + 4, y: PAD - 6, 'font-size': 10.5, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, svg).textContent = '● landmark  ◆ agent';
+
+  bars.innerHTML = `
+    <div class="vrow"><span class="vlabel">L₁</span><div class="vtrack"><div class="vbar pos" style="left:0;transform:none;width:0%"></div></div><span class="vval">0</span></div>
+    <div class="vrow"><span class="vlabel">L₂</span><div class="vtrack"><div class="vbar pos" style="left:0;transform:none;width:0%"></div></div><span class="vval">0</span></div>`;
+
+  function cur() { return mode === 'joint' ? jp : ip; }
+
+  function render() {
+    const P = cur(), k = Math.min(t, P.cells.length - 1);
+    const [a, b] = P.cells[k], cov = P.cov[k];
+    aDot.setAttribute('cx', cx(a % N)); aDot.setAttribute('cy', cy(Math.floor(a / N)));
+    aTxt.setAttribute('x', cx(a % N)); aTxt.setAttribute('y', cy(Math.floor(a / N)) + 4);
+    bDot.setAttribute('cx', cx(b % N)); bDot.setAttribute('cy', cy(Math.floor(b / N)));
+    bTxt.setAttribute('x', cx(b % N)); bTxt.setAttribute('y', cy(Math.floor(b / N)) + 4);
+    lm1.setAttribute('fill', cov[0] ? '#2563eb' : '#c2c9d4');
+    lm2.setAttribute('fill', cov[1] ? '#2563eb' : '#c2c9d4');
+
+    $$('#navBars .vrow')[0].querySelector('.vbar').style.width = cov[0] ? '100%' : '0%';
+    $$('#navBars .vrow')[1].querySelector('.vbar').style.width = cov[1] ? '100%' : '0%';
+    $$('#navBars .vval')[0].textContent = cov[0];
+    $$('#navBars .vval')[1].textContent = cov[1];
+
+    const covered = cov[0] + cov[1];
+    info.innerHTML = `t = ${k}   covered = ${covered}/2  ` +
+      (covered === 2 ? '<span class="badge ok">success</span>' : (k >= P.cells.length - 1 ? '<span class="badge bad">timeout</span>' : ''));
+
+    if (mode === 'joint') {
+      T(eqEl, `V(s_t)=\\max_{\\mathbf{a}}\\big[r+\\gamma V(s')\\big]=\\mathbf{${P.vs[k].toFixed(3)}}`, true);
+    } else {
+      T(eqEl, `Q_1=\\mathbf{${P.qa[k].toFixed(3)}},\\qquad Q_2=\\mathbf{${P.qb[k].toFixed(3)}}`, true);
+    }
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } runBtn.textContent = 'Run ▶'; }
+
+  runBtn.addEventListener('click', () => {
+    if (running) { stop(); return; }
+    if (t >= cur().cells.length - 1) t = 0;
+    runBtn.textContent = 'Pause';
+    running = setInterval(() => {
+      t++;
+      render();
+      if (t >= cur().cells.length - 1) stop();
+    }, 110);
+  });
+  $('#navReset').addEventListener('click', () => { stop(); t = 0; render(); });
+
+  $$('#navModeBtns button').forEach(b => b.addEventListener('click', () => {
+    $$('#navModeBtns button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    mode = b.dataset.mode; stop(); t = 0;
+    blurb.innerHTML = mode === 'joint'
+      ? 'Joint value iteration backs up over all $5\\times5$ joint actions; the greedy policy splits the agents.'
+      : 'Each critic backs up over its own action only, with the teammate invisible; both chase the same landmark.';
+    render();
+  }));
+
+  render();
+}
+
+/* =====================================================================
+   06 — non-stationary gradient dynamics
+   ===================================================================== */
+function initNS() {
+  const svg = $('#nsSvg'), bars = $('#nsBars'), eqEl = $('#nsEq'), info = $('#nsInfo');
+  const etaS = $('#nsEta'), etaV = $('#nsEtaVal'), runBtn = $('#nsRun');
+  const M = 34, W = 300, SZ = W - 2 * M;
+  const X = p => M + p * SZ, Y = q => W - M - q * SZ;
+  svg.innerHTML = '';
+  el('rect', { x: M, y: M, width: SZ, height: SZ, fill: '#fafafa', stroke: '#f0f0f0' }, svg);
+  el('line', { x1: M, x2: W - M, y1: Y(0.5), y2: Y(0.5), stroke: '#ececec' }, svg);
+  el('line', { x1: X(0.5), x2: X(0.5), y1: M, y2: W - M, stroke: '#ececec' }, svg);
+  el('text', { x: W - M, y: W - M + 16, 'text-anchor': 'end', class: 'gridlab' }, svg).textContent = 'p →';
+  el('text', { x: M - 8, y: M + 4, 'text-anchor': 'end', class: 'gridlab' }, svg).textContent = 'q ↑';
+
+  const defs = el('defs', {}, svg);
+  const mk = el('marker', { id: 'nsArr', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 5, markerHeight: 5, orient: 'auto', markerUnits: 'userSpaceOnUse' }, defs);
+  el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: '#d4d4d8' }, mk);
+
+  for (let i = 1; i < 6; i++) for (let j = 1; j < 6; j++) {
+    const p = i / 6, q = j / 6, u = 2 * q - 1, v = -(2 * p - 1), n = Math.hypot(u, v) || 1, L = 11;
+    const ax = X(p), ay = Y(q), dx = u / n * L, dy = -v / n * L;
+    el('line', { x1: ax - dx / 2, y1: ay - dy / 2, x2: ax + dx / 2, y2: ay + dy / 2, stroke: '#d4d4d8', 'stroke-width': 1, 'marker-end': 'url(#nsArr)' }, svg);
+  }
+  el('circle', { cx: X(0.5), cy: Y(0.5), r: 3, fill: '#111' }, svg);
+  el('text', { x: X(0.5) + 7, y: Y(0.5) - 7, 'font-size': 10.5, fill: '#6b7280' }, svg).textContent = 'Nash (½,½)';
+  const trail = el('polyline', { fill: 'none', stroke: '#2563eb', 'stroke-width': 1.6, 'stroke-linejoin': 'round' }, svg);
+  const dot = el('circle', { cx: X(0.35), cy: Y(0.6), r: 5, fill: '#111' }, svg);
+
+  bars.innerHTML = `
+    <div class="vrow"><span class="vlabel">p</span><div class="vtrack"><div class="vbar pos" style="left:0;transform:none;width:35%"></div></div><span class="vval">0.350</span></div>
+    <div class="vrow"><span class="vlabel">q</span><div class="vtrack"><div class="vbar pos" style="left:0;transform:none;width:60%"></div></div><span class="vval">0.600</span></div>
+    <div class="vrow"><span class="vlabel">u₁</span><div class="vtrack"><div class="vzero"></div><div class="vbar neg" style="width:0%"></div></div><span class="vval">0.000</span></div>`;
+
+  let p = 0.35, q = 0.60, eta = 0.06, t = 0, running = null, pts = [[p, q]];
+
+  function render() {
+    const cl = v => Math.max(0, Math.min(1, v));
+    dot.setAttribute('cx', X(cl(p))); dot.setAttribute('cy', Y(cl(q)));
+    trail.setAttribute('points', pts.map(([a, b]) => `${X(cl(a)).toFixed(1)},${Y(cl(b)).toFixed(1)}`).join(' '));
+    const rows = $$('#nsBars .vrow');
+    rows[0].querySelector('.vbar').style.width = (p * 100).toFixed(1) + '%';
+    rows[1].querySelector('.vbar').style.width = (q * 100).toFixed(1) + '%';
+    rows[0].querySelector('.vval').textContent = p.toFixed(3);
+    rows[1].querySelector('.vval').textContent = q.toFixed(3);
+    const u1 = (2 * p - 1) * (2 * q - 1);
+    const ub = rows[2].querySelector('.vbar');
+    ub.style.width = (Math.abs(u1) * 50).toFixed(1) + '%';
+    ub.style.left = '50%';
+    ub.style.transform = u1 >= 0 ? 'none' : 'translateX(-100%)';
+    ub.className = 'vbar ' + (u1 >= 0 ? 'pos' : 'neg');
+    rows[2].querySelector('.vval').textContent = u1.toFixed(3);
+    T(eqEl,
+      `\\begin{aligned}
+        \\Delta p &= \\eta(2q-1) = \\mathbf{${(eta * (2 * q - 1)).toFixed(4)}}\\\\
+        \\Delta q &= -\\eta(2p-1) = \\mathbf{${(-eta * (2 * p - 1)).toFixed(4)}}\\\\
+        u_1 &= (2p-1)(2q-1) = \\mathbf{${u1.toFixed(3)}}
+      \\end{aligned}`, true);
+    info.textContent = `t = ${t}   (p, q) = (${p.toFixed(3)}, ${q.toFixed(3)})`;
+  }
+
+  function step() {
+    q = q - eta * (2 * p - 1);
+    p = p + eta * (2 * q - 1);
+    t++; pts.push([p, q]);
+    if (pts.length > 700) pts.shift();
+    render();
+  }
+  function stop() { if (running) { clearInterval(running); running = null; runBtn.textContent = 'Run ▶'; } }
+
+  runBtn.addEventListener('click', () => {
+    if (running) { stop(); return; }
+    runBtn.textContent = 'Pause';
+    running = setInterval(step, 110);
+  });
+  $('#nsReset').addEventListener('click', () => {
+    stop(); p = 0.35; q = 0.60; t = 0; pts = [[p, q]]; render();
+  });
+  etaS.addEventListener('input', () => {
+    eta = parseFloat(etaS.value); etaV.textContent = eta.toFixed(3); render();
+  });
+  render();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initPayoff();
+  initMix();
+  initNav();
+  initNS();
+  initScroll();
+});
+</script>
+</body>
+</html>

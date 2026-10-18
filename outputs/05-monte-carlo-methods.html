@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 5 · Monte Carlo Methods</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- trajectory ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.chip.bad{background:#fee2e2;color:#991b1b}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:30px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:64px;text-align:right;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 320px;min-width:0}
+.gw-right{flex:1 1 320px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+.grid-svg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:300px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+
+/* ---------------- importance rows ---------------- */
+.isrow{display:grid;grid-template-columns:50px 1fr 128px 54px;gap:10px;align-items:center;font-size:12.5px;font-family:ui-monospace,monospace;margin:9px 0}
+.ischip{font-weight:650;color:#374151}
+.isbar{position:relative;height:20px;background:#fafafa;border:1px solid #f0f0f0;border-radius:6px;overflow:hidden}
+.isfill{position:absolute;top:0;bottom:0;left:0;background:#2563eb;transition:width .15s}
+.isfill.b{background:#c2c9d4}
+.istag{position:absolute;right:6px;top:1px;font-size:11px;font-weight:650;color:#111}
+.isratio{text-align:right;font-weight:650}
+.isrow input[type=range]{margin:0}
+.stat{display:flex;gap:20px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;margin-top:12px}
+.stat b{font-weight:700}
+.chart{width:100%;height:auto;display:block}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .isrow{grid-template-columns:42px 1fr 96px 46px;gap:7px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Ch. 05 · Monte Carlo</a>
+    <nav class="nav">
+      <a href="#sample">Sampling</a>
+      <a href="#prediction">Prediction</a>
+      <a href="#incremental">Incremental</a>
+      <a href="#control">Control</a>
+      <a href="#offpolicy">Off-policy</a>
+      <a href="#weighted">Weighted IS</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Part II · Chapter 5</p>
+    <h1>Monte Carlo Methods</h1>
+    <p class="lede">Estimate value from the only thing an agent actually has — episodes it has lived through — by averaging the returns it saw.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="sample">
+  <div class="wrap">
+    <h2><span class="num">01</span>Learning from experience</h2>
+    <p>Dynamic programming needs the model: to back up a state it must know every $P(s'\mid s,a)$. <b>Monte Carlo</b> (MC) methods discard the model and learn from <b>sampled episodes</b> — sequences $S_0,A_0,R_1,\dots,S_T$ produced by interacting with the world or a simulator.</p>
+    <div class="eqbox">
+      $$v_\pi(s)=\mathbb{E}_\pi\!\left[G_t \mid S_t=s\right]\;\approx\;\frac{1}{|T(s)|}\sum_{t\in T(s)}G_t .$$
+    </div>
+    <p>Here $T(s)$ is the set of times state $s$ was visited and $G_t$ the return that followed. The expectation is simply replaced by a sample average.</p>
+    <div class="note">
+      <b>Sampling replaces the model.</b> MC is unbiased and needs no $P$, but a single episode's return can be far from its mean — the price is variance, paid back over many episodes.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="prediction">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>Monte Carlo prediction</h2>
+      <p>Run a batch of episodes under a fixed policy $\pi$ and, for every visit to $s$, record the return that followed from that point. Two bookkeeping rules:</p>
+      <div class="eqbox">
+        $$\text{first-visit: use the first visit to }s\text{ per episode}\qquad\text{every-visit: use all of them.}$$
+      </div>
+      <p>Both converge to $v_\pi(s)$ as episodes accumulate. First-visit estimates are independent sample means, which makes them the clean case; every-visit reuses correlated returns but is still consistent. Returns are computed backward in one sweep from the terminal, since $G_t=R_{t+1}+\gamma G_{t+1}$.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · episode replay</span>
+        <div class="btnrow">
+          <button id="predSample">Episode</button>
+          <button id="predRun" class="primary">Run ▶</button>
+          <button id="predReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="gridwrap">
+        <div class="gw-left">
+          <svg id="predSvg" class="grid-svg" role="img" aria-label="Gridworld with Monte Carlo value estimates"></svg>
+          <div class="legend"><span>low</span><span class="grad"></span><span>high</span></div>
+          <p class="small muted" id="predInfo" style="text-align:center;margin-top:12px;font-family:ui-monospace,monospace"></p>
+        </div>
+
+        <div class="gw-right">
+          <div class="slider-row">
+            <span class="small muted">$\epsilon$</span>
+            <input id="predEps" type="range" min="0.02" max="0.4" step="0.01" value="0.1" aria-label="exploration epsilon">
+            <span class="val" id="predEpsVal">0.10</span>
+          </div>
+          <div class="btnrow" id="predVisitBtns" style="margin-top:6px">
+            <button data-v="first" class="active">First-visit</button>
+            <button data-v="every">Every-visit</button>
+          </div>
+          <p class="small muted" style="margin:16px 0 4px">The grid shows $\hat V(s)$. Trajectory of the last episode:</p>
+          <div class="traj" id="predTraj"></div>
+
+          <h4 style="margin-bottom:4px">Running estimate</h4>
+          <div class="eqbox" id="predEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="incremental">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>The incremental mean</h2>
+      <p>Storing every return is wasteful. An average can be updated as each new sample arrives:</p>
+      <div class="eqbox">
+        $$V_{n+1}=V_n+\frac{1}{n}\big(G_n-V_n\big).$$
+      </div>
+      <p>The estimate moves from the old value by the error $G_n-V_n$, scaled by the shrinking step $1/n$. Replacing $1/n$ with a constant $\alpha$ gives the constant-$\alpha$ form that recurs in every later chapter.</p>
+      <div class="eqbox">
+        $$V_{n+1}=V_n+\alpha\big(G_n-V_n\big).$$
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · running average</span>
+        <div class="btnrow">
+          <button id="incDraw">Sample return</button>
+          <button id="incRun" class="primary">Run ▶</button>
+          <button id="incReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 360px">
+          <svg id="incChart" class="chart" role="img" aria-label="running mean converging to the true mean"></svg>
+        </div>
+        <div class="col" style="flex:1 1 240px">
+          <div class="slider-row">
+            <span class="small muted">$\sigma$</span>
+            <input id="incSigma" type="range" min="0.1" max="1.2" step="0.05" value="0.5" aria-label="return standard deviation">
+            <span class="val" id="incSigmaVal">0.50</span>
+          </div>
+          <div class="stat" id="incStat"></div>
+          <div class="eqbox" id="incEq" style="margin-top:14px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="control">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Monte Carlo control</h2>
+      <p>Control follows generalized policy iteration: evaluate $q_\pi$ by averaging returns, then make $\pi$ greedy with respect to it. Two things break if done naively — a greedy policy stops exploring, and some $(s,a)$ may never be sampled, so their values never improve.</p>
+      <div class="eqbox">
+        $$Q(S_t,A_t)\leftarrow Q(S_t,A_t)+\frac{1}{N(S_t,A_t)}\big(G_t-Q(S_t,A_t)\big).$$
+      </div>
+      <p><b>Exploring starts</b> fixes the first problem by beginning every episode from a random $(s,a)$. <b>ε-soft</b> policies fix it more gently, keeping at least $\epsilon/|\mathcal A|$ probability on every action:</p>
+      <div class="eqbox">
+        $$\pi(a\mid s)\ \ge\ \frac{\epsilon}{|\mathcal A|},\qquad \pi(a\mid s)=1-\epsilon+\frac{\epsilon}{|\mathcal A|}\ \text{ for the greedy }a .$$
+      </div>
+      <p>Improving to the ε-greedy policy at every step makes GPI converge to the best ε-soft policy.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · MC control</span>
+        <div class="btnrow">
+          <button id="ctrlRun" class="primary">Run ▶</button>
+          <button id="ctrlReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <svg id="ctrlSvg" class="grid-svg" role="img" aria-label="Gridworld with learned greedy policy" style="max-width:300px"></svg>
+          <p class="small muted" style="text-align:center;margin-top:10px">Arrow = current greedy action. Shade = $\max_a Q(s,a)$.</p>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <div class="btnrow" id="ctrlModeBtns">
+            <button data-m="es" class="active">Exploring starts</button>
+            <button data-m="soft">ε-soft</button>
+          </div>
+          <div class="slider-row" id="ctrlEpsRow" style="margin-top:14px;display:none">
+            <span class="small muted">$\epsilon$</span>
+            <input id="ctrlEps" type="range" min="0.02" max="0.5" step="0.01" value="0.1" aria-label="epsilon for soft policy">
+            <span class="val" id="ctrlEpsVal">0.10</span>
+          </div>
+          <div class="stat" id="ctrlStat" style="margin-top:16px"></div>
+          <p class="small muted" style="margin-top:16px">Now that every state-action pair is reachable, the value estimates stop being an accident of which paths happened to be sampled first.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="offpolicy">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Off-policy prediction</h2>
+      <p>Sometimes $v_\pi$ is wanted for a target policy $\pi$ while a different behavior policy $b$ generates the data — to reuse old episodes, or to explore freely while still learning a greedy target. The two policies assign different likelihoods to the actions actually taken, and <b>importance sampling</b> corrects the gap with their ratio.</p>
+      <div class="eqbox">
+        $$\rho_{t:T-1}=\prod_{k=t}^{T-1}\frac{\pi(A_k\mid S_k)}{b(A_k\mid S_k)} .$$
+      </div>
+      <p>$\rho_{t:T-1}$ is the relative probability that $\pi$ rather than $b$ would have produced the suffix $A_t,\dots,A_{T-1}$. It requires $b(a\mid s)>0$ wherever $\pi(a\mid s)>0$. Weighting each return by it gives the <b>ordinary</b> estimator, which is unbiased:</p>
+      <div class="eqbox">
+        $$V(s)=\frac{\sum_{t\in T(s)}\rho_{t:T-1}\,G_t}{|T(s)|}.$$
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · building the importance weight</span>
+        <span class="small muted" style="font-family:ui-monospace,monospace">$\rho=\prod_k \pi_k/b_k$</span>
+      </div>
+      <p class="small muted" style="margin-top:0">A four-step trajectory $S_0\!\to\!S_1\!\to\!S_2\!\to\!S_3$. The target is fixed at $\pi(A_k\mid S_k)=0.5$ on every step; drag the behavior probabilities and watch the product.</p>
+      <div id="isRows"></div>
+      <div class="row" style="margin-top:14px">
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row">
+            <span class="small muted">return $G$</span>
+            <input id="isG" type="range" min="-1" max="1" step="0.05" value="0.6" aria-label="sampled return">
+            <span class="val" id="isGVal">0.60</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 360px">
+          <div class="eqbox" id="isEq" style="margin-top:0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="weighted">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>Weighted importance sampling</h2>
+      <p>Ordinary IS is unbiased but its <b>variance is often unbounded</b>: one long episode with many factors above $1$ makes a single term $\rho_{t:T-1}G_t$ enormous. Weighted IS divides by the accumulated weights instead of the count:</p>
+      <div class="eqbox">
+        $$V(s)=\frac{\sum_{t\in T(s)}\rho_{t:T-1}\,G_t}{\sum_{t\in T(s)}\rho_{t:T-1}} .$$
+      </div>
+      <p>It is biased for finite $n$, but consistent with far lower variance, so it is the estimator used in practice. Incrementally, with cumulative weight $C$, the update is the ordinary running mean with the step $W_n/C_n$:</p>
+      <div class="eqbox">
+        $$V_{n+1}=V_n+\frac{W_n}{C_n}\big(G_n-V_n\big),\qquad C_{n+1}=C_n+W_n,\qquad W_n=\rho_{t:T-1}.$$
+      </div>
+      <p>Setting $C_n=n$, i.e. counting instead of accumulating weights, recovers ordinary IS — the two estimators differ in a single line.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · ordinary vs weighted IS</span>
+        <div class="btnrow">
+          <button id="varRun" class="primary">Run ▶</button>
+          <button id="varReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 420px">
+          <svg id="varChart" class="chart" role="img" aria-label="ordinary and weighted importance sampling estimates over episodes"></svg>
+          <p class="small muted" style="text-align:center;margin-top:2px"><span style="color:#dc2626">ordinary IS</span> &nbsp;·&nbsp; <span style="color:#2563eb">weighted IS</span> &nbsp;·&nbsp; <span style="color:#9ca3af">true $v_\pi(s_0)$</span></p>
+        </div>
+        <div class="col" style="flex:1 1 240px">
+          <div class="btnrow" id="varPolicyBtns">
+            <button data-p="off" class="active">Off-policy</button>
+            <button data-p="on">On-policy</button>
+          </div>
+          <div class="slider-row" style="margin-top:14px">
+            <span class="small muted">$\epsilon$</span>
+            <input id="varEps" type="range" min="0.02" max="0.4" step="0.01" value="0.1" aria-label="target epsilon">
+            <span class="val" id="varEpsVal">0.10</span>
+          </div>
+          <div class="stat" id="varStat" style="flex-direction:column;gap:7px"></div>
+          <p class="small muted" style="margin-top:14px" id="varHint">Off-policy: episodes come from a uniform behavior policy and are reweighted. Watch the red estimate jump whenever a rare, high-weight episode lands; the blue one does not.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">07</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Ordinary IS</th><th>Weighted IS</th></tr>
+      <tr><td>Estimator</td><td>$\dfrac{\sum \rho_{t:T-1}G_t}{|T(s)|}$</td><td>$\dfrac{\sum \rho_{t:T-1}G_t}{\sum \rho_{t:T-1}}$</td></tr>
+      <tr><td>Bias</td><td>Unbiased</td><td>Biased for finite $n$; consistent</td></tr>
+      <tr><td>Variance</td><td>Often unbounded</td><td>Bounded</td></tr>
+      <tr><td>Incremental step</td><td>$1/n$</td><td>$W_n/C_n$</td></tr>
+      <tr><td>When to use</td><td>Short episodes, rare-target reasoning</td><td>Default off-policy estimator</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      v_\pi(s) &\approx \frac{1}{|T(s)|}\sum_{t\in T(s)}G_t\\[2pt]
+      V_{n+1} &= V_n+\frac{1}{n}\big(G_n-V_n\big)\\[2pt]
+      \rho_{t:T-1} &= \prod_{k=t}^{T-1}\frac{\pi(A_k\mid S_k)}{b(A_k\mid S_k)}\\[2pt]
+      V_{n+1} &= V_n+\frac{W_n}{C_n}\big(G_n-V_n\big),\qquad C_{n+1}=C_n+W_n
+      \end{aligned}$$
+    </div>
+    <p class="small muted">The estimates here wait for the episode to end before touching a value; the next chapter — temporal-difference learning — makes the same update from a single step, without waiting for the return.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="04-dynamic-programming.html"><span class="pg-k">Previous</span><span class="pg-t">Dynamic Programming</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="06-temporal-difference-learning.html"><span class="pg-k">Next</span><span class="pg-t">Temporal-Difference Learning</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+/* =====================================================================
+   Shared 4x4 gridworld
+   ===================================================================== */
+const GN = 4;
+const GOAL = [0, 3];
+const PIT = [3, 0];
+const STEP = -0.04;
+const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+const ACTION_NAMES = ['↑', '→', '↓', '←'];
+
+const gwIdx = (r, c) => r * GN + c;
+const gwIsGoal = (r, c) => r === GOAL[0] && c === GOAL[1];
+const gwIsPit = (r, c) => r === PIT[0] && c === PIT[1];
+const gwIsTerm = (r, c) => gwIsGoal(r, c) || gwIsPit(r, c);
+
+function gwStep(r, c, a) {
+  let nr = r + DIRS[a][0], nc = c + DIRS[a][1];
+  if (nr < 0 || nr >= GN || nc < 0 || nc >= GN) { nr = r; nc = c; }
+  let rw = STEP;
+  if (gwIsGoal(nr, nc)) rw = 1; else if (gwIsPit(nr, nc)) rw = -1;
+  return { r: nr, c: nc, rw, term: gwIsTerm(nr, nc) };
+}
+
+function optimalQ(gamma) {
+  let q = Array.from({ length: GN * GN }, () => [0, 0, 0, 0]);
+  for (let it = 0; it < 3000; it++) {
+    const nq = q.map(row => row.slice());
+    let d = 0;
+    for (let r = 0; r < GN; r++) for (let c = 0; c < GN; c++) {
+      if (gwIsTerm(r, c)) continue;
+      for (let a = 0; a < 4; a++) {
+        const s = gwStep(r, c, a);
+        const val = s.term ? s.rw : s.rw + gamma * Math.max(...q[gwIdx(s.r, s.c)]);
+        d = Math.max(d, Math.abs(val - q[gwIdx(r, c)][a]));
+        nq[gwIdx(r, c)][a] = val;
+      }
+    }
+    q = nq;
+    if (d < 1e-12) break;
+  }
+  return q;
+}
+
+function evalPolicy(policy, gamma) {
+  let V = new Array(GN * GN).fill(0);
+  for (let it = 0; it < 4000; it++) {
+    const nV = V.slice();
+    let d = 0;
+    for (let r = 0; r < GN; r++) for (let c = 0; c < GN; c++) {
+      if (gwIsTerm(r, c)) continue;
+      let v = 0;
+      for (let a = 0; a < 4; a++) {
+        const s = gwStep(r, c, a);
+        v += policy[gwIdx(r, c)][a] * (s.term ? s.rw : s.rw + gamma * V[gwIdx(s.r, s.c)]);
+      }
+      d = Math.max(d, Math.abs(v - V[gwIdx(r, c)]));
+      nV[gwIdx(r, c)] = v;
+    }
+    V = nV;
+    if (d < 1e-12) break;
+  }
+  return V;
+}
+
+function egreedy(Q, eps) {
+  return Q.map(row => {
+    const m = Math.max(...row), gi = row.indexOf(m), n = 4;
+    return row.map((x, i) => (i === gi ? (1 - eps) + eps / n : eps / n));
+  });
+}
+
+function sampleDist(p) {
+  const r = Math.random();
+  let acc = 0;
+  for (let i = 0; i < p.length; i++) { acc += p[i]; if (r <= acc + 1e-12) return i; }
+  return p.length - 1;
+}
+
+/* One episode. chooseAction(sIdx) -> action; optional forced first action. */
+function rollout(start, chooseAction, gamma, forcedA) {
+  let r = start[0], c = start[1];
+  const S = [], A = [], R = [];
+  for (let t = 0; t < 200; t++) {
+    if (gwIsTerm(r, c)) break;
+    const a = (t === 0 && forcedA != null) ? forcedA : chooseAction(gwIdx(r, c));
+    const st = gwStep(r, c, a);
+    S.push(gwIdx(r, c)); A.push(a); R.push(st.rw);
+    r = st.r; c = st.c;
+    if (st.term) break;
+  }
+  let G = 0;
+  const ret = new Array(R.length);
+  for (let t = R.length - 1; t >= 0; t--) { G = R[t] + gamma * G; ret[t] = G; }
+  return { S, A, ret };
+}
+
+function colorFor(v) {
+  const t = clamp(v, -1, 1);
+  const a = Math.min(0.88, Math.abs(t) * 0.92);
+  return t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
+}
+const textColorFor = v => Math.abs(v) > 0.5 ? '#fff' : '#111';
+
+/* Build a 4x4 grid. Returns cell handles. */
+function gridCells(svg, px) {
+  svg.setAttribute('viewBox', `0 0 ${GN * px} ${GN * px}`);
+  svg.innerHTML = '';
+  const cells = [];
+  for (let r = 0; r < GN; r++) for (let c = 0; c < GN; c++) {
+    const g = el('g', { class: 'cell' }, svg);
+    const rect = el('rect', {
+      x: c * px + 1.5, y: r * px + 1.5, width: px - 3, height: px - 3, rx: 6,
+      fill: '#fff', stroke: 'none'
+    }, g);
+    const vt = el('text', {
+      x: c * px + px / 2, y: r * px + px / 2 + 5, 'text-anchor': 'middle',
+      'font-size': 13, 'font-family': 'ui-monospace, monospace', 'font-weight': 600, fill: '#111'
+    }, g);
+    const at = el('text', {
+      x: c * px + px - 12, y: r * px + 15, 'text-anchor': 'middle',
+      'font-size': 12, fill: '#111', opacity: 0.85
+    }, g);
+    cells.push({ g, rect, vt, at, r, c });
+  }
+  return cells;
+}
+
+/* Generic clipped line chart. */
+function drawChart(svg, W, H, series, lo, hi, xmax) {
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = '';
+  const padL = 42, padR = 10, padT = 12, padB = 20;
+  const X = x => padL + (xmax > 0 ? (x / xmax) : 0) * (W - padL - padR);
+  const Y = y => padT + ((hi - y) / (hi - lo)) * (H - padT - padB);
+  const defs = el('defs', {}, svg);
+  const cid = svg.id + '-clip';
+  const cp = el('clipPath', { id: cid }, defs);
+  el('rect', {
+    x: padL, y: padT, width: W - padL - padR, height: H - padT - padB
+  }, cp);
+
+  /* axis */
+  el('line', { x1: padL, y1: padT, x2: padL, y2: H - padB, stroke: '#ececec' }, svg);
+  el('line', { x1: padL, y1: H - padB, x2: W - padR, y2: H - padB, stroke: '#ececec' }, svg);
+  [lo, (lo + hi) / 2, hi].forEach(v => {
+    const t = el('text', {
+      x: padL - 6, y: Y(v) + 4, 'text-anchor': 'end',
+      'font-size': 10, 'font-family': 'ui-monospace, monospace', fill: '#9ca3af'
+    }, svg);
+    t.textContent = v.toFixed(2);
+    el('line', { x1: padL, y1: Y(v), x2: W - padR, y2: Y(v), stroke: '#f6f6f6' }, svg);
+  });
+
+  const g = el('g', { 'clip-path': `url(#${cid})` }, svg);
+  series.forEach(s => {
+    if (!s.pts.length) return;
+    const d = s.pts.map((p, i) => (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1)).join(' ');
+    el('path', {
+      d, fill: 'none', stroke: s.color, 'stroke-width': s.w || 1.7,
+      'stroke-dasharray': s.dash || '', 'stroke-linejoin': 'round', 'stroke-linecap': 'round'
+    }, g);
+  });
+}
+
+/* =====================================================================
+   02 — Monte Carlo prediction (episode replay)
+   ===================================================================== */
+function initPrediction() {
+  const svg = $('#predSvg');
+  const cells = gridCells(svg, 74);
+  const trajEl = $('#predTraj');
+  const eqEl = $('#predEq');
+  const infoEl = $('#predInfo');
+  const epsSlider = $('#predEps');
+  const epsVal = $('#predEpsVal');
+
+  const GAMMA = 0.9;
+  let eps = 0.1;
+  let Q, PI, Vtrue;
+  let Vhat = new Array(GN * GN).fill(0);
+  let count = new Array(GN * GN).fill(0);
+  let episodes = 0;
+  let mode = 'first';
+  let sel = { r: 3, c: 3 };
+  let running = null;
+
+  function rebuild() {
+    Q = optimalQ(GAMMA);
+    PI = egreedy(Q, eps);
+    Vtrue = evalPolicy(PI, GAMMA);
+  }
+  function reset() {
+    stop();
+    Vhat = new Array(GN * GN).fill(0);
+    count = new Array(GN * GN).fill(0);
+    episodes = 0;
+    renderGrid(); renderEq();
+  }
+
+  function randomStart() {
+    let r, c;
+    do { r = (Math.random() * GN) | 0; c = (Math.random() * GN) | 0; } while (gwIsTerm(r, c));
+    return [r, c];
+  }
+
+  function doEpisode() {
+    const start = randomStart();
+    const { S, A, ret } = rollout(start, s => sampleDist(PI[s]), GAMMA, null);
+    episodes++;
+    const seen = new Set();
+    for (let t = 0; t < S.length; t++) {
+      const s = S[t];
+      if (mode === 'first' && seen.has(s)) continue;
+      seen.add(s);
+      count[s] += 1;
+      Vhat[s] += (ret[t] - Vhat[s]) / count[s];
+    }
+    /* trajectory chips */
+    const items = [];
+    for (let t = 0; t < Math.min(S.length, 22); t++) {
+      const r = (S[t] / GN) | 0, c = S[t] % GN;
+      items.push(`<span class="chip ${gwIsGoal(r, c) ? 'now' : (gwIsPit(r, c) ? 'bad' : '')}">(${r},${c})</span>`);
+    }
+    trajEl.innerHTML = items.join('<span class="arw">→</span>');
+    renderGrid(); renderEq();
+  }
+
+  function renderGrid() {
+    cells.forEach(({ rect, vt, at, r, c }) => {
+      const i = gwIdx(r, c);
+      if (gwIsTerm(r, c)) {
+        rect.setAttribute('fill', gwIsGoal(r, c) ? '#1e40af' : '#991b1b');
+        vt.textContent = gwIsGoal(r, c) ? '+1' : '−1';
+        vt.setAttribute('fill', '#fff');
+      } else {
+        const v = Vhat[i];
+        rect.setAttribute('fill', colorFor(v));
+        vt.textContent = count[i] ? v.toFixed(2) : '·';
+        vt.setAttribute('fill', textColorFor(v));
+      }
+      at.textContent = '';
+      rect.setAttribute('stroke', (sel.r === r && sel.c === c) ? '#111' : 'none');
+      rect.setAttribute('stroke-width', (sel.r === r && sel.c === c) ? 2.6 : 0);
+    });
+    infoEl.textContent = `episodes = ${episodes}`;
+  }
+
+  function renderEq() {
+    const i = gwIdx(sel.r, sel.c);
+    const term = gwIsTerm(sel.r, sel.c);
+    if (term) {
+      T(eqEl, `\\text{Terminal — no returns originate here.}`, true);
+      return;
+    }
+    const v = Vhat[i], n = count[i], tv = Vtrue[i];
+    T(eqEl,
+      `\\begin{aligned}
+        \\hat V(&\\text{(${sel.r},${sel.c})}) = \\frac{1}{${n}}\\sum G_t = \\mathbf{${v.toFixed(3)}}\\\\
+        v_\\pi(&\\text{(${sel.r},${sel.c})}) = ${tv.toFixed(3)}
+      \\end{aligned}`, true);
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  cells.forEach(cell => cell.g.addEventListener('click', () => {
+    sel = { r: cell.r, c: cell.c };
+    renderGrid(); renderEq();
+  }));
+
+  $('#predSample').addEventListener('click', () => { stop(); doEpisode(); });
+  $('#predRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(doEpisode, 110);
+  });
+  $('#predReset').addEventListener('click', reset);
+  epsSlider.addEventListener('input', () => {
+    eps = parseFloat(epsSlider.value);
+    epsVal.textContent = eps.toFixed(2);
+    rebuild(); reset();
+  });
+  $$('#predVisitBtns button').forEach(b => b.addEventListener('click', () => {
+    $$('#predVisitBtns button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    mode = b.dataset.v;
+    reset();
+  }));
+
+  rebuild(); renderGrid(); renderEq();
+}
+
+/* =====================================================================
+   03 — Incremental running mean
+   ===================================================================== */
+function initIncremental() {
+  const svg = $('#incChart');
+  const statEl = $('#incStat');
+  const eqEl = $('#incEq');
+  const sigmaSlider = $('#incSigma');
+  const sigmaVal = $('#incSigmaVal');
+  const TRUE_MU = 0.7;
+  let sigma = 0.5;
+  let n = 0, V = 0, Vprev = 0;
+  let lastG = null;
+  let running = null;
+
+  function gauss() {
+    let u = 0, v = 0;
+    while (!u) u = Math.random();
+    while (!v) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function draw() {
+    const G = TRUE_MU + sigma * gauss();
+    lastG = G; n++;
+    Vprev = V;
+    V += (G - V) / n;
+    render();
+  }
+
+  function render() {
+    const pts = [{ x: 0, y: 0 }];
+    render.hist = render.hist || [];
+    if (lastG != null) render.hist.push(V);
+    const xmax = Math.max(40, render.hist.length);
+    const series = [
+      { pts: [{ x: 0, y: TRUE_MU }, { x: xmax, y: TRUE_MU }], color: '#9ca3af', dash: '5 4', w: 1.4 },
+      { pts: render.hist.map((y, i) => ({ x: i + 1, y })), color: '#2563eb', w: 1.9 }
+    ];
+    drawChart(svg, 520, 230, series, -0.3, 1.5, xmax);
+    statEl.innerHTML =
+      `<span>n = <b>${n}</b></span>` +
+      `<span>Gₙ = <b>${lastG == null ? '—' : lastG.toFixed(3)}</b></span>` +
+      `<span>V = <b>${V.toFixed(3)}</b></span>` +
+      `<span class="muted">μ = ${TRUE_MU.toFixed(2)}</span>`;
+    if (lastG == null) {
+      T(eqEl, `V \\leftarrow V + \\tfrac{1}{n}(G_n - V)`, true);
+    } else {
+      T(eqEl,
+        `\\begin{aligned}
+          V &\\leftarrow ${Vprev.toFixed(3)} + \\frac{1}{${n}}(${lastG.toFixed(3)} - ${Vprev.toFixed(3)})\\\\
+            &= \\mathbf{${V.toFixed(3)}}
+        \\end{aligned}`, true);
+    }
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  $('#incDraw').addEventListener('click', () => { stop(); draw(); });
+  $('#incRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(draw, 90);
+  });
+  $('#incReset').addEventListener('click', () => {
+    stop(); n = 0; V = 0; Vprev = 0; lastG = null; render.hist = []; render();
+  });
+  sigmaSlider.addEventListener('input', () => {
+    sigma = parseFloat(sigmaSlider.value);
+    sigmaVal.textContent = sigma.toFixed(2);
+  });
+
+  render.hist = [];
+  render();
+}
+
+/* =====================================================================
+   04 — Monte Carlo control
+   ===================================================================== */
+function initControl() {
+  const svg = $('#ctrlSvg');
+  const cells = gridCells(svg, 74);
+  const statEl = $('#ctrlStat');
+  const epsRow = $('#ctrlEpsRow');
+  const epsSlider = $('#ctrlEps');
+  const epsVal = $('#ctrlEpsVal');
+
+  const GAMMA = 0.9;
+  let mode = 'es';
+  let eps = 0.1;
+  let Q, N;      /* value and visit counts per (s,a) */
+  let episodes = 0;
+  let returned = 0;
+  let running = null;
+
+  function poly(s) {
+    const q = Q[s];
+    const m = Math.max(...q), gi = q.indexOf(m), n = 4;
+    return q.map((x, i) => i === gi ? (1 - eps) + eps / n : eps / n);
+  }
+
+  function reset() {
+    stop();
+    Q = Array.from({ length: GN * GN }, () => [0, 0, 0, 0]);
+    N = Array.from({ length: GN * GN }, () => [0, 0, 0, 0]);
+    episodes = 0; returned = 0;
+    render();
+  }
+
+  function randomStartSA() {
+    let r, c;
+    do { r = (Math.random() * GN) | 0; c = (Math.random() * GN) | 0; } while (gwIsTerm(r, c));
+    return { start: [r, c], a: (Math.random() * 4) | 0 };
+  }
+  function randomStart() {
+    let r, c;
+    do { r = (Math.random() * GN) | 0; c = (Math.random() * GN) | 0; } while (gwIsTerm(r, c));
+    return [r, c];
+  }
+
+  function doEpisode() {
+    let ep;
+    if (mode === 'es') {
+      const f = randomStartSA();
+      ep = rollout(f.start, s => sampleDist(poly(s)), GAMMA, f.a);
+    } else {
+      ep = rollout(randomStart(), s => sampleDist(poly(s)), GAMMA, null);
+    }
+    episodes++;
+    if (ep.ret.length) returned += ep.ret[0];
+    /* every-visit update of Q(s,a) */
+    for (let t = 0; t < ep.S.length; t++) {
+      const s = ep.S[t], a = ep.A[t], g = ep.ret[t];
+      N[s][a] += 1;
+      Q[s][a] += (g - Q[s][a]) / N[s][a];
+    }
+    render();
+  }
+
+  function render() {
+    cells.forEach(({ rect, vt, at, r, c }) => {
+      const i = gwIdx(r, c);
+      if (gwIsTerm(r, c)) {
+        rect.setAttribute('fill', gwIsGoal(r, c) ? '#1e40af' : '#991b1b');
+        vt.textContent = gwIsGoal(r, c) ? '+1' : '−1';
+        vt.setAttribute('fill', '#fff');
+        at.textContent = '';
+      } else {
+        const q = Q[i];
+        const m = Math.max(...q);
+        rect.setAttribute('fill', colorFor(m));
+        vt.textContent = m.toFixed(2);
+        vt.setAttribute('fill', textColorFor(m));
+        at.textContent = N[i].some(x => x > 0) ? ACTION_NAMES[q.indexOf(m)] : '';
+        at.setAttribute('fill', textColorFor(m));
+      }
+    });
+    const visited = N.filter(row => row.some(x => x > 0)).length;
+    statEl.innerHTML =
+      `<span>episodes = <b>${episodes}</b></span>` +
+      `<span>(s,a) seen = <b>${visited}</b>/16</span>` +
+      `<span>avg return = <b>${episodes ? (returned / episodes).toFixed(2) : '—'}</b></span>`;
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  $('#ctrlRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(doEpisode, 60);
+  });
+  $('#ctrlReset').addEventListener('click', reset);
+  $$('#ctrlModeBtns button').forEach(b => b.addEventListener('click', () => {
+    $$('#ctrlModeBtns button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    mode = b.dataset.m;
+    epsRow.style.display = mode === 'soft' ? 'flex' : 'none';
+    reset();
+  }));
+  epsSlider.addEventListener('input', () => {
+    eps = parseFloat(epsSlider.value);
+    epsVal.textContent = eps.toFixed(2);
+  });
+
+  reset();
+}
+
+/* =====================================================================
+   05 — Importance-weight builder
+   ===================================================================== */
+function initISRatio() {
+  const rowsEl = $('#isRows');
+  const eqEl = $('#isEq');
+  const gSlider = $('#isG');
+  const gVal = $('#isGVal');
+  const PI_K = 0.5;
+  const bDefault = [0.5, 0.25, 0.4, 0.2];
+  const b = bDefault.slice();
+
+  rowsEl.innerHTML = b.map((_, k) => `
+    <div class="isrow">
+      <span class="ischip">k=${k}</span>
+      <div class="isbar"><div class="isfill" data-pi="${k}" style="width:0%"></div><span class="istag" data-pitag="${k}">π ${PI_K.toFixed(2)}</span></div>
+      <input type="range" data-b="${k}" min="0.05" max="1" step="0.05" value="${b[k]}" aria-label="behavior probability at step ${k}">
+      <span class="isratio" data-r="${k}"></span>
+    </div>`).join('');
+
+  function render() {
+    let rho = 1;
+    b.forEach((bv, k) => {
+      rowsEl.querySelector(`.isfill[data-pi="${k}"]`).style.width = (PI_K * 100) + '%';
+      const ratio = PI_K / bv;
+      rho *= ratio;
+      rowsEl.querySelector(`[data-r="${k}"]`).textContent = '×' + ratio.toFixed(2);
+    });
+    const G = parseFloat(gSlider.value);
+    gVal.textContent = G.toFixed(2);
+    T(eqEl,
+      `\\begin{aligned}
+        \\rho &= \\prod_{k=0}^{3}\\frac{${PI_K.toFixed(2)}}{b_k} = \\mathbf{${rho.toFixed(2)}}\\\\
+        \\rho G &= ${rho.toFixed(2)}\\times ${G.toFixed(2)} = \\mathbf{${(rho * G).toFixed(2)}}
+      \\end{aligned}`, true);
+  }
+
+  rowsEl.addEventListener('input', e => {
+    const k = e.target.dataset.b;
+    if (k == null) return;
+    b[+k] = parseFloat(e.target.value);
+    render();
+  });
+  gSlider.addEventListener('input', render);
+  render();
+}
+
+/* =====================================================================
+   06 — Ordinary vs weighted importance sampling
+   ===================================================================== */
+function initVariance() {
+  const svg = $('#varChart');
+  const statEl = $('#varStat');
+  const epsSlider = $('#varEps');
+  const epsVal = $('#varEpsVal');
+  const hintEl = $('#varHint');
+
+  const GAMMA = 0.9;
+  const MAX_EP = 3000;
+  const S0 = [3, 3];
+  let eps = 0.1;
+  let mode = 'off';
+  let Q, PI, Vtrue;
+  let Vor = 0, Nor = 0, Vw = 0, Cw = 0, lastW = null;
+  let histOr = [], histW = [];
+  let running = null;
+
+  const uniform = Array.from({ length: GN * GN }, () => [0.25, 0.25, 0.25, 0.25]);
+
+  function rebuild() {
+    Q = optimalQ(GAMMA);
+    PI = egreedy(Q, eps);
+    Vtrue = evalPolicy(PI, GAMMA)[gwIdx(3, 3)];
+  }
+  function reset() {
+    stop();
+    Vor = 0; Nor = 0; Vw = 0; Cw = 0; lastW = null;
+    histOr = []; histW = [];
+    render();
+  }
+
+  function behaviorFor() { return mode === 'off' ? uniform : PI; }
+
+  function doEpisode() {
+    if (Nor >= MAX_EP) { stop(); return; }
+    const beh = behaviorFor();
+    const { S, A, ret } = rollout(S0, s => sampleDist(beh[s]), GAMMA, null);
+    let rho = 1;
+    for (let t = 0; t < S.length; t++) rho *= PI[S[t]][A[t]] / beh[S[t]][A[t]];
+    const G = ret.length ? ret[0] : 0;
+    lastW = rho;
+    Nor++; Vor += (rho * G - Vor) / Nor;
+    Cw += rho; if (Cw > 0) Vw += (rho / Cw) * (G - Vw);
+    histOr.push(Vor); histW.push(Vw);
+    render();
+  }
+
+  function render() {
+    const xmax = Math.max(50, Math.min(Nor, MAX_EP));
+    const lo = Math.min(-0.2, Vtrue - 0.8), hi = Math.max(1.2, Vtrue + 1.0);
+    const series = [
+      { pts: [{ x: 0, y: Vtrue }, { x: xmax, y: Vtrue }], color: '#9ca3af', dash: '5 4', w: 1.4 },
+      { pts: histOr.map((y, i) => ({ x: i + 1, y })), color: '#dc2626', w: 1.6 },
+      { pts: histW.map((y, i) => ({ x: i + 1, y })), color: '#2563eb', w: 1.8 }
+    ];
+    drawChart(svg, 560, 250, series, lo, hi, xmax);
+    statEl.innerHTML =
+      `<span>episodes = <b>${Nor}</b></span>` +
+      `<span style="color:#dc2626">ordinary = <b>${Nor ? Vor.toFixed(3) : '—'}</b></span>` +
+      `<span style="color:#2563eb">weighted = <b>${Cw > 0 ? Vw.toFixed(3) : '—'}</b></span>` +
+      `<span class="muted">true = ${Vtrue.toFixed(3)}</span>` +
+      `<span>last W = <b>${lastW == null ? '—' : lastW.toFixed(2)}</b></span>`;
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  $('#varRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(() => { for (let i = 0; i < 4; i++) doEpisode(); }, 70);
+  });
+  $('#varReset').addEventListener('click', reset);
+  $$('#varPolicyBtns button').forEach(b => b.addEventListener('click', () => {
+    $$('#varPolicyBtns button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    mode = b.dataset.p;
+    hintEl.textContent = mode === 'off'
+      ? 'Off-policy: episodes come from a uniform behavior policy and are reweighted. Watch the red estimate jump whenever a rare, high-weight episode lands; the blue one does not.'
+      : 'On-policy: the behavior policy is the target, so every weight W = 1 and the two estimators coincide. The variance of the reweighting is gone.';
+    reset();
+  }));
+  epsSlider.addEventListener('input', () => {
+    eps = parseFloat(epsSlider.value);
+    epsVal.textContent = eps.toFixed(2);
+    rebuild(); reset();
+  });
+
+  rebuild(); reset();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initPrediction();
+  initIncremental();
+  initControl();
+  initISRatio();
+  initVariance();
+  initScroll();
+});
+</script>
+</body>
+</html>

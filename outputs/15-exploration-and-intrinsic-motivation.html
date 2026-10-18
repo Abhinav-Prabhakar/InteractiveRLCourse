@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<!--
+  Chapter 15 — Exploration and Intrinsic Motivation.
+  Assumptions (per prompt.md):
+  · Follows index.md numbering (Ch.15) and voice; adjacent chapters are Ch.14
+    (Offline RL) and Ch.16 (Hierarchical RL), referenced only by name.
+  · prompt.md forbids quizzes, so the brief's quiz (derive the ICM reward; why a
+    forward model is gamed by stochasticity and how the inverse model fixes it)
+    is delivered as prose + the ICM interactive rather than a quiz component.
+  · The ICM panel is an honest in-page simulation (an online linear forward model
+    over a controllable feature and an independent noise feature); all plotted
+    numbers are produced by that code, none are hard-coded.
+  · Three visualizers, as the brief asks (Curiosity Explorer is the showcase).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exploration and Intrinsic Motivation</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- chain diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+/* ---------------- chapter extras ---------------- */
+#cnSvg,#icmSvg,#cxSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%}
+#cxSvg{max-width:380px;margin:0 auto}
+.cell{cursor:default}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Exploration</a>
+    <nav class="nav">
+      <a href="#sparse">Sparse reward</a>
+      <a href="#count">Counts</a>
+      <a href="#icm">ICM</a>
+      <a href="#rnd">RND</a>
+      <a href="#explorer">Explorer</a>
+      <a href="#episodic">Never give up</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Modern and Advanced Topics</p>
+    <h1>Exploration and<br>Intrinsic Motivation</h1>
+    <p class="lede">When the task reward says nothing, the agent has to invent a reason to look around — a bonus for wherever it has not yet been.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="sparse">
+  <div class="wrap">
+    <h2><span class="num">01</span>The sparse-reward problem</h2>
+    <p>Every method so far quietly assumed reward arrives often enough to shape a value function. In a <b>sparse-reward</b> task it does not: the agent can act for thousands of steps and observe nothing but zero. A greedy policy on a flat value function has nothing to prefer, and $Q$-learning has no gradient to follow.</p>
+    <p>The fix is to let the agent <em>manufacture</em> its own reward from experience and add it to the task reward:</p>
+    <div class="eqbox">
+      $$r_t \;=\; r^{e}_t \;+\; r^{i}_t$$
+    </div>
+    <p>Here $r^{e}_t$ is the <b>extrinsic reward</b> the environment hands out, and $r^{i}_t$ is an <b>intrinsic reward</b> the agent computes for itself. Every section that follows is a different proposal for $r^{i}_t$.</p>
+    <div class="note">
+      <b>Why this is not just $\varepsilon$-greedy.</b> Random exploration is memoryless and diffusive: it forgets where it has been, so it re-covers the same handful of states forever. An intrinsic reward is a <em>memory</em> of where you have been — and a memory can be valued, planned over, and annealed away.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="count">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>Count-based exploration and pseudo-counts</h2>
+      <p>The oldest intrinsic reward is also the most direct: pay the agent for visiting states it has rarely seen. Let $N(s)$ be the number of times $s$ has been visited, and set</p>
+      <div class="eqbox">
+        $$r^{i}(s) \;=\; \frac{\beta}{\sqrt{N(s)}},\qquad \beta>0 .$$
+      </div>
+      <p>A state seen $N$ times is worth $\beta/\sqrt{N}$: the bonus decays as familiarity grows, but slowly enough that a well-trodden corridor is never fully abandoned.</p>
+      <p class="small muted">Read that back: the bonus is a decreasing function of familiarity, so each visit buys the next one a strictly smaller reward — exploration is a diminishing return on repeat.</p>
+      <div class="note">
+        <b>Counting is only possible in the tabula rasa world.</b> For a tabular MDP $N(s)$ is just a counter. When states are raw observations — pixels, robot poses — no two states are ever exactly equal, so the counter is always one. The way out is to <em>estimate</em> the count from a density model.
+      </div>
+      <p>Learn a density model $\rho_n(s)$ over states and write $\rho'_n(s)$ for the same model after one imagined extra observation of $s$. The <b>pseudo-count</b> recovers how many times $s$ <em>would</em> have been seen:</p>
+      <div class="eqbox">
+        $$\hat N_n(s) \;=\; \frac{\rho_n(s)\big(1-\rho'_n(s)\big)}{\rho'_n(s)-\rho_n(s)},\qquad r^{i}(s)=\frac{\beta}{\sqrt{\hat N_n(s)}} .$$
+      </div>
+      <p>The denominator is the surprise of one more observation: a state the model already predicts confidently yields a tiny ratio and thus a tiny bonus. This turns any density model — even a neural one — into a novelty signal.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · count-based novelty bonus</span>
+        <div class="slider-row" style="width:220px">
+          <span class="small muted">$\beta$</span>
+          <input type="range" id="cnBeta" min="0" max="2" step="0.05" value="1" aria-label="novelty bonus weight beta">
+          <span class="val" id="cnBetaVal">1.00</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="cnSvg" viewBox="0 0 360 210" role="img" aria-label="Novelty bonus bars over a line of states"></svg>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <p class="small muted" style="margin-top:0">Click a box to visit it; the bar is its bonus $\beta/\sqrt{N(s)}$. Watch a single state drop out of favour as its count climbs.</p>
+          <div class="btnrow">
+            <button id="cnWalk">Random walk</button>
+            <button id="cnReset">Reset</button>
+          </div>
+          <h4 style="margin-bottom:4px">Novelty bonus</h4>
+          <div class="eqbox" id="cnEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="icm">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>The Intrinsic Curiosity Module</h2>
+      <p>Counts break down the moment states stop repeating. The <b>Intrinsic Curiosity Module</b> (ICM) replaces the counter with a <em>prediction error</em>: reward the agent for states whose consequences it cannot yet predict. Rather than predicting raw observations, ICM first learns a feature map $\phi$ and builds two small networks on top of it:</p>
+      <div class="eqbox">
+        $$\hat a_t \;=\; g\big(\phi(s_t),\,\phi(s_{t+1})\big),\qquad
+          \hat\phi(s_{t+1}) \;=\; f\big(\phi(s_t),\,a_t\big)$$
+      </div>
+      <p>The <b>inverse model</b> $g$ predicts the action that produced the transition; the <b>forward model</b> $f$ predicts the next state's features. They train together on:</p>
+      <div class="eqbox">
+        $$L_I \;=\; -\log g\big(a_t \mid \phi(s_t),\phi(s_{t+1})\big),\qquad
+          L_F \;=\; \tfrac{1}{2}\big\|\,f(\phi(s_t),a_t)-\phi(s_{t+1})\,\big\|_2^2 .$$
+      </div>
+      <p>The forward error <em>is</em> the curiosity — scaled into a reward:</p>
+      <div class="eqbox">
+        $$r^{i}_t \;=\; \frac{\eta}{2}\big\|\,f(\phi(s_t),a_t)-\phi(s_{t+1})\,\big\|_2^2 \;=\; \eta\,L_F^{(t)} ,\qquad
+          \min_{\phi,f,g}\;(1-\beta)\,L_I+\beta\,L_F .$$
+      </div>
+      <p>The inverse loss is weighted more heavily ($\beta<1$), so the feature map is shaped mostly by what predicts actions. That detail is not cosmetic; it is the entire reason the module survives a stochastic world.</p>
+      <div class="note">
+        <b>Why a forward model alone gets gamed by randomness.</b> Put the agent in a reward-free room with a television showing random static. No forward model can predict the next frame, so its error stays maximal forever, and the agent parks in front of the TV forever. <b>The encoder is the load-bearing piece:</b> $\phi$ must be useful for predicting <em>which action</em> caused a transition, and static is independent of the action, so no gradient flows into those coordinates. The inverse model throws away what is uncontrollable, and only genuine, learnable surprise is left.
+      </div>
+      <p class="small muted">Read the inverse loss back: it forces $\phi$ to keep exactly the features that make the action predictable — and the forward model is then paid only for the surprise that remains.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · prediction error under a noisy TV</span>
+        <div class="btnrow" id="icmModeBtns">
+          <button data-mode="fwd" class="active">Forward only</button>
+          <button data-mode="icm">ICM (with inverse model)</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 360px">
+          <svg id="icmSvg" viewBox="0 0 420 270" role="img" aria-label="Intrinsic reward over training steps for a forward model and for ICM"></svg>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row">
+            <span class="small muted">noise $\sigma$</span>
+            <input type="range" id="icmNoise" min="0" max="1" step="0.02" value="0.5" aria-label="stochasticity of the noisy television">
+            <span class="val" id="icmNoiseVal">0.50</span>
+          </div>
+          <div class="btnrow" style="margin-top:6px">
+            <button id="icmRun" class="primary">Train ▶</button>
+            <button id="icmReset">Reset</button>
+          </div>
+          <p class="small muted" id="icmMsg" style="margin:12px 0 0;font-family:ui-monospace,monospace"></p>
+          <h4 style="margin-bottom:4px">Intrinsic reward at step $t$</h4>
+          <div class="eqbox" id="icmEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="rnd">
+  <div class="wrap">
+    <h2><span class="num">04</span>Random Network Distillation</h2>
+    <p>ICM pays for surprise about <em>dynamics</em>. <b>Random Network Distillation</b> (RND) pays for surprise about the <em>state itself</em>, and never learns a dynamics model at all. Fix a random network $f_\theta$ and freeze it. Train a second network $g_{\bar\theta}$ to imitate it — but only on the states the agent actually visits:</p>
+    <div class="eqbox">
+      $$r^{i}_t \;=\; \big\|\,f_\theta(s_{t+1})-g_{\bar\theta}(s_{t+1})\,\big\|_2^2,\qquad
+        L_{\text{RND}} \;=\; \tfrac{1}{2}\big\|\,f_\theta(s)-g_{\bar\theta}(s)\,\big\|_2^2 .$$
+    </div>
+    <p>On a familiar state the student has caught up and the gap is small; on a novel state the frozen random target is still a surprise. Novelty is the <b>distillation gap</b> between a fixed random function and its pupil — one network, one regression, and no notion of action required.</p>
+    <div class="note">
+      <b>Normalise before you trust the gap.</b> The reward scale drifts as the student improves, so RND standardises the intrinsic return with a running estimate of its standard deviation, and sums rewards over a <em>non-episodic</em> stream so that novelty persists across episode boundaries. Without this, a task change silently rescales the exploration bonus.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="explorer">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Curiosity Explorer</h2>
+      <p>Here is the whole idea on a hard-exploration maze. The reward sits at the far end of a perfect maze; a random walk stumbles onto it almost never. The agent plans with value iteration on the current novelty field $\beta/\sqrt{N(s)}$, so its value function is <em>shape</em> — highest exactly where it has not been.</p>
+      <p>Run it with the bonus on, then turn it off. With the bonus the value function sweeps the maze room by room; without it the field is flat, every action ties, and the agent devolves into a random walk.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · sparse-reward maze</span>
+        <div class="btnrow">
+          <button id="cxIntrinsic" class="active">Intrinsic reward: ON</button>
+          <button id="cxNewEp">New episode</button>
+          <button id="cxReset">Reset</button>
+          <button id="cxRun" class="primary">Run ▶</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="cxSvg" viewBox="0 0 338 338" role="img" aria-label="Sparse-reward maze with a visit heatmap and a moving agent"></svg>
+          <div class="legend"><span>few visits</span><span class="grad" style="background:linear-gradient(90deg,#fafafa,#2563eb)"></span><span>many</span></div>
+          <div class="slider-row" style="margin:16px auto 0;max-width:320px">
+            <span class="small muted">$\beta$</span>
+            <input type="range" id="cxBeta" min="0" max="2" step="0.05" value="0.5" aria-label="intrinsic reward weight beta">
+            <span class="val" id="cxBetaVal">0.50</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <p class="small muted" style="margin-top:0">Shaded cells are visit counts: $\beta/\sqrt{N(s)}$ is large where the shading is light. “New episode” clears the counts, the way episodic novelty does — watch the frontier reopen.</p>
+          <p class="small muted" id="cxStats" style="font-family:ui-monospace,monospace;margin-bottom:4px"></p>
+          <p class="small" id="cxStatus" style="font-family:ui-monospace,monospace;color:#111;margin-top:0"></p>
+          <h4 style="margin-bottom:4px">Reward at $s_t$</h4>
+          <div class="eqbox" id="cxEq"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="episodic">
+  <div class="wrap">
+    <h2><span class="num">06</span>Episodic novelty and Never Give Up</h2>
+    <p>Every bonus so far is <b>lifelong</b>: once a state is familiar, it stays familiar forever. That is exactly wrong when the task <em>requires</em> redoing something you have already done — the agent remembers the room as explored, has no reason to return, and gives up on the episode.</p>
+    <p><b>Episodic novelty</b> fixes this by resetting the counter at the start of every episode. Combine it with a lifelong signal and you get the reward used by <b>Never Give Up</b> (NGU):</p>
+    <div class="eqbox">
+      $$r^{i}_t \;=\; \alpha_t\,\frac{1}{\sqrt{N_e(s_t)}} \;+\; \beta\, r^{\text{life}}_t ,$$
+    </div>
+    <p>where $N_e(s_t)$ counts visits <em>within the current episode</em>, $r^{\text{life}}_t$ is a lifelong signal such as RND's distillation gap, and $\alpha_t$ decays over training so that episodic novelty matters most early and fades as competence grows.</p>
+    <div class="note">
+      <b>Never Give Up is the property this buys.</b> Because the episodic bonus returns at every episode boundary, the agent keeps pushing into a room it has already emptied of extrinsic reward instead of retiring there. The lifelong term prevents cross-episode revisiting; the episodic term prevents intra-episode surrender. You need both.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">07</span>Summary</h2>
+    <p>Two ways to price surprise. One learns to predict the consequences of your actions; the other never learns, and just measures how far you have drifted from a random fixed function.</p>
+    <table class="cmp">
+      <tr><th></th><th>Curiosity (ICM)</th><th>Random Network Distillation (RND)</th></tr>
+      <tr><td>Intrinsic signal</td><td>Forward-model prediction error in feature space</td><td>Gap to a frozen random network</td></tr>
+      <tr><td>What is learned</td><td>Encoder $\phi$, forward $f$, inverse $g$</td><td>Predictor $g_{\bar\theta}$ only</td></tr>
+      <tr><td>Dynamics model?</td><td>Yes — predicts $\phi(s_{t+1})$ from $(\phi(s_t),a_t)$</td><td>No — a pure regression on states</td></tr>
+      <tr><td>Safeguard</td><td>Inverse model discards uncontrollable noise</td><td>Return normalisation; non-episodic stream</td></tr>
+      <tr><td>Failure mode</td><td>Stochasticity with no controllable signal to keep</td><td>Reward-scale drift; target too shallow</td></tr>
+      <tr><td>Episodic variant</td><td>With per-episode counts</td><td>NGU episodic memory on the embedding</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      r_t &= r^{e}_t + r^{i}_t\\[2pt]
+      r^{i}_{\text{count}}(s) &= \frac{\beta}{\sqrt{N(s)}}\\[2pt]
+      r^{i}_{\text{ICM}}(t) &= \frac{\eta}{2}\big\|\,f(\phi(s_t),a_t)-\phi(s_{t+1})\,\big\|_2^2\\[2pt]
+      r^{i}_{\text{RND}}(t) &= \big\|\,f_\theta(s_{t+1})-g_{\bar\theta}(s_{t+1})\,\big\|_2^2\\[2pt]
+      r^{i}_{\text{NGU}}(t) &= \alpha_t\,\frac{1}{\sqrt{N_e(s_t)}} + \beta\,r^{\text{life}}_t
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream — hierarchical option discovery, goal-conditioned policies, and the meta-RL of the chapters that follow — is a way of turning this one novelty signal into a <em>curriculum</em>: exploring not just where to go next, but what to try next.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="14-offline-reinforcement-learning.html"><span class="pg-k">Previous</span><span class="pg-t">Offline RL</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="16-hierarchical-reinforcement-learning.html"><span class="pg-k">Next</span><span class="pg-t">Hierarchical RL</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  try { katex.render(tex, node, { throwOnError: false, displayMode: display }); } catch (e) {}
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function gauss() {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/* =====================================================================
+   02 — Count-based novelty bonus
+   ===================================================================== */
+function initCountBonus() {
+  const svg = $('#cnSvg'), eq = $('#cnEq');
+  const slider = $('#cnBeta'), bval = $('#cnBetaVal');
+  const NC = 12, CW = 24, GAP = 6, X0 = 18, BASE = 168, HMAX = 110, BMAX = 2;
+
+  const N = new Array(NC).fill(0);
+  let beta = parseFloat(slider.value);
+  let last = 0;
+
+  svg.innerHTML = '';
+  const bars = [], counts = [];
+  for (let i = 0; i < NC; i++) {
+    const x = X0 + i * (CW + GAP);
+    const g = el('g', { style: 'cursor:pointer' }, svg);
+    el('rect', {
+      x, y: BASE - HMAX - 10, width: CW, height: HMAX + 10, rx: 5,
+      fill: '#fafafa', stroke: '#f0f0f0', 'stroke-width': 1
+    }, g);
+    const bar = el('rect', { x, y: BASE, width: CW, height: 0, rx: 5, fill: '#2563eb' }, g);
+    const ct = el('text', {
+      x: x + CW / 2, y: BASE + 16, 'text-anchor': 'middle', 'font-size': 11,
+      'font-family': 'ui-monospace, monospace', fill: '#9ca3af'
+    }, g);
+    const idx = i;
+    g.addEventListener('click', () => { N[idx]++; last = idx; render(); });
+    bars.push(bar); counts.push(ct);
+  }
+  el('line', { x1: X0 - 6, y1: BASE, x2: X0 + NC * (CW + GAP) - GAP + 6, y2: BASE, stroke: '#e5e5e5' }, svg);
+
+  function render() {
+    for (let i = 0; i < NC; i++) {
+      const b = beta / Math.sqrt(Math.max(N[i], 1));
+      const h = (b / BMAX) * HMAX;
+      bars[i].setAttribute('height', Math.max(h, 0));
+      bars[i].setAttribute('y', BASE - h);
+      counts[i].textContent = N[i] ? N[i] : '·';
+    }
+    const n = Math.max(N[last], 1);
+    T(eq,
+      `\\begin{aligned}
+        r^{i}(s) &= \\frac{\\beta}{\\sqrt{N(s)}}\\\\[2pt]
+        &= \\frac{${beta.toFixed(2)}}{\\sqrt{${n}}} = \\mathbf{${(beta / Math.sqrt(n)).toFixed(3)}}
+      \\end{aligned}`, true);
+  }
+
+  slider.addEventListener('input', () => {
+    beta = parseFloat(slider.value);
+    bval.textContent = beta.toFixed(2);
+    render();
+  });
+  $('#cnWalk').addEventListener('click', () => {
+    let pos = Math.floor(NC / 2);
+    for (let t = 0; t < 240; t++) {
+      pos += Math.random() < 0.5 ? -1 : 1;
+      if (pos < 0) pos = 1;
+      if (pos >= NC) pos = NC - 2;
+      N[pos]++;
+    }
+    last = Math.floor(NC / 2);
+    render();
+  });
+  $('#cnReset').addEventListener('click', () => {
+    for (let i = 0; i < NC; i++) N[i] = 0;
+    last = 0; render();
+  });
+
+  render();
+}
+
+/* =====================================================================
+   03 — ICM: forward error vs. inverse-filtered error under a noisy TV
+   ===================================================================== */
+function initICM() {
+  const svg = $('#icmSvg'), eq = $('#icmEq'), msg = $('#icmMsg');
+  const noise = $('#icmNoise'), nval = $('#icmNoiseVal');
+  const T_END = 260, SIG2MAX = 1;
+
+  const W = 420, H = 270, ML = 50, MR = 16, MT = 20, MB = 40;
+  const PW = W - ML - MR, PH = H - MT - MB;
+
+  let sigma = parseFloat(noise.value);
+  let mode = 'fwd';
+  let curves = null;   /* {c:[], f:[]} */
+  let t = 0;
+  let timer = null;
+
+  function build() {
+    /* A controllable feature follows a deterministic, learnable map;
+       an independent noise feature is unpredictable. An online linear
+       forward model is trained on the pair; its squared error on the
+       controllable coordinate is the ICM reward, on both is the
+       forward-only reward. */
+    sigma = parseFloat(noise.value);
+    nval.textContent = sigma.toFixed(2);
+    let Wm = [[0, 0], [0, 0]], b = [0, 0];
+    let c = 0.7;
+    let prev = [c, gauss() * sigma];
+    let emaC = 1.0, emaN = sigma * sigma;
+    const lr = 0.05;
+    const arrC = [], arrF = [];
+    for (let k = 0; k < T_END; k++) {
+      const nextC = 0.9 * c + 0.3;
+      const nextN = gauss() * sigma;
+      const s = prev;
+      const p0 = Wm[0][0] * s[0] + Wm[0][1] * s[1] + b[0];
+      const p1 = Wm[1][0] * s[0] + Wm[1][1] * s[1] + b[1];
+      const e0 = p0 - nextC, e1 = p1 - nextN;
+      emaC = 0.98 * emaC + 0.02 * e0 * e0;
+      emaN = 0.98 * emaN + 0.02 * e1 * e1;
+      for (let i = 0; i < 2; i++) {
+        const ei = i ? e1 : e0;
+        for (let j = 0; j < 2; j++) Wm[i][j] -= lr * ei * s[j];
+        b[i] -= lr * ei;
+      }
+      c = nextC; prev = [nextC, nextN];
+      arrC.push(emaC); arrF.push(emaC + emaN);
+    }
+    curves = { c: arrC, f: arrF };
+    t = 0;
+  }
+
+  function ymax() { return Math.max(1.15, 1.0 + sigma * sigma + 0.12); }
+  const xOf = (k) => ML + (k / T_END) * PW;
+  const yOf = (v) => MT + PH * (1 - v / ymax());
+
+  function draw() {
+    svg.innerHTML = '';
+    const Ym = ymax();
+    /* y grid */
+    for (let v = 0; v <= 2.0001; v += 0.5) {
+      if (v > Ym + 1e-9) continue;
+      const y = yOf(v);
+      el('line', { x1: ML, y1: y, x2: ML + PW, y2: y, stroke: v === 0 ? '#e5e5e5' : '#f2f2f2' }, svg);
+      el('text', { x: ML - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, svg).textContent = v.toFixed(1);
+    }
+    el('line', { x1: ML, y1: MT, x2: ML, y2: MT + PH, stroke: '#e5e5e5' }, svg);
+    el('line', { x1: ML, y1: MT + PH, x2: ML + PW, y2: MT + PH, stroke: '#e5e5e5' }, svg);
+    el('text', { x: ML + PW, y: MT + PH + 30, 'text-anchor': 'end', 'font-size': 11.5, fill: '#6b7280' }, svg).textContent = 'training step';
+    el('text', { x: ML - 42, y: MT + 10, 'font-size': 11.5, fill: '#6b7280' }, svg).textContent = 'reward';
+
+    /* irreducible noise floor */
+    const yf = yOf(sigma * sigma);
+    el('line', { x1: ML, y1: yf, x2: ML + PW, y2: yf, stroke: '#dc2626', 'stroke-width': 1, 'stroke-dasharray': '4 4', opacity: 0.55 }, svg);
+    el('text', { x: ML + PW - 4, y: yf - 5, 'text-anchor': 'end', 'font-size': 10.5, fill: '#dc2626', 'font-family': 'ui-monospace, monospace' }, svg).textContent = 'σ² floor';
+
+    /* one polyline per curve, revealed up to t */
+    function poly(arr, color, active) {
+      const pts = [];
+      for (let k = 0; k <= t; k++) pts.push(`${xOf(k)},${yOf(arr[k])}`);
+      if (pts.length < 2) return;
+      el('polyline', {
+        points: pts.join(' '), fill: 'none', stroke: color,
+        'stroke-width': active ? 2.6 : 1.6, opacity: active ? 1 : 0.45,
+        'stroke-linejoin': 'round', 'stroke-linecap': 'round'
+      }, svg);
+    }
+    poly(curves.f, '#2563eb', mode === 'fwd');
+    poly(curves.c, '#111111', mode === 'icm');
+
+    /* active marker */
+    const isF = mode === 'fwd';
+    const val = isF ? curves.f[t] : curves.c[t];
+    el('circle', { cx: xOf(t), cy: yOf(val), r: 3.4, fill: isF ? '#2563eb' : '#111' }, svg);
+
+    /* labels */
+    el('text', { x: ML + 10, y: MT + 14, 'font-size': 11.5, fill: '#111' }, svg).textContent = 'ICM';
+    el('text', { x: ML + 10, y: MT + 30, 'font-size': 11.5, fill: '#2563eb' }, svg).textContent = 'forward only';
+  }
+
+  function updateEq() {
+    const ec = curves.c[t], ef = curves.f[t];
+    if (mode === 'fwd') {
+      T(eq, `\\begin{aligned}
+        r^{i}_t &= e_c(t) + \\sigma^{2}\\\\[2pt]
+        &= ${ec.toFixed(2)} + ${(sigma * sigma).toFixed(2)} = \\mathbf{${ef.toFixed(3)}}
+      \\end{aligned}`, true);
+    } else {
+      T(eq, `\\begin{aligned}
+        r^{i}_t &= e_c(t)\\\\[2pt]
+        &= \\mathbf{${ec.toFixed(3)}}\\quad\\text{(the }\\sigma^{2}\\text{ term is dropped)}
+      \\end{aligned}`, true);
+    }
+    msg.textContent = mode === 'fwd'
+      ? (sigma > 0.02 ? 'the static keeps paying — the bonus never decays' : 'no static: forward error decays cleanly')
+      : 'inverse-filtered: only controllable surprise remains';
+  }
+
+  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+  function loop() {
+    if (t >= T_END) { stop(); return; }
+    t++; draw(); updateEq();
+  }
+  function play() {
+    stop(); build(); draw(); updateEq();
+    timer = setInterval(loop, 32);
+  }
+
+  $('#icmRun').addEventListener('click', () => { if (timer) { stop(); return; } play(); });
+  $('#icmReset').addEventListener('click', () => { stop(); build(); draw(); updateEq(); });
+  noise.addEventListener('input', () => { stop(); build(); draw(); updateEq(); });
+  $$('#icmModeBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      $$('#icmModeBtns button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      mode = b.dataset.mode;
+      draw(); updateEq();
+    });
+  });
+
+  build(); draw(); updateEq();
+}
+
+/* =====================================================================
+   05 — Curiosity Explorer
+   ===================================================================== */
+function initMaze() {
+  const N = 11, SEED = 12345;
+  const GAMMA = 0.95, EPS = 0.08, CAP = 520;
+  const CELL = 30, X0 = 4, Y0 = 4, VIEW = N * CELL + 8;
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const idx = (r, c) => r * N + c;
+
+  /* seeded perfect maze (recursive backtracker) */
+  const rnd = mulberry32(SEED);
+  const g = Array.from({ length: N }, () => Array(N).fill(1));
+  {
+    const st = [[1, 1]]; g[1][1] = 0;
+    while (st.length) {
+      const [r, c] = st[st.length - 1];
+      const opts = [];
+      for (const [dr, dc] of [[0, 2], [2, 0], [0, -2], [-2, 0]]) {
+        const nr = r + dr, nc = c + dc;
+        if (nr > 0 && nr < N - 1 && nc > 0 && nc < N - 1 && g[nr][nc] === 1)
+          opts.push([nr, nc, r + dr / 2, c + dc / 2]);
+      }
+      if (!opts.length) { st.pop(); continue; }
+      const [nr, nc, mr, mc] = opts[Math.floor(rnd() * opts.length)];
+      g[mr][mc] = 0; g[nr][nc] = 0; st.push([nr, nc]);
+    }
+  }
+  const START = [1, 1];
+  const goal = (() => {
+    const dist = Array.from({ length: N }, () => Array(N).fill(-1));
+    const q = [START]; dist[START[0]][START[1]] = 0;
+    let far = START, fd = 0, h = 0;
+    while (h < q.length) {
+      const [r, c] = q[h++];
+      if (dist[r][c] > fd) { fd = dist[r][c]; far = [r, c]; }
+      for (const [dr, dc] of DIRS) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < N && nc >= 0 && nc < N && g[nr][nc] === 0 && dist[nr][nc] < 0) {
+          dist[nr][nc] = dist[r][c] + 1; q.push([nr, nc]);
+        }
+      }
+    }
+    return far;
+  })();
+  const open = [];
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!g[r][c]) open.push([r, c]);
+
+  const svg = $('#cxSvg'), eq = $('#cxEq');
+  const statsEl = $('#cxStats'), statusEl = $('#cxStatus');
+  const betaSlider = $('#cxBeta'), betaVal = $('#cxBetaVal');
+
+  let Ncnt = new Float64Array(N * N);
+  let visited = new Set([idx(START[0], START[1])]);
+  let ar = START[0], ac = START[1];
+  let steps = 0, goalStep = -1, timer = null;
+  let intrinsic = true, beta = parseFloat(betaSlider.value);
+
+  /* --- build maze svg --- */
+  svg.innerHTML = '';
+  const cellEls = [];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const x = X0 + c * CELL, y = Y0 + r * CELL;
+      const rect = el('rect', {
+        x: x + 1, y: y + 1, width: CELL - 2, height: CELL - 2, rx: 4,
+        fill: '#fafafa'
+      }, svg);
+      const t = el('text', {
+        x: x + CELL / 2, y: y + CELL / 2 + 4, 'text-anchor': 'middle',
+        'font-size': 12, 'font-weight': 650, 'font-family': 'ui-monospace, monospace',
+        fill: '#111'
+      }, svg);
+      cellEls.push({ rect, t, r, c });
+    }
+  }
+  const agent = el('circle', {
+    cx: X0 + ac * CELL + CELL / 2, cy: Y0 + ar * CELL + CELL / 2,
+    r: CELL * 0.3, fill: '#111', stroke: '#fff', 'stroke-width': 2
+  }, svg);
+
+  function render() {
+    let maxN = 1;
+    for (const [r, c] of open) maxN = Math.max(maxN, Ncnt[idx(r, c)]);
+    cellEls.forEach(({ rect, t, r, c }) => {
+      if (g[r][c]) { rect.setAttribute('fill', '#e5e7eb'); t.textContent = ''; return; }
+      if (r === START[0] && c === START[1]) { rect.setAttribute('fill', '#111'); t.textContent = 'S'; t.setAttribute('fill', '#fff'); return; }
+      if (r === goal[0] && c === goal[1]) { rect.setAttribute('fill', '#1e40af'); t.textContent = 'G'; t.setAttribute('fill', '#fff'); return; }
+      const n = Ncnt[idx(r, c)];
+      if (n > 0) {
+        const a = Math.min(0.85, 0.12 + 0.65 * (n / maxN));
+        rect.setAttribute('fill', `rgba(37,99,235,${a.toFixed(3)})`);
+      } else {
+        rect.setAttribute('fill', '#fafafa');
+      }
+      t.textContent = '';
+    });
+    agent.setAttribute('cx', X0 + ac * CELL + CELL / 2);
+    agent.setAttribute('cy', Y0 + ar * CELL + CELL / 2);
+
+    const cov = visited.size / open.length;
+    statsEl.textContent = `steps = ${steps}   coverage = ${(cov * 100).toFixed(0)}%   β = ${beta.toFixed(2)}`;
+    statusEl.textContent = goalStep >= 0
+      ? `goal reached in ${goalStep} steps`
+      : (steps >= CAP ? 'stopped at cap — goal never reached' : 'running…');
+    renderEq();
+  }
+
+  function renderEq() {
+    const n = Math.max(Ncnt[idx(ar, ac)], 1);
+    if (intrinsic) {
+      T(eq, `\\begin{aligned}
+        r^{i}(s_t) &= \\frac{\\beta}{\\sqrt{N(s_t)}} = \\frac{${beta.toFixed(2)}}{\\sqrt{${n}}} = ${(beta / Math.sqrt(n)).toFixed(3)}\\\\[2pt]
+        r_t &= r^{e}_t + r^{i}_t
+      \\end{aligned}`, true);
+    } else {
+      T(eq, `r^{i}(s_t)=0,\\qquad r_t=r^{e}_t=0`, true);
+    }
+  }
+
+  function plan() {
+    const R = new Float64Array(N * N);
+    for (const [r, c] of open) {
+      const i = idx(r, c);
+      R[i] = intrinsic ? beta / Math.sqrt(Math.max(Ncnt[i], 1)) : 0;
+    }
+    let V = new Float64Array(N * N);
+    for (let k = 0; k < 40; k++) {
+      const nv = new Float64Array(N * N);
+      for (const [r, c] of open) {
+        const i = idx(r, c);
+        let best = -1e18;
+        for (const [dr, dc] of DIRS) {
+          let nr = r + dr, nc = c + dc;
+          if (g[nr][nc]) { nr = r; nc = c; }
+          const q = R[idx(nr, nc)] + GAMMA * V[idx(nr, nc)];
+          if (q > best) best = q;
+        }
+        nv[i] = best;
+      }
+      V = nv;
+    }
+    return { R, V };
+  }
+
+  function tick() {
+    const { R, V } = plan();
+    let a;
+    if (Math.random() < EPS) {
+      a = Math.floor(Math.random() * 4);
+    } else {
+      const cand = [];
+      let best = -1e18;
+      for (let d = 0; d < 4; d++) {
+        let nr = ar + DIRS[d][0], nc = ac + DIRS[d][1];
+        if (g[nr][nc]) { nr = ar; nc = ac; }
+        const q = R[idx(nr, nc)] + GAMMA * V[idx(nr, nc)];
+        if (q > best + 1e-9) { best = q; cand.length = 0; cand.push(d); }
+        else if (Math.abs(q - best) < 1e-9) cand.push(d);
+      }
+      a = cand[Math.floor(Math.random() * cand.length)];
+    }
+    let nr = ar + DIRS[a][0], nc = ac + DIRS[a][1];
+    if (g[nr][nc]) { nr = ar; nc = ac; }
+    ar = nr; ac = nc;
+    Ncnt[idx(ar, ac)]++;
+    visited.add(idx(ar, ac));
+    steps++;
+    if (ar === goal[0] && ac === goal[1] && goalStep < 0) goalStep = steps;
+    render();
+    if (goalStep >= 0 || steps >= CAP) stop();
+  }
+
+  function stop() { if (timer) { clearInterval(timer); timer = null; } $('#cxRun').textContent = 'Run ▶'; }
+
+  $('#cxRun').addEventListener('click', () => {
+    if (timer) { stop(); return; }
+    if (goalStep >= 0 || steps >= CAP) return;
+    $('#cxRun').textContent = 'Stop ■';
+    timer = setInterval(tick, 45);
+  });
+  $('#cxReset').addEventListener('click', () => {
+    stop(); $('#cxRun').textContent = 'Run ▶';
+    Ncnt = new Float64Array(N * N); visited = new Set([idx(START[0], START[1])]);
+    ar = START[0]; ac = START[1]; steps = 0; goalStep = -1;
+    render();
+  });
+  $('#cxNewEp').addEventListener('click', () => {
+    if (timer) stop();
+    Ncnt = new Float64Array(N * N); visited = new Set([idx(ar, ac)]);
+    steps = 0; goalStep = -1;
+    render();
+  });
+  $('#cxIntrinsic').addEventListener('click', () => {
+    intrinsic = !intrinsic;
+    const b = $('#cxIntrinsic');
+    b.textContent = 'Intrinsic reward: ' + (intrinsic ? 'ON' : 'OFF');
+    b.classList.toggle('active', intrinsic);
+    stop(); render();
+  });
+  betaSlider.addEventListener('input', () => {
+    beta = parseFloat(betaSlider.value);
+    betaVal.textContent = beta.toFixed(2);
+    render();
+  });
+
+  render();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initCountBonus();
+  initICM();
+  initMaze();
+  initScroll();
+});
+</script>
+</body>
+</html>

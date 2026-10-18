@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapter 11 · Policy Gradient Methods</title>
+
+<!-- Assumptions: the playground uses a tabular softmax policy over the four
+     grid moves and updates its logits with REINFORCE plus a scalar
+     running-mean baseline; the baseline-variance panel fixes a two-action
+     Bernoulli policy (rewards 1 and 0, pi(a1)=0.6, 132/88 sample counts) with
+     a seeded RNG so the exact mean and variance are reproducible. Per the
+     chapter task the footer carries no prev/next chapter links (the reference
+     has none); the topbar keeps the in-page section anchors. -->
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row input[type=range]{margin:10px 0}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- svg ---------------- */
+svg{display:block;max-width:100%;height:auto}
+#polSvg,#baseSvg,#gaeSvg{border-radius:10px;background:#fbfbfc;box-shadow:inset 0 0 0 1px #f0f0f0;width:100%;margin:0 auto}
+#playSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+
+/* ---------------- probability / gradient bars ---------------- */
+.pbar{display:flex;height:28px;border-radius:7px;overflow:hidden;border:1px solid #f0f0f0;margin:10px 0}
+.pbar>span{display:flex;align-items:center;justify-content:center;font-family:ui-monospace,monospace;font-size:12px;font-weight:650;color:#fff;transition:flex .25s;white-space:nowrap;overflow:hidden}
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;padding:2px 4px}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:22px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+.stat{font-family:ui-monospace,monospace;font-size:13px;display:flex;gap:22px;flex-wrap:wrap;margin:10px 0 2px}
+.stat b{font-weight:650}
+.leg{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:#6b7280;font-family:ui-monospace,monospace;margin-top:8px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:middle;margin-right:5px}
+
+/* ---------------- misc ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:30%}
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .stat{gap:14px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">Ch. 11 · Policy Gradients</a>
+    <nav class="nav">
+      <a href="#theorem">Theorem</a>
+      <a href="#reinforce">REINFORCE</a>
+      <a href="#baseline">Baselines</a>
+      <a href="#actor">Actor–critic</a>
+      <a href="#gae">GAE(λ)</a>
+      <a href="#play">Playground</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Part III · Chapter 11</p>
+    <h1>Policy Gradient Methods</h1>
+    <p class="lede">Differentiate the return with respect to the policy's own parameters and let gradient ascent find the policy — no max over actions required.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="objective">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>The objective</h2>
+      <p>Value-based methods learn $Q$ and read an action off by maximising. Policy-based methods parameterise the policy itself and <b>ascend the return directly</b>:</p>
+      <div class="eqbox">
+        $$\pi_\theta(a\mid s)\ \text{(differentiable in }\theta),\qquad
+        J(\theta)=\mathbb{E}_{\tau\sim p_\theta}\!\left[\sum_{t=0}^{T-1}\gamma^{t}\,r_{t+1}\right].$$
+      </div>
+      <p>An episode is a trajectory $\tau=(s_0,a_0,s_1,a_1,\dots)$ drawn from</p>
+      <div class="eqbox">
+        $$p_\theta(\tau)=\rho(s_0)\prod_{t=0}^{T-1}\pi_\theta(a_t\mid s_t)\,P(s_{t+1}\mid s_t,a_t).$$
+      </div>
+      <p>Changing $\theta$ changes the actions and, through them, the states visited. <b>The gradient of an expectation is not the expectation of the gradient here, because the measure $p_\theta$ moves with $\theta$.</b></p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · a differentiable policy</span>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="polSvg" viewBox="0 0 360 205" role="img" aria-label="A Gaussian policy density with mean mu, standard deviation sigma, and one sampled action"></svg>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row"><span class="small muted">mean $\mu$</span><input type="range" id="polMu" min="-2" max="2" step="0.05" value="0" aria-label="policy mean"><span class="val" id="polMuVal">0.00</span></div>
+          <div class="slider-row"><span class="small muted">std $\sigma$</span><input type="range" id="polSigma" min="0.3" max="1.6" step="0.05" value="0.7" aria-label="policy standard deviation"><span class="val" id="polSigmaVal">0.70</span></div>
+          <div class="slider-row"><span class="small muted">action $a$</span><input type="range" id="polA" min="-3" max="3" step="0.05" value="1" aria-label="sampled action"><span class="val" id="polAVal">1.00</span></div>
+          <p class="small muted" style="margin-bottom:0">Move $\mu$ and the density slides; widen $\sigma$ and it flattens. The dot is one sampled action — the box below is its score function, $\nabla_\theta\log\pi_\theta(a)$.</p>
+        </div>
+      </div>
+      <div class="eqbox" id="polEq"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="theorem">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>The policy gradient theorem</h2>
+      <p>The log-derivative identity $\nabla_\theta p_\theta = p_\theta\,\nabla_\theta\log p_\theta$ moves the gradient inside the expectation:</p>
+      <div class="eqbox">
+        $$\nabla_\theta J(\theta)=\mathbb{E}_{\tau\sim p_\theta}\!\big[\,R(\tau)\,\nabla_\theta\log p_\theta(\tau)\,\big].$$
+      </div>
+      <p>Only the policy factors of $p_\theta(\tau)$ depend on $\theta$; the initial-state density and the transition model drop out:</p>
+      <div class="eqbox">
+        $$\nabla_\theta\log p_\theta(\tau)=\sum_{t=0}^{T-1}\nabla_\theta\log\pi_\theta(a_t\mid s_t).$$
+      </div>
+      <p>The policy-only sum on that second line is exactly where the model is spent — no $\nabla_\theta P$ survives. Read it back: the gradient scores each action by how much $\theta$ raises its log-probability, weighted by the return the trajectory earned. Rewards before $a_t$ cannot depend on it, so they drop too, and averaging over the on-policy state distribution $\mu$ gives the theorem:</p>
+      <div class="eqbox">
+        $$\nabla_\theta J(\theta)=\sum_{s}\mu(s)\sum_{a}\nabla_\theta\pi_\theta(a\mid s)\,q^\pi(s,a)
+        =\mathbb{E}_{\pi_\theta}\!\big[\nabla_\theta\log\pi_\theta(A_t\mid S_t)\,\hat q(S_t,A_t)\big].$$
+      </div>
+      <p><b>The state distribution is not differentiated.</b> That is the theorem's gift: $\mu$ shifts with $\theta$ in reality, but its derivative never appears, so the expectation can be sampled by simply acting with $\pi_\theta$.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the likelihood-ratio gradient</span>
+        <div class="btnrow">
+          <button id="scoreAscend" class="primary">Ascend θ ▶</button>
+          <button id="scoreReset">Reset</button>
+        </div>
+      </div>
+      <p class="small muted" style="margin-top:0">Three actions with fixed values $q=(1.0,\,0.3,\,-0.4)$. Blue mass is the softmax policy; the bars below are the gradient $\pi_i(q_i-\bar q)$. Slide the logits and watch the two move together.</p>
+      <div id="scoreBar" class="pbar"></div>
+      <div id="scoreGrad"></div>
+      <div class="row" style="margin-top:8px">
+        <div class="col" style="flex:1 1 220px">
+          <div class="slider-row"><span class="small muted">$\theta_1$</span><input type="range" id="stA" min="-2" max="2" step="0.1" value="0" aria-label="logit 1"><span class="val" id="stAv">0.0</span></div>
+          <div class="slider-row"><span class="small muted">$\theta_2$</span><input type="range" id="stB" min="-2" max="2" step="0.1" value="0" aria-label="logit 2"><span class="val" id="stBv">0.0</span></div>
+          <div class="slider-row"><span class="small muted">$\theta_3$</span><input type="range" id="stC" min="-2" max="2" step="0.1" value="0" aria-label="logit 3"><span class="val" id="stCv">0.0</span></div>
+        </div>
+        <div class="col" style="flex:1 1 260px"><div class="eqbox" id="scoreEq" style="margin-top:0"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="reinforce">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>REINFORCE</h2>
+      <p>Estimate the expectation with one sampled episode, and replace the action value by the return that followed it:</p>
+      <div class="eqbox">
+        $$\nabla_\theta J(\theta)\approx\sum_{t=0}^{T-1}\nabla_\theta\log\pi_\theta(a_t\mid s_t)\,G_t,
+        \qquad \theta\leftarrow\theta+\alpha\,\widehat{\nabla_\theta J(\theta)}.$$
+      </div>
+      <p>This is Monte-Carlo policy gradient — <b>unbiased, but noisy</b>. Each score is multiplied by a full sampled return whose spread grows with the horizon; a lucky episode drags every action it contains, good or bad, in its direction.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="baseline">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Baselines and variance</h2>
+      <p>Subtract any function $b(s)$ of the state. Its contribution to the gradient is exactly zero, because scores are mean-zero under $\pi_\theta$:</p>
+      <div class="eqbox">
+        $$\mathbb{E}_{a\sim\pi_\theta}\!\big[\nabla_\theta\log\pi_\theta(a\mid s)\,b(s)\big]
+        =b(s)\,\nabla_\theta\!\sum_{a}\pi_\theta(a\mid s)=b(s)\,\nabla_\theta 1=0.$$
+      </div>
+      <p>So replacing $G_t$ by $G_t-b(s_t)$ leaves the mean untouched and only shrinks the spread. <b>The natural baseline is the value $V^\pi(s)$</b> — the mean of $G_t$, the part of the return the score cannot explain. Any $b$ is unbiased; a good one is what turns REINFORCE from a curiosity into an algorithm.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · a baseline cuts variance, not bias</span>
+        <div class="slider-row" style="width:230px"><span class="small muted">baseline $b$</span><input type="range" id="baseB" min="0" max="0.9" step="0.01" value="0" aria-label="baseline"><span class="val" id="baseBVal">0.00</span></div>
+      </div>
+      <p class="small muted" style="margin-top:0">One-step REINFORCE on a two-action state: rewards $1$ and $0$, policy $\pi(a_1)=0.6$. Each dot is one gradient estimate; blue/red mark which action was sampled, the blue line is the sample mean, the dark dashed line the true gradient.</p>
+      <svg id="baseSvg" viewBox="0 0 360 150" role="img" aria-label="Scatter of sampled gradient estimates for different baselines"></svg>
+      <div class="stat" id="baseStats"></div>
+      <div class="leg"><span><span class="sw" style="background:#2563eb"></span>$a_1$ sampled</span><span><span class="sw" style="background:#dc2626"></span>$a_2$ sampled</span><span><span class="sw" style="background:#111"></span>true $\nabla_\theta J$</span></div>
+      <div class="eqbox" id="baseEq"></div>
+    </div>
+  </div>
+</section>
+<!-- ==================================================================== -->
+<section id="actor">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Actor–critic</h2>
+      <p>Rather than sample the whole return, learn its mean. An <b>actor</b> $\pi_\theta$ chooses actions; a <b>critic</b> $V_w$ estimates value; and the policy is nudged by the <b>advantage</b>, which the one-step TD error estimates:</p>
+      <div class="eqbox">
+        $$A^\pi(s,a)=Q^\pi(s,a)-V^\pi(s),\qquad
+        \delta_t=r_{t+1}+\gamma V_w(s_{t+1})-V_w(s_t)\approx A^\pi(s_t,a_t).$$
+      </div>
+      <div class="eqbox">
+        $$\theta\leftarrow\theta+\alpha_\theta\,\nabla_\theta\log\pi_\theta(a_t\mid s_t)\,\delta_t,
+        \qquad w\leftarrow w+\alpha_w\,\delta_t\,\nabla_w V_w(s_t).$$
+      </div>
+      <p>The advantage is centered under the policy: $\mathbb{E}_{a\sim\pi}[A^\pi(s,a)]=0$. Subtracting $V^\pi$ removes exactly the part of the return the score cannot influence, so the actor moves only on what it controls. The critic trades Monte-Carlo bias for bootstrapping variance — it reacts at every step, but only as far as its own errors allow.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the advantage as a centered weight</span>
+        <div class="slider-row" style="width:230px"><span class="small muted">baseline $b$</span><input type="range" id="advB" min="-0.4" max="1" step="0.01" value="0.3" aria-label="baseline"><span class="val" id="advBVal">0.30</span></div>
+      </div>
+      <p class="small muted" style="margin-top:0">Four actions with $Q=(0.9,\,0.5,\,0.1,\,-0.3)$ under a uniform policy. The bars are $Q(s,a)-b$. At $b=V(s)$ they are the true advantages and cancel under $\pi$.</p>
+      <div id="advBars"></div>
+      <div class="eqbox" id="advEq"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="gae">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>Advantage estimation: GAE(λ)</h2>
+      <p>Set $\delta_t=r_{t+1}+\gamma V(s_{t+1})-V(s_t)$. The advantage that trades off horizon is a geometric sum of TD errors:</p>
+      <div class="eqbox">
+        $$\hat A^{\mathrm{GAE}(\lambda)}_t=\sum_{l=0}^{\infty}(\gamma\lambda)^{l}\,\delta_{t+l}
+        =\delta_t+\gamma\lambda\,\hat A^{\mathrm{GAE}(\lambda)}_{t+1}.$$
+      </div>
+      <p>At $\lambda=0$ it is the one-step TD advantage — low variance, biased by whatever the critic gets wrong. At $\lambda=1$ it is the Monte-Carlo advantage — unbiased, high variance. <b>$\lambda$ slides continuously between the two.</b></p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · GAE(λ) over one trajectory</span>
+        <div class="slider-row" style="width:220px"><span class="small muted">$\lambda$</span><input type="range" id="gaeL" min="0" max="1" step="0.02" value="0" aria-label="GAE lambda"><span class="val" id="gaeLVal">0.00</span></div>
+      </div>
+      <p class="small muted" style="margin-top:0">A six-step trajectory with $\gamma=0.9$. Grey bars are the TD residuals $\delta_t$; blue/red bars are the resulting advantages $\hat A_t(\lambda)$.</p>
+      <svg id="gaeSvg" viewBox="0 0 360 190" role="img" aria-label="GAE advantages for each timestep against lambda"></svg>
+      <div class="stat" id="gaeStats"></div>
+      <div class="eqbox" id="gaeEq"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="play">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">07</span>Policy Gradient Playground</h2>
+      <p>A $5\times5$ grid, start bottom-left, goal top-right, a pit at the centre. Every state carries its own softmax policy over the four moves, and REINFORCE updates only its logits, from sampled episodes alone:</p>
+      <div class="eqbox">
+        $$\theta_{s,a}\leftarrow\theta_{s,a}+\alpha\,(G_t-b)\,
+        \big(\mathbf 1\{a=A_t\}-\pi_\theta(a\mid s)\big),$$
+      </div>
+      <p>where the bracket is $\nabla_{\theta_{s,a}}\log\pi_\theta(A_t\mid s)$ and $b$ is the running mean return. Train it and watch each cell's arrows rotate toward the goal and away from the pit — the policy distribution is the thing being learned.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · Policy Gradient Playground</span>
+        <div class="btnrow">
+          <button id="playTrain">Train 50 eps</button>
+          <button id="playRun" class="primary">Run ▶</button>
+          <button id="playEpisode">Sample episode</button>
+          <button id="playReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="playSvg" viewBox="0 0 320 320" role="img" aria-label="Grid navigation task with the learned policy arrows in each cell"></svg>
+          <p class="small muted" id="playInfo" style="text-align:center;margin-top:10px;font-family:ui-monospace,monospace"></p>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row"><span class="small muted">step size $\alpha$</span><input type="range" id="playAlpha" min="0.1" max="0.8" step="0.02" value="0.4" aria-label="learning rate"><span class="val" id="playAlphaVal">0.40</span></div>
+          <p class="small muted" style="margin-top:14px">Each cell shows its action distribution as four arrows from the centre: longer and darker means more probable; the greediest move is black.</p>
+          <div class="leg" style="flex-direction:column;gap:7px">
+            <span><span class="sw" style="background:#1e40af"></span>goal, $+1$</span>
+            <span><span class="sw" style="background:#991b1b"></span>pit, $-1$</span>
+            <span><span class="sw" style="background:#2563eb"></span>probable move</span>
+          </div>
+          <p class="small muted" style="margin-top:16px;margin-bottom:0">Step reward $-0.02$, $\gamma=0.99$, episodes capped at 60 steps. The baseline is the running mean of episode returns.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">08</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Value-based (Ch. 9–10)</th><th>Policy-based (this chapter)</th></tr>
+      <tr><td>Learns</td><td>$Q_\theta(s,a)$, then acts greedily</td><td>$\pi_\theta(a\mid s)$ directly</td></tr>
+      <tr><td>Objective</td><td>Minimise TD error (a surrogate)</td><td>Maximise $J(\theta)$ itself</td></tr>
+      <tr><td>Update signal</td><td>TD error $\delta$</td><td>Advantage-weighted score $\nabla\log\pi\,\hat A$</td></tr>
+      <tr><td>Actions</td><td>$\arg\max_a Q$ — needs all values</td><td>Sample from $\pi$ — continuous and stochastic are natural</td></tr>
+      <tr><td>On / off policy</td><td>Off-policy: replay allowed</td><td>On-policy: the data must come from $\pi_\theta$</td></tr>
+      <tr><td>Bias / variance</td><td>Bootstrapping bias, maximisation bias</td><td>High variance; $\lambda$ and the critic tune it</td></tr>
+      <tr><td>Failure mode</td><td>Deadly triad, overestimation</td><td>Destructive updates from a noisy step</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      \nabla_\theta J(\theta) &= \mathbb{E}_{\pi_\theta}\!\big[\nabla_\theta\log\pi_\theta(A_t\mid S_t)\,\hat q(S_t,A_t)\big]\\[2pt]
+      \text{REINFORCE}\quad \theta &\leftarrow \theta+\alpha\,\nabla_\theta\log\pi_\theta(a_t\mid s_t)\,G_t\\[2pt]
+      \text{baseline}\quad &\mathbb{E}\!\big[\nabla_\theta\log\pi_\theta(a\mid s)\,b(s)\big]=0\\[2pt]
+      A^\pi(s,a) &= Q^\pi(s,a)-V^\pi(s)\ \approx\ \delta_t=r_{t+1}+\gamma V(s_{t+1})-V(s_t)\\[2pt]
+      \hat A^{\mathrm{GAE}(\lambda)}_t &= \delta_t+\gamma\lambda\,\hat A^{\mathrm{GAE}(\lambda)}_{t+1}
+      \end{aligned}$$
+    </div>
+    <p class="small muted">The next chapter keeps this raw gradient but constrains the step: TRPO and PPO bound how far one batch is allowed to move $\pi_\theta$.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<nav class="pager" aria-label="Chapter navigation"><a class="pg-prev" href="10-deep-q-networks.html"><span class="pg-k">Previous</span><span class="pg-t">Deep Q-Networks</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="12-trust-region-and-proximal-policy-optimization.html"><span class="pg-k">Next</span><span class="pg-t">TRPO &amp; PPO</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function softmax(z) {
+  const m = Math.max(...z);
+  const e = z.map(v => Math.exp(v - m));
+  const s = e.reduce((a, b) => a + b, 0);
+  return e.map(v => v / s);
+}
+function signedRow(label, value, maxAbs) {
+  const neg = value < 0;
+  const w = maxAbs > 0 ? (Math.abs(value) / maxAbs) * 50 : 0;
+  return '<div class="vrow" style="cursor:default">' +
+    '<span class="vlabel">' + label + '</span>' +
+    '<div class="vtrack"><div class="vzero"></div>' +
+    '<div class="vbar ' + (neg ? 'neg' : 'pos') + '" style="width:' + w.toFixed(2) + '%;transform:' +
+    (neg ? 'translateX(-100%)' : 'none') + '"></div></div>' +
+    '<span class="vval">' + value.toFixed(3) + '</span></div>';
+}
+
+/* =====================================================================
+   01 — a differentiable (Gaussian) policy
+   ===================================================================== */
+function initPolicy() {
+  const svg = $('#polSvg'), eq = $('#polEq');
+  const muS = $('#polMu'), sigS = $('#polSigma'), aS = $('#polA');
+  const muV = $('#polMuVal'), sigV = $('#polSigmaVal'), aV = $('#polAVal');
+  const x0 = 30, x1 = 330, base = 168, top = 26, XMIN = -4, XMAX = 4;
+  const px = a => x0 + (a - XMIN) / (XMAX - XMIN) * (x1 - x0);
+
+  function render() {
+    const mu = parseFloat(muS.value), sg = parseFloat(sigS.value), a0 = parseFloat(aS.value);
+    muV.textContent = mu.toFixed(2); sigV.textContent = sg.toFixed(2); aV.textContent = a0.toFixed(2);
+    svg.innerHTML = '';
+    el('line', { x1: x0, y1: base, x2: x1, y2: base, stroke: '#e5e5e5' }, svg);
+    [-4, -2, 0, 2, 4].forEach(t => {
+      const xx = px(t);
+      const tx = el('text', { x: xx, y: base + 18, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, svg);
+      tx.textContent = t;
+    });
+    const peak = 1 / (sg * Math.sqrt(2 * Math.PI));
+    const yDens = d => base - (d / peak) * (base - top);
+    let d = '';
+    for (let i = 0; i <= 160; i++) {
+      const a = XMIN + (XMAX - XMIN) * i / 160;
+      const dens = Math.exp(-((a - mu) ** 2) / (2 * sg * sg)) * peak;
+      d += (i ? 'L' : 'M') + px(a).toFixed(1) + ' ' + yDens(dens).toFixed(1) + ' ';
+    }
+    el('path', { d, fill: 'none', stroke: '#2563eb', 'stroke-width': 2 }, svg);
+    el('line', { x1: px(mu), y1: top, x2: px(mu), y2: base, stroke: '#c2c9d4', 'stroke-dasharray': '3 3' }, svg);
+    el('line', { x1: px(a0), y1: top, x2: px(a0), y2: base, stroke: '#111', 'stroke-width': 1.3 }, svg);
+    const dens0 = Math.exp(-((a0 - mu) ** 2) / (2 * sg * sg)) * peak;
+    el('circle', { cx: px(a0), cy: yDens(dens0), r: 5, fill: '#111' }, svg);
+    const lmu = el('text', { x: px(mu), y: top - 8, 'text-anchor': 'middle', 'font-size': 11, fill: '#6b7280', 'font-family': 'ui-monospace,monospace' }, svg);
+    lmu.textContent = 'μ';
+    const logp = -Math.log(sg * Math.sqrt(2 * Math.PI)) - ((a0 - mu) ** 2) / (2 * sg * sg);
+    const gmu = (a0 - mu) / (sg * sg);
+    const gsg = (((a0 - mu) ** 2) - sg * sg) / (sg ** 3);
+    T(eq, '\\begin{aligned}' +
+      '\\log\\pi_\\theta(a)&=-\\tfrac12\\log(2\\pi\\sigma^2)-\\tfrac{(a-\\mu)^2}{2\\sigma^2}=' + logp.toFixed(3) + '\\\\[2pt]' +
+      '\\nabla_\\mu\\log\\pi_\\theta(a)&=\\tfrac{a-\\mu}{\\sigma^2}=' + gmu.toFixed(3) + ',\\qquad ' +
+      '\\nabla_\\sigma\\log\\pi_\\theta(a)=\\tfrac{(a-\\mu)^2-\\sigma^2}{\\sigma^3}=' + gsg.toFixed(3) +
+      '\\end{aligned}', true);
+  }
+  [muS, sigS, aS].forEach(s => s.addEventListener('input', render));
+  render();
+}
+
+/* =====================================================================
+   02 — likelihood-ratio gradient over three actions
+   ===================================================================== */
+function initScore() {
+  const thetas = [0, 0, 0];
+  const q = [1.0, 0.3, -0.4];
+  const bar = $('#scoreBar'), grad = $('#scoreGrad'), eq = $('#scoreEq');
+  const cols = ['#1e3a8a', '#2563eb', '#60a5fa'];
+  const sliders = [$('#stA'), $('#stB'), $('#stC')];
+  const vals = [$('#stAv'), $('#stBv'), $('#stCv')];
+
+  function render() {
+    sliders.forEach((s, i) => { thetas[i] = parseFloat(s.value); vals[i].textContent = thetas[i].toFixed(1); });
+    const p = softmax(thetas);
+    const qbar = p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+    bar.innerHTML = p.map((pi, i) =>
+      '<span style="flex:' + Math.max(pi, 0.001).toFixed(4) + ';background:' + cols[i] + '">' + (pi * 100).toFixed(0) + '%</span>').join('');
+    const g = p.map((pi, i) => pi * (q[i] - qbar));
+    grad.innerHTML = [0, 1, 2].map(i => signedRow(String(i + 1), g[i], 0.25)).join('');
+    T(eq, '\\begin{aligned}' +
+      '\\nabla_{\\theta_i}J&=\\sum_a\\pi(a)\\,q(a)\\,\\nabla_{\\theta_i}\\log\\pi(a)=\\pi_i\\big(q_i-\\bar q\\big)\\\\[2pt]' +
+      '\\bar q&=\\sum_a\\pi(a)q(a)=' + qbar.toFixed(3) + '\\\\[2pt]' +
+      '\\nabla_\\theta J&=\\big(' + g.map(x => x.toFixed(3)).join(',\\;') + '\\big)' +
+      '\\end{aligned}', true);
+  }
+  sliders.forEach(s => s.addEventListener('input', render));
+  $('#scoreAscend').addEventListener('click', () => {
+    const p = softmax(thetas);
+    const qbar = p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+    for (let i = 0; i < 3; i++) thetas[i] = Math.max(-2, Math.min(2, thetas[i] + 0.6 * p[i] * (q[i] - qbar)));
+    sliders.forEach((s, i) => s.value = thetas[i].toFixed(2));
+    render();
+  });
+  $('#scoreReset').addEventListener('click', () => {
+    thetas[0] = thetas[1] = thetas[2] = 0;
+    sliders.forEach(s => s.value = 0);
+    render();
+  });
+  render();
+}
+/* =====================================================================
+   04 — baseline variance
+   ===================================================================== */
+function initBaseline() {
+  const svg = $('#baseSvg');
+  const bS = $('#baseB'), bV = $('#baseBVal'), stats = $('#baseStats');
+  const M = 220, p = 0.6, r = [1, 0];
+  const actRng = mulberry32(7), jitRng = mulberry32(99);
+  const acts = [], jit = [];
+  for (let i = 0; i < Math.round(M * p); i++) acts.push(0);
+  for (let i = 0; i < M - Math.round(M * p); i++) acts.push(1);
+  for (let i = acts.length - 1; i > 0; i--) {
+    const j = Math.floor(actRng() * (i + 1));
+    const tmp = acts[i]; acts[i] = acts[j]; acts[j] = tmp;
+  }
+  for (let i = 0; i < M; i++) jit.push(jitRng());
+  const score = a => a === 0 ? (1 - p) : (-p);
+  const XMIN = -0.05, XMAX = 0.6, x0 = 30, x1 = 330, axis = 126, yTop = 16;
+  const px = g => x0 + (g - XMIN) / (XMAX - XMIN) * (x1 - x0);
+
+  function render() {
+    const b = parseFloat(bS.value); bV.textContent = b.toFixed(2);
+    const gs = acts.map(a => score(a) * (r[a] - b));
+    const mean = gs.reduce((s, v) => s + v, 0) / M;
+    const vr = gs.reduce((s, v) => s + (v - mean) ** 2, 0) / M;
+    const std = Math.sqrt(vr);
+    svg.innerHTML = '';
+    el('line', { x1: x0, y1: axis, x2: x1, y2: axis, stroke: '#e5e5e5' }, svg);
+    el('line', { x1: px(0), y1: yTop, x2: px(0), y2: axis, stroke: '#c2c9d4', 'stroke-dasharray': '3 3' }, svg);
+    el('line', { x1: px(0.24), y1: yTop, x2: px(0.24), y2: axis, stroke: '#111', 'stroke-dasharray': '4 3' }, svg);
+    gs.forEach((g, i) => {
+      const xx = px(g), yy = yTop + 8 + jit[i] * (axis - yTop - 20);
+      el('circle', { cx: xx, cy: yy, r: 3.2, fill: acts[i] === 0 ? '#2563eb' : '#dc2626', opacity: 0.5 }, svg);
+    });
+    el('line', { x1: px(mean), y1: yTop, x2: px(mean), y2: axis, stroke: '#2563eb', 'stroke-width': 2 }, svg);
+    const tt = el('text', { x: px(0.24), y: axis + 15, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, svg);
+    tt.textContent = 'true ∇J';
+    stats.innerHTML = '<span>mean <b>' + mean.toFixed(3) + '</b></span>' +
+      '<span>std <b>' + std.toFixed(3) + '</b></span>' +
+      '<span class="muted">true ∇J = 0.240</span>';
+    T($('#baseEq'), '\\text{mean}= ' + mean.toFixed(3) +
+      ',\\qquad \\operatorname{std}= ' + std.toFixed(3) +
+      ',\\qquad \\mathbb{E}[g]= \\pi(a_1)\\pi(a_2)(r_1-r_2)=0.240', true);
+  }
+  bS.addEventListener('input', render);
+  render();
+}
+
+/* =====================================================================
+   05 — advantage as a centered weight
+   ===================================================================== */
+function initAdvantage() {
+  const Q = [0.9, 0.5, 0.1, -0.3];
+  const pi = [0.25, 0.25, 0.25, 0.25];
+  const V = pi.reduce((s, pv, i) => s + pv * Q[i], 0);
+  const bS = $('#advB'), bV = $('#advBVal'), bars = $('#advBars'), eq = $('#advEq');
+
+  function render() {
+    const b = parseFloat(bS.value); bV.textContent = b.toFixed(2);
+    const w = Q.map(qi => qi - b);
+    const maxAbs = Math.max(1e-6, ...w.map(Math.abs));
+    bars.innerHTML = w.map((wi, i) => signedRow('a' + (i + 1), wi, maxAbs)).join('');
+    T(eq, 'A(s,a)=Q(s,a)-V(s),\\qquad V(s)=\\sum_a\\pi(a\\mid s)\\,Q(s,a)=' + V.toFixed(2) +
+      ',\\qquad \\sum_a\\pi(a)\\big(Q(s,a)-b\\big)=' + (V - b).toFixed(2), false);
+  }
+  bS.addEventListener('input', render);
+  render();
+}
+/* =====================================================================
+   06 — GAE(lambda)
+   ===================================================================== */
+function initGAE() {
+  const delta = [0.9, 0.5, -0.3, 0.2, 1.1, 0.4], gam = 0.9, nT = delta.length;
+  const lS = $('#gaeL'), lV = $('#gaeLVal'), svg = $('#gaeSvg'), eq = $('#gaeEq'), stats = $('#gaeStats');
+  const x0 = 34, x1 = 336, base = 142, top = 18, YMIN = -0.6, YMAX = 2.4;
+  const py = v => base - (v - YMIN) / (YMAX - YMIN) * (base - top);
+
+  function render() {
+    const lam = parseFloat(lS.value); lV.textContent = lam.toFixed(2);
+    const A = new Array(nT);
+    A[nT - 1] = delta[nT - 1];
+    for (let t = nT - 2; t >= 0; t--) A[t] = delta[t] + gam * lam * A[t + 1];
+    svg.innerHTML = '';
+    el('line', { x1: x0, y1: py(0), x2: x1, y2: py(0), stroke: '#e5e5e5' }, svg);
+    const slot = (x1 - x0) / nT, bw = slot * 0.42;
+    for (let t = 0; t < nT; t++) {
+      const cx = x0 + (t + 0.5) * slot;
+      el('rect', { x: cx - bw - 2, y: Math.min(py(0), py(delta[t])), width: bw, height: Math.max(Math.abs(py(delta[t]) - py(0)), 1), fill: '#f0f0f0', rx: 3 }, svg);
+      el('rect', { x: cx + 2, y: Math.min(py(0), py(A[t])), width: bw, height: Math.max(Math.abs(py(A[t]) - py(0)), 1), fill: A[t] < 0 ? '#dc2626' : '#2563eb', rx: 3 }, svg);
+      const tx = el('text', { x: cx, y: base + 16, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, svg);
+      tx.textContent = 't' + t;
+    }
+    const label = lam < 0.02 ? 'TD(0) advantage · low variance, biased'
+      : lam > 0.98 ? 'Monte-Carlo advantage · unbiased, high variance'
+        : 'mixing the two';
+    stats.innerHTML = '<span>t=0: <b>' + A[0].toFixed(3) + '</b></span><span class="muted">' + label + '</span>';
+    T(eq, '\\hat A^{\\mathrm{GAE}(\\lambda)}_t=\\delta_t+\\gamma\\lambda\\,\\hat A^{\\mathrm{GAE}(\\lambda)}_{t+1}' +
+      ',\\qquad \\gamma\\lambda=' + (gam * lam).toFixed(3), false);
+  }
+  lS.addEventListener('input', render);
+  render();
+}
+
+/* =====================================================================
+   07 — Policy Gradient Playground
+   ===================================================================== */
+function initPlay() {
+  const N = 5, CELL = 64, GAM = 0.99, MAXS = 60, STEP = -0.02;
+  const GOAL = 0 * N + 4, PIT = 2 * N + 2, START = 4 * N + 0;
+  const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+  const SCR = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+  const theta = Array.from({ length: N * N }, () => [0, 0, 0, 0]);
+  let alpha = 0.4, base = 0, eps = 0, rets = [], lastTraj = [], running = false, timer = null;
+
+  const svg = $('#playSvg'), info = $('#playInfo');
+  const aS = $('#playAlpha'), aV = $('#playAlphaVal');
+  const cellLayer = el('g', {}, svg), pathLayer = el('g', {}, svg);
+  const arrowLayer = el('g', {}, svg), markLayer = el('g', {}, svg);
+
+  const isTerm = i => i === GOAL || i === PIT;
+  const pi = i => softmax(theta[i]);
+  function sampleFrom(p) {
+    const r = Math.random(); let acc = 0;
+    for (let k = 0; k < p.length; k++) { acc += p[k]; if (r <= acc + 1e-12) return k; }
+    return p.length - 1;
+  }
+
+  /* static cells */
+  for (let i = 0; i < N * N; i++) {
+    const r = Math.floor(i / N), c = i % N;
+    const term = isTerm(i);
+    el('rect', {
+      x: c * CELL + 2, y: r * CELL + 2, width: CELL - 4, height: CELL - 4, rx: 7,
+      fill: i === GOAL ? '#1e40af' : i === PIT ? '#991b1b' : '#fafafa',
+      stroke: term ? 'none' : '#ededed', 'stroke-width': 1
+    }, cellLayer);
+    if (term) {
+      const t = el('text', { x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 8, 'text-anchor': 'middle', 'font-size': 22, 'font-weight': 650, fill: '#fff' }, cellLayer);
+      t.textContent = i === GOAL ? 'G' : '×';
+    }
+  }
+  const st = el('text', { x: (START % N) * CELL + CELL / 2, y: Math.floor(START / N) * CELL + CELL / 2 + 5, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 650, fill: '#6b7280' }, markLayer);
+  st.textContent = 'S';
+
+  function episode() {
+    let s = START, hist = [], states = [START];
+    for (let t = 0; t < MAXS; t++) {
+      const p = pi(s), a = sampleFrom(p);
+      const r = Math.floor(s / N), c = s % N;
+      let nr = r + DIRS[a][0], nc = c + DIRS[a][1];
+      if (nr < 0 || nr >= N || nc < 0 || nc >= N) { nr = r; nc = c; }
+      const ns = nr * N + nc;
+      let rew = STEP, done = false;
+      if (ns === GOAL) { rew = 1; done = true; }
+      else if (ns === PIT) { rew = -1; done = true; }
+      hist.push({ s, a, r: rew });
+      states.push(ns);
+      s = ns;
+      if (done) break;
+    }
+    return { hist, states };
+  }
+
+  function train(n) {
+    for (let e = 0; e < n; e++) {
+      const { hist, states } = episode();
+      const G = new Array(hist.length);
+      let g = 0;
+      for (let t = hist.length - 1; t >= 0; t--) { g = hist[t].r + GAM * g; G[t] = g; }
+      rets.push(G[0]); if (rets.length > 200) rets.shift();
+      base += 0.05 * (G[0] - base);
+      for (let t = 0; t < hist.length; t++) {
+        const { s, a } = hist[t], p = pi(s), adv = G[t] - base;
+        for (let k = 0; k < 4; k++) theta[s][k] += alpha * adv * ((k === a ? 1 : 0) - p[k]);
+      }
+      lastTraj = states;
+      eps++;
+    }
+  }
+
+  function drawArrows() {
+    arrowLayer.innerHTML = '';
+    pathLayer.innerHTML = '';
+    if (lastTraj.length > 1) {
+      let d = '';
+      lastTraj.forEach((s, i) => {
+        const cx = (s % N) * CELL + CELL / 2, cy = Math.floor(s / N) * CELL + CELL / 2;
+        d += (i ? 'L' : 'M') + cx + ' ' + cy + ' ';
+      });
+      el('path', { d, fill: 'none', stroke: '#93b4f8', 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: 0.8 }, pathLayer);
+    }
+    for (let i = 0; i < N * N; i++) {
+      if (isTerm(i)) continue;
+      const cx = (i % N) * CELL + CELL / 2, cy = Math.floor(i / N) * CELL + CELL / 2;
+      const p = pi(i);
+      let best = 0; for (let k = 1; k < 4; k++) if (p[k] > p[best]) best = k;
+      for (let k = 0; k < 4; k++) {
+        const len = 6 + 18 * p[k];
+        el('line', {
+          x1: cx, y1: cy, x2: cx + SCR[k][0] * len, y2: cy + SCR[k][1] * len,
+          stroke: k === best ? '#111' : '#2563eb',
+          'stroke-width': 1 + 2.5 * p[k], opacity: 0.25 + 0.75 * p[k], 'stroke-linecap': 'round'
+        }, arrowLayer);
+      }
+    }
+  }
+
+  function drawInfo() {
+    const recent = rets.slice(-20);
+    const avg = recent.length ? recent.reduce((s, v) => s + v, 0) / recent.length : 0;
+    info.textContent = 'episodes = ' + eps + '   avg return (last 20) = ' + avg.toFixed(3) + '   baseline b = ' + base.toFixed(3);
+  }
+
+  function drawAll() { drawArrows(); drawInfo(); }
+
+  function stop() { if (timer) { clearInterval(timer); timer = null; } running = false; $('#playRun').textContent = 'Run ▶'; }
+
+  $('#playTrain').addEventListener('click', () => { stop(); train(50); drawAll(); });
+  $('#playRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = true; $('#playRun').textContent = 'Stop';
+    timer = setInterval(() => {
+      train(4); drawAll();
+      if (eps >= 1500) stop();
+    }, 110);
+  });
+  $('#playEpisode').addEventListener('click', () => {
+    const { states } = episode();
+    lastTraj = states;
+    drawAll();
+  });
+  $('#playReset').addEventListener('click', () => {
+    stop();
+    for (let i = 0; i < N * N; i++) theta[i] = [0, 0, 0, 0];
+    base = 0; eps = 0; rets = []; lastTraj = [];
+    drawAll();
+  });
+  aS.addEventListener('input', () => { alpha = parseFloat(aS.value); aV.textContent = alpha.toFixed(2); });
+
+  drawAll();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initPolicy();
+  initScore();
+  initBaseline();
+  initAdvantage();
+  initGAE();
+  initPlay();
+  initScroll();
+});
+</script>
+</body>
+</html>
