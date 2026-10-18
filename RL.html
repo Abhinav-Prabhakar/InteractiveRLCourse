@@ -177,7 +177,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   <div class="wrap">
     <p class="eyebrow">Reinforcement Learning · Foundations</p>
     <h1>Markov Reward Processes<br>&amp; Markov Decision Processes</h1>
-    <p class="lede">Every reinforcement learning algorithm, from tabular Q-learning to PPO, attacks the same problem: an agent observes a state, chooses an action, collects a reward, and wants to collect as much as it can over time. This note builds the mathematics of that problem in three layers (a process that moves between states, then one that pays rewards, then one in which the agent chooses), with a live model at each stage so you can check every equation against numbers.</p>
+    <p class="lede">The mathematical objects underneath every RL algorithm — built up one piece at a time, with every transition probability you can poke at.</p>
   </div>
 </header>
 
@@ -185,15 +185,13 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 <section id="markov">
   <div class="wrap">
     <h2><span class="num">01</span>The Markov property</h2>
-    <p>Suppose an agent wants to know how good its current situation is. If the answer depended on everything that had happened so far, the question would have no compact answer: the agent would need a separate estimate for every possible history, and the number of histories grows exponentially with time. Reinforcement learning avoids this by working with states that summarise the past well enough that the rest of it can be forgotten.</p>
-    <p>Formally, a sequence of random states $S_0,S_1,S_2,\dots$ has the <b>Markov property</b> if the next state is conditionally independent of the past, given the present:</p>
+    <p>A stochastic process has the <b>Markov property</b> when the future is conditionally independent of the past given the present:</p>
     <div class="eqbox">
       $$\mathbb{P}\!\left(S_{t+1}=s' \;\middle|\; S_t=s,\; S_{t-1}=s_{t-1},\dots,S_0=s_0\right)=\mathbb{P}\!\left(S_{t+1}=s' \;\middle|\; S_t=s\right)$$
     </div>
-    <p>The left side is a prediction made with the full history in hand; the right side is a prediction made from the current state alone. The Markov property says the extra information never improves the prediction. In statistical terms, the current state is a <b>sufficient statistic</b> for the future: knowing where you are makes how you got there irrelevant.</p>
-    <p>Whether a process is Markov depends on what you call the state. In Newtonian mechanics, a ball's position and velocity together are Markov, because they determine its whole future trajectory; its position alone is not, because two balls in the same place can be heading in different directions. The same issue appears in practice. A single frame of the game Pong shows where the ball is but not which way it is moving, which is why the DQN agents that learned Atari games were fed several consecutive frames at once. You can always restore the Markov property by putting more information into the state, so the practical question is how compact a Markov state you can find.</p>
+    <p>Equivalently: <b>the state is a sufficient statistic for the future.</b> Knowing <em>where you are</em> makes <em>how you got there</em> irrelevant.</p>
     <div class="note">
-      <b>What the assumption buys.</b> Because the future depends only on the present state, the expected total reward from now on can be written as a function of the current state alone, $V(s)$: one number per state instead of one per history. Every equation on this page is a relation between such per-state numbers, and each derivation uses the Markov property at exactly one step. It is worth watching for that step each time.
+      <b>Why this single assumption carries the whole theory.</b> It lets us write the expected return from a state as a function of that state alone, $V(s)$. Without it, value would have to depend on the entire history, and nothing that follows would close.
     </div>
   </div>
 </section>
@@ -203,23 +201,11 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   <div class="wide">
     <div class="wrap" style="padding:0">
       <h2><span class="num">02</span>Markov chains</h2>
-      <p>Start with the simplest model that has the Markov property and nothing else: no rewards and no decisions, only a system moving at random among a finite set of states $\mathcal{S}$. Because the next state depends only on the current one, the entire dynamics fit in one table, the <b>transition matrix</b> $P$, with a row for each current state and a column for each next state:</p>
+      <p>A Markov chain is the bare skeleton: a set of states $\mathcal{S}$ and a <b>transition matrix</b> $P$ whose entries are</p>
       <div class="eqbox">
         $$P_{ss'}=\mathbb{P}\!\left(S_{t+1}=s' \mid S_t=s\right),\qquad P_{ss'}\ge 0,\qquad \sum_{s'\in\mathcal{S}}P_{ss'}=1 .$$
       </div>
-      <p>Row $s$ is the probability distribution over where the system goes next from $s$, so its entries are nonnegative and sum to one. A matrix with this property is called <b>row-stochastic</b>. Together with a starting state, $P$ completely specifies a <b>Markov chain</b>. We also assume that the same $P$ applies at every time step, which makes the chain <b>time-homogeneous</b>; every process on this page has that property.</p>
-
-      <h3>Many steps at once</h3>
-      <p>What is the probability of going from $s$ to $s''$ in two steps? The chain must pass through some intermediate state $s'$. By the Markov property, the second step depends only on $s'$, not on the fact that the chain started in $s$, so the probabilities of the two steps multiply. Summing over the intermediate state gives a matrix product:</p>
-      <div class="eqbox">
-        $$\mathbb{P}\!\left(S_{t+2}=s''\mid S_t=s\right)=\sum_{s'\in\mathcal{S}}P_{ss'}\,P_{s's''}=\left(P^{2}\right)_{ss''}.$$
-      </div>
-      <p>Repeating the argument, the $n$-step transition probabilities are the entries of $P^n$. The same algebra pushes whole distributions forward in time. If the column vector $\mu_t$ holds the probability of being in each state at time $t$, then $\mu_{t+1}^\top=\mu_t^\top P$. A distribution that this update leaves unchanged is called <b>stationary</b>. (We write $\mu$ rather than the conventional $\pi$, because $\pi$ will soon stand for a policy.)</p>
-      <div class="eqbox">
-        $$\mu^\top P=\mu^\top,\qquad \sum_{s\in\mathcal{S}}\mu_s=1 .$$
-      </div>
-      <p>When every state can reach every other, the stationary distribution is unique, and $\mu_s$ is the long-run fraction of time the chain spends in $s$, whichever state it started from.</p>
-      <p>The chain below has four states. Press <b>Step</b> to sample one transition: the next state is drawn from the current state's row of $P$, and nothing else is consulted. Click a state to move the token there by hand. After a few dozen steps a pattern emerges. The token keeps circling $A\to B\to C\to A$, with an occasional detour through $D$, and because there is no arrow from $B$ to $A$, a token at $B$ can only get home the long way round. Over a long run it spends about 32% of its time in $A$ and 15% in $D$; this chain's stationary distribution is $\mu\approx(0.32,\,0.28,\,0.25,\,0.15)$.</p>
+      <p>Every row of $P$ is a probability distribution. The $n$-step transition matrix is just $P^n$, and a distribution $\pi$ is <b>stationary</b> if $\pi^\top P=\pi^\top$.</p>
     </div>
 
     <div class="panel" style="margin-top:26px">
@@ -236,9 +222,9 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
           <svg id="chainSvg" class="diagram" viewBox="0 0 400 400" role="img" aria-label="Markov chain diagram"></svg>
         </div>
         <div class="col" style="flex:1 1 260px">
-          <p class="small muted" style="margin-top:0">Transition matrix $P$: rows are the current state, columns the next state, and each row sums to 1. Hover over an entry to light up its arrow in the diagram. Arrow thickness is proportional to probability.</p>
+          <p class="small muted" style="margin-top:0">Transition matrix $P$. Hover a cell to highlight the corresponding arrow; click a state to place the token there.</p>
           <div id="chainMatrix"></div>
-          <p class="small muted" style="margin-top:18px;margin-bottom:0">Sampled trajectory (most recent state highlighted)</p>
+          <p class="small muted" style="margin-top:18px;margin-bottom:0">Sampled trajectory</p>
           <div class="traj" id="chainTraj"></div>
         </div>
       </div>
@@ -251,20 +237,17 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   <div class="wide">
     <div class="wrap" style="padding:0">
       <h2><span class="num">03</span>Markov Reward Processes</h2>
-      <p>A Markov chain tells us where a system goes, but not whether we like going there. To talk about good and bad outcomes, we attach a number to each step. A <b>Markov reward process</b> (MRP) is a Markov chain that emits a reward each time it leaves a state. It is specified by the tuple $(\mathcal{S},P,R,\gamma)$: the states and transition matrix from before, an expected reward for each state, and a discount factor $\gamma$, whose role is explained below. The expected reward for state $s$ is</p>
+      <p>Attach a reward to being in each state and you get a <b>Markov Reward Process</b> $\;(\mathcal{S},P,R,\gamma)$.</p>
       <div class="eqbox">
-        $$R_s=\mathbb{E}\!\left[R_{t+1}\mid S_t=s\right].$$
+        $$R_s=\mathbb{E}\!\left[R_{t+1}\mid S_t=s\right]$$
       </div>
-      <p>The time index follows a convention used throughout RL: the reward earned in $S_t$ arrives together with the next state, so it is labelled $R_{t+1}$. The reward itself may be random. $R_s$ is its average, and because everything we compute below is an expectation, the average is all we need.</p>
 
       <h3>The return and the discount</h3>
-      <p>An agent does not care about any single reward; it cares about the whole stream of rewards still to come. The obvious summary is their sum, but a plain sum has a problem. If the process never ends, the sum can be infinite, and then every state looks equally (infinitely) good or bad. The fix is to shrink each reward by a factor $\gamma$ for every step of delay. The result is the <b>return</b>:</p>
+      <p>The <b>return</b> $G_t$ is the total discounted reward from time $t$ onward:</p>
       <div class="eqbox">
         $$G_t \;=\; R_{t+1}+\gamma R_{t+2}+\gamma^2R_{t+3}+\cdots \;=\;\sum_{k=0}^{\infty}\gamma^{k}R_{t+k+1}$$
       </div>
-      <p>If every reward satisfies $|R_t|\le R_{\max}$, the geometric series bounds the return by $R_{\max}/(1-\gamma)$, so for any $\gamma<1$ it is finite. When every episode is guaranteed to end, as in a game, $\gamma=1$ is also allowed, since the sum then has only finitely many terms.</p>
-      <p>The <b>discount factor</b> $\gamma\in[0,1]$ is more than a mathematical convenience: it sets how far ahead the agent looks. With $\gamma=0$, only $R_{t+1}$ survives, and an agent maximising this return is completely myopic. It will take a small reward now even if doing so leads straight to disaster on the next step. As $\gamma$ approaches 1, distant rewards count almost as much as immediate ones, and the agent becomes patient, willing to accept a loss now for a larger gain later. A useful rule of thumb is that rewards more than about $1/(1-\gamma)$ steps away contribute little, so $\gamma=0.9$ corresponds to a horizon of roughly ten steps and $\gamma=0.99$ to roughly a hundred.</p>
-      <p>The panel below discounts a fixed stream of five rewards, $2,0,-1,3,1$. Start at $\gamma=0$: only the first reward counts, and the return is 2. Now raise $\gamma$ slowly. At first the total dips slightly below 2, because the $-1$ two steps out is discounted less than the $+3$ three steps out. Past $\gamma\approx0.3$ the later rewards win, and the total climbs toward the undiscounted sum of 5. The same rewards, in the same order, are worth different amounts to agents with different discount factors.</p>
+      <p>The discount $\gamma\in[0,1]$ does two jobs: below $1$ it keeps the sum finite, and it encodes <em>how much we care about the future</em>. Drag the slider: at $\gamma=0$ only the first reward survives.</p>
     </div>
 
     <div class="panel" style="margin-top:22px">
@@ -277,57 +260,41 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         </div>
       </div>
       <div class="disc" id="discChart"></div>
-      <p class="small muted" style="text-align:center;margin-bottom:6px">Dashed outline: the reward $R_{t+k+1}$ as received &nbsp;·&nbsp; solid bar: its contribution to the return, $\gamma^k R_{t+k+1}$</p>
+      <p class="small muted" style="text-align:center;margin-bottom:6px">Dashed outline = undiscounted reward $R_{t+k+1}$ &nbsp;·&nbsp; solid = its contribution $\gamma^k R_{t+k+1}$</p>
       <div class="eqbox" id="discEq"></div>
     </div>
 
     <div class="wrap" style="padding:0">
       <h3>The value function</h3>
-      <p>The return is a random variable: run the chain twice from the same state and you will usually collect different rewards. To score a state, we average over that randomness. The <b>state-value function</b> is the expected return from a state:</p>
+      <p>The <b>state-value function</b> is the expected return starting from $s$:</p>
       <div class="eqbox">
         $$V(s)=\mathbb{E}\!\left[G_t \mid S_t=s\right]$$
       </div>
-      <p>By the Markov property, this depends only on $s$ and not on how the chain arrived there, and because the chain is time-homogeneous it does not depend on $t$ either. An MRP with $n$ states therefore has exactly $n$ values to find. Computing them straight from the definition would mean averaging over every possible infinite future, which is hopeless. The way out is to notice that the return is recursive:</p>
-      <div class="eqbox">
-        $$G_t = R_{t+1}+\gamma\left(R_{t+2}+\gamma R_{t+3}+\cdots\right)=R_{t+1}+\gamma\,G_{t+1}.$$
-      </div>
-      <p>The return from now is the next reward plus the discounted return from one step later. Taking expectations of this identity gives an equation that relates the value of each state to the values of the states that follow it.</p>
 
       <h3>Deriving the Bellman expectation equation</h3>
+      <p>Split the return into the immediate reward plus the discounted rest, then use the Markov property to throw away the history:</p>
       <div class="eqbox">
         $$
         \begin{aligned}
         V(s) &= \mathbb{E}\!\left[G_t \mid S_t=s\right] \\[2pt]
-             &= \mathbb{E}\!\left[R_{t+1}\mid S_t=s\right]+\gamma\,\mathbb{E}\!\left[G_{t+1} \mid S_t=s\right] \\[2pt]
-             &= R_s+\gamma\sum_{s'\in\mathcal{S}}P_{ss'}\;\mathbb{E}\!\left[G_{t+1}\mid S_t=s,\,S_{t+1}=s'\right] \\[2pt]
+             &= \mathbb{E}\!\left[R_{t+1}+\gamma G_{t+1} \mid S_t=s\right] \\[2pt]
              &= R_s+\gamma\sum_{s'\in\mathcal{S}}P_{ss'}\;\mathbb{E}\!\left[G_{t+1}\mid S_{t+1}=s'\right] \\[2pt]
              &= R_s+\gamma\sum_{s'\in\mathcal{S}}P_{ss'}\,V(s')
         \end{aligned}
         $$
       </div>
-      <p>The first line is the definition. The second substitutes $G_t=R_{t+1}+\gamma G_{t+1}$ and splits the expectation by linearity. In the third line, the first term is $R_s$ by definition, and the second is expanded with the law of total expectation: the chain moves to $s'$ with probability $P_{ss'}$, so we average the expected future return over those possibilities. The fourth line is where the Markov property is spent. Once we know that $S_{t+1}=s'$, knowing that the chain was in $s$ a step earlier tells us nothing more about the rewards that follow, so that condition can be dropped. The last line uses time-homogeneity: the expected return from $s'$ is the same whether we start counting at time $t+1$ or any other time, and that is $V(s')$.</p>
-      <p>The result is the <b>Bellman expectation equation</b> for an MRP. In words: the value of a state is the reward for leaving it plus the discounted average value of where you land. The infinite sums and trajectories have disappeared, leaving one equation per state that links each value to its successors' values. It is called an <em>expectation</em> equation because it averages over next states; later we will meet a version that maximises instead.</p>
+      <p>The third line is exactly where the Markov property is spent: conditioning on the whole history collapses to conditioning on $S_{t+1}=s'$.</p>
 
       <h3>Solving it in closed form</h3>
-      <p>Stack the values into a vector $V\in\mathbb{R}^n$ and the rewards into $R$. The sum $\sum_{s'}P_{ss'}V(s')$ is entry $s$ of the matrix-vector product $PV$, so the $n$ Bellman equations together form a linear system:</p>
+      <p>Written over the whole state space, the Bellman equation is a linear system:</p>
       <div class="eqbox">
         $$V=R+\gamma PV \quad\Longrightarrow\quad (I-\gamma P)V=R \quad\Longrightarrow\quad \boxed{\;V=(I-\gamma P)^{-1}R\;}$$
       </div>
-      <p>It remains to check that $I-\gamma P$ is invertible. Because $P$ is row-stochastic, multiplying a vector by $P$ replaces each entry with a weighted average of the vector's entries, and an average can never exceed the largest entry in absolute value. So $\|PV\|_\infty\le\|V\|_\infty$ for every $V$, which means $\gamma P$ shrinks every vector by at least a factor $\gamma<1$ in the max-norm. That is enough for the geometric (Neumann) series of the inverse to converge:</p>
+      <p>Because $P$ is stochastic, $\|\gamma P\|_\infty=\gamma<1$, so the Neumann series converges and the inverse always exists:</p>
       <div class="eqbox">
         $$(I-\gamma P)^{-1}=\sum_{k=0}^{\infty}\gamma^{k}P^{k} \quad\Longrightarrow\quad V=\sum_{k=0}^{\infty}\gamma^{k}P^{k}R$$
       </div>
-      <p>This expansion has a direct reading. Since $P^k$ holds the $k$-step transition probabilities, entry $s$ of $P^kR$ is the expected reward $k$ steps after starting in $s$, that is, $\mathbb{E}[R_{t+k+1}\mid S_t=s]$. The closed form is the definition of $V$ again, with the expectation moved inside the sum and each term computed with a matrix power.</p>
-
-      <h3>Iterating instead of inverting</h3>
-      <p>Inverting an $n\times n$ matrix costs $O(n^3)$ operations. That is nothing for four states and out of the question for the roughly $10^{20}$ positions of checkers. The alternative is to use the Bellman equation as an update rule: start from any guess $V_0$ and repeat $V_{k+1}=R+\gamma PV_k$. Subtracting the true equation $V=R+\gamma PV$ shows that each update shrinks the error by at least a factor $\gamma$:</p>
-      <div class="eqbox">
-        $$\|V_{k+1}-V\|_\infty=\gamma\,\big\|P\,(V_k-V)\big\|_\infty\le\gamma\,\|V_k-V\|_\infty .$$
-      </div>
-      <p>Starting from $V_0=0$, the iterate $V_k$ is exactly the expected discounted reward over the first $k$ steps, the Neumann series cut off after $k$ terms. It is this iterative scheme, not the matrix inverse, that carries over to decision problems.</p>
-      <p>The panel below uses the four-state chain from before, with rewards $R=(1,\,2,\,0,\,-1)$ for $A,B,C,D$. In <b>Closed form</b> mode the bars show $V=(I-\gamma P)^{-1}R$. Set $\gamma=0$ and the values equal the rewards, since a myopic agent sees only what it collects on leaving. Then raise $\gamma$. By $\gamma=0.9$ every value is positive, including $D$'s, even though $D$ itself pays $-1$: from $D$ the chain soon returns to the rewarding loop through $A$ and $B$. Push $\gamma$ toward 0.99 and all four values grow large together, approaching the long-run average reward per step (about 0.73 for this chain) divided by $1-\gamma$. What distinguishes the states is the comparatively small offset on top.</p>
-      <p>Switch to <b>Value iteration</b> to watch the iterative solution. (With no choices to make, value iteration is just the update above.) <b>Step</b> applies $V_{k+1}=R+\gamma PV_k$ once, starting from $V_0=0$; <b>Run</b> repeats until successive iterates differ by less than $10^{-5}$. The size of the last change, shown below the buttons, falls by a factor close to $\gamma$ per step, so convergence takes about a hundred steps at $\gamma=0.9$ and about a thousand at $\gamma=0.99$. A far-sighted agent is more expensive to compute for.</p>
-      <p>Click any state, in the diagram or on its bar, and the <b>Bellman check</b> box writes out its Bellman equation with the current numbers. In closed-form mode the right-hand side reproduces the bar exactly, which is what it means for $V$ to solve the equation. In iteration mode the right-hand side computes the <em>next</em> iterate, so the two disagree until the iteration has converged.</p>
+      <p class="small muted">Read that last line back: $V$ is the sum over horizons $k$ of the $k$-step reward, discounted by $\gamma^k$ and averaged over $P^k$.</p>
     </div>
 
     <div class="panel" style="margin-top:26px">
@@ -342,7 +309,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="row">
         <div class="col" style="flex:1 1 320px">
           <svg id="mrpSvg" class="diagram" viewBox="0 0 400 400" role="img" aria-label="MRP diagram"></svg>
-          <p class="small muted" style="text-align:center;margin:8px 0 0">Rewards: $R_A=1,\;R_B=2,\;R_C=0,\;R_D=-1$. Click a state to write out its Bellman equation.</p>
+          <p class="small muted" style="text-align:center;margin:8px 0 0">Click a state to plug its numbers into the Bellman equation.</p>
         </div>
 
         <div class="col" style="flex:1 1 320px">
@@ -376,86 +343,50 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   <div class="wide">
     <div class="wrap" style="padding:0">
       <h2><span class="num">04</span>Markov Decision Processes</h2>
-      <p>So far the agent has been a spectator. The chain moved according to $P$, and the agent could only add up what it received. Reinforcement learning is about agents that act, so the last ingredient is choice. In a <b>Markov decision process</b> (MDP), the agent picks an <b>action</b> $A_t$ from a set $\mathcal{A}$ at every step, and the action affects both where the process goes next and what it pays. An MDP is the tuple $(\mathcal{S},\mathcal{A},P,R,\gamma)$, with one transition matrix and one reward vector for each action:</p>
+      <p>Now give the agent a choice. An <b>MDP</b> is $\;(\mathcal{S},\mathcal{A},P,R,\gamma)$ where the transition and reward now depend on the action taken:</p>
       <div class="eqbox">
         $$P^{a}_{ss'}=\mathbb{P}\!\left(S_{t+1}=s'\mid S_t=s,\,A_t=a\right),\qquad
           R^{a}_{s}=\mathbb{E}\!\left[R_{t+1}\mid S_t=s,\,A_t=a\right]$$
       </div>
-      <p>The Markov property now says that the current state and action together determine the distribution of what happens next. An MRP is the special case in which every state offers a single action. The extra index looks like a small change, but it changes the question. In an MRP we wanted to <em>compute</em> the value of each state. In an MDP we want to <em>choose</em> actions that make those values as large as possible, and it is that choice which will make the equations nonlinear.</p>
+      <p>An MRP is precisely an MDP where every state has exactly one available action. That is the entire difference, and the hard part: choosing means maximising, and $\max$ is not linear.</p>
 
       <h3>Policies</h3>
-      <p>Before we can talk about the value of a state, we have to say how the agent will behave from there. A <b>policy</b> $\pi(a\mid s)$ gives the probability of taking action $a$ in state $s$. It looks only at the current state, and the Markov property is why that is enough: the state already summarises everything about the past that matters for the future, and it can be shown that some optimal policy always ignores the history. A deterministic policy puts all its probability on one action per state, and we then write $\pi(s)$ for that action.</p>
-      <p>Once a policy is fixed, the agent's choices are just another source of randomness. Averaging over them collapses the MDP back into an MRP, with the <b>policy-induced</b> transition matrix and reward</p>
+      <p>A <b>policy</b> $\pi(a\mid s)$ is a distribution over actions for each state; it turns the MDP back into an MRP. Averaging over actions gives the <b>policy-induced</b> transition and reward:</p>
       <div class="eqbox">
-        $$P^{\pi}_{ss'}=\sum_{a}\pi(a\mid s)\,P^{a}_{ss'},\qquad R^{\pi}_{s}=\sum_{a}\pi(a\mid s)\,R^{a}_{s}.$$
+        $$P^{\pi}_{ss'}=\sum_{a}\pi(a\mid s)\,P^{a}_{ss'},\qquad R^{\pi}_{s}=\sum_{a}\pi(a\mid s)\,R^{a}_{s}$$
       </div>
-      <p>Everything from the previous section applies to the MRP $(\mathcal{S},P^\pi,R^\pi,\gamma)$, and this reduction will do a lot of work below.</p>
 
       <h3>Two value functions</h3>
-      <p>With a policy in hand, values are defined as before; the subscript on $\mathbb{E}_\pi$ records that actions are drawn from $\pi$. Alongside the state-value function we now also want an <b>action-value function</b> $Q_\pi(s,a)$: the expected return if the agent takes action $a$ in state $s$ and follows $\pi$ from then on.</p>
       <div class="eqbox">
         $$V_{\pi}(s)=\mathbb{E}_{\pi}\!\left[G_t\mid S_t=s\right],\qquad
           Q_{\pi}(s,a)=\mathbb{E}_{\pi}\!\left[G_t\mid S_t=s,\,A_t=a\right]$$
       </div>
-      <p>The reason for keeping two is that $V_\pi$ scores situations, while $Q_\pi$ scores decisions. Comparing $Q_\pi(s,a)$ across actions tells you directly which action looks best in $s$; getting the same information from $V_\pi$ requires knowing $P$ and $R$ in order to look one step ahead. That difference will matter once the agent has to learn without a model of its environment. The two functions are linked in both directions:</p>
+      <p>They are related by a simple average and a simple lookahead:</p>
       <div class="eqbox">
         $$V_{\pi}(s)=\sum_{a}\pi(a\mid s)\,Q_{\pi}(s,a),\qquad
           Q_{\pi}(s,a)=R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}\,V_{\pi}(s')$$
       </div>
-      <p>The left equation is an average: a state's value is the policy-weighted mean of the values of its actions. The right equation is a one-step lookahead: action $a$ earns $R^a_s$ on average and lands in $s'$ with probability $P^a_{ss'}$, after which the agent follows $\pi$ and expects $V_\pi(s')$. Its derivation is the MRP derivation above, with $A_t=a$ added to every condition.</p>
 
       <h3>Bellman expectation equation (policy evaluation)</h3>
-      <p>Substituting the right equation into the left eliminates $Q_\pi$ and leaves an equation in $V_\pi$ alone:</p>
       <div class="eqbox">
         $$V_{\pi}(s)=\sum_{a}\pi(a\mid s)\left[R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}\,V_{\pi}(s')\right]$$
       </div>
-      <p>Computing $V_\pi$ for a given policy is called <b>policy evaluation</b>. Distributing the sum over $a$ produces exactly $R^\pi$ and $P^\pi$, so in matrix form this is the Bellman equation of the policy-induced MRP, and it has the same closed-form solution:</p>
-      <div class="eqbox">
-        $$V_{\pi}=R^{\pi}+\gamma P^{\pi}V_{\pi}\quad\Longrightarrow\quad V_{\pi}=\left(I-\gamma P^{\pi}\right)^{-1}R^{\pi}$$
-      </div>
-      <p>Evaluating a fixed policy is no harder than solving an MRP.</p>
+      <p>For a fixed policy this is again linear — $V_\pi=(I-\gamma P^{\pi})^{-1}R^{\pi}$ — so evaluating a policy is an MRP solve.</p>
 
       <h3>Optimality</h3>
-      <p>Evaluation tells us how good a given policy is, but the goal is the best policy. The <b>optimal value functions</b> are the best values any policy can achieve:</p>
-      <div class="eqbox">
-        $$V_{*}(s)=\max_{\pi}V_{\pi}(s),\qquad Q_{*}(s,a)=\max_{\pi}Q_{\pi}(s,a)$$
-      </div>
-      <p>In principle, a different policy could achieve the maximum in each state. A central result of MDP theory says this never happens: there is a single deterministic policy $\pi_*$ that attains $V_*(s)$ in every state at once.</p>
-      <p>To find equations for $V_*$ and $Q_*$, repeat the reasoning that linked $V_\pi$ and $Q_\pi$, but replace the policy's average with a choice. After taking action $a$ in $s$, an optimal agent continues optimally, so the action's value is its immediate reward plus the discounted optimal value of wherever it lands. In $s$ itself, an optimal agent takes whichever action has the highest value, since putting probability on a worse action could only lower the average:</p>
-      <div class="eqbox">
-        $$Q_{*}(s,a)=R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}\,V_{*}(s'),\qquad V_{*}(s)=\max_{a}\,Q_{*}(s,a)$$
-      </div>
-      <p>Substituting each equation into the other gives the <b>Bellman optimality equations</b>:</p>
+      <p>Define $V_{*}(s)=\max_{\pi}V_{\pi}(s)$ and $Q_{*}(s,a)=\max_{\pi}Q_{\pi}(s,a)$. They satisfy the <b>Bellman optimality equations</b>:</p>
       <div class="eqbox">
         $$V_{*}(s)=\max_{a}\left[R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}\,V_{*}(s')\right]$$
         $$Q_{*}(s,a)=R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}\max_{a'}Q_{*}(s',a')$$
       </div>
-      <p>Once $Q_*$ is known, acting optimally requires no further planning: in each state, take the action with the highest $Q_*$. The optimal policy is <b>greedy</b> with respect to $Q_*$:</p>
+      <p>and the optimal policy is greedy with respect to $Q_*$:</p>
       <div class="eqbox">
         $$\pi_{*}(s)=\arg\max_{a}\;Q_{*}(s,a)$$
       </div>
-      <p>This is why so many RL algorithms aim for $Q_*$ rather than $V_*$. With $V_*$ alone, the agent would still need $P$ and $R$ to carry out the one-step lookahead inside the brackets.</p>
-
-      <h3>Why the max changes everything</h3>
-      <p>Compare the optimality equation for $V_*$ with the expectation equation for $V_\pi$. The only difference is that the weighted average $\sum_a\pi(a\mid s)$ has become $\max_a$. Averaging is linear; taking a maximum is not. Two numbers are enough to see it: $\max(1,0)+\max(0,1)=2$, but $\max(1+0,\,0+1)=1$. As a result, there is no fixed matrix $M$ with $V_*=R+\gamma MV_*$. Which action wins the max in each state depends on $V_*$ itself, so we cannot rearrange and invert as we did for the MRP.</p>
-      <p>Some structure survives. For each fixed choice of one action per state, the right-hand side is linear, so the equation is <b>piecewise linear</b>, with one piece for each deterministic policy. If we knew the optimal policy, we could solve a linear system for its value. <b>Policy iteration</b> builds on exactly this: evaluate the current policy, make it greedy with respect to the resulting values, and repeat.</p>
-      <p>The more direct route is to iterate, as we did for the MRP. Let $\mathcal{T}$, the <b>Bellman optimality operator</b>, be the map that sends any value vector $V$ to the right-hand side of the optimality equation:</p>
-      <div class="eqbox">
-        $$(\mathcal{T}V)(s)=\max_{a}\left[R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}\,V(s')\right]$$
-      </div>
-      <p>$V_*$ is a fixed point of $\mathcal{T}$, and the key fact is that $\mathcal{T}$ is a <b>contraction</b>: it brings any two value vectors closer together by at least a factor $\gamma$. The proof uses two inequalities. First, the gap between two maxima is at most the largest gap between the quantities being maximised: $|\max_a f(a)-\max_a g(a)|\le\max_a|f(a)-g(a)|$. Second, as in the MRP, a probability-weighted average of differences is no larger than the largest difference. For any value vectors $V$, $U$ and any state $s$, the rewards cancel and</p>
-      <div class="eqbox">
-        $$
-        \begin{aligned}
-        \big|(\mathcal{T}V)(s)-(\mathcal{T}U)(s)\big| &\le \max_{a}\,\gamma\,\Big|\sum_{s'}P^{a}_{ss'}\big(V(s')-U(s')\big)\Big| \\[2pt]
-        &\le \gamma\,\max_{a}\sum_{s'}P^{a}_{ss'}\,\|V-U\|_{\infty} \;=\; \gamma\,\|V-U\|_{\infty}.
-        \end{aligned}
-        $$
-        $$\|\mathcal{T}V-\mathcal{T}U\|_{\infty}\le\gamma\,\|V-U\|_{\infty}$$
-      </div>
-      <p>The second line holds for every $s$, so taking the maximum over $s$ gives the contraction bound in the last line.</p>
       <div class="note">
-        <b>Value iteration.</b> Banach's fixed-point theorem says that a contraction on a complete space has exactly one fixed point, and that iterating the map from any starting point converges to it geometrically. Applied to $\mathcal{T}$, it gives two results at once: $V_*$ is the unique solution of the Bellman optimality equation, and the algorithm $V_{k+1}=\mathcal{T}V_k$, called <b>value iteration</b>, finds it, with the error shrinking by at least a factor $\gamma$ per sweep. It is the update you ran on the MRP, with a max inserted.
+        <b>The $\max$ is the whole story.</b> In an MRP the Bellman equation is linear and has a closed-form solution. In an MDP the $\max$ makes it piecewise-linear and <em>non</em>linear — no matrix inverse solves it. Instead we iterate the operator $\mathcal{T}$ defined by the right-hand side, which is a $\gamma$-contraction:
+        $$\|\mathcal{T}V-\mathcal{T}U\|_{\infty}\le\gamma\|V-U\|_{\infty}.$$
+        Banach's fixed-point theorem then guarantees a unique fixed point and geometric convergence at rate $\gamma$ — that's <b>value iteration</b>.
       </div>
     </div>
   </div>
@@ -466,15 +397,11 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   <div class="wide">
     <div class="wrap" style="padding:0">
       <h2><span class="num">05</span>A slippery gridworld</h2>
-      <p>Here is an MDP small enough to see whole. An agent lives on a $5\times5$ grid and in each cell can try to move up, right, down or left. The floor is slippery: the intended move succeeds with probability $0.8$, and with probability $0.1$ each the agent slides in one of the two perpendicular directions instead. A move that would leave the grid keeps the agent where it is.</p>
+      <p>A $5\times5$ grid. The agent moves <em>up, right, down, left</em>, but the world is slippery: the intended action succeeds with probability $0.8$, and with probability $0.1$ each the agent slides perpendicular instead. Bumping a wall leaves you in place.</p>
       <div class="eqbox">
         $$\mathbb{P}(s'\mid s,a)=\begin{cases}0.8 & s'=\text{intended}(s,a)\\ 0.1 & s'=\text{perpendicular}(s,a)\ \text{(each)}\\ 0 & \text{otherwise}\end{cases}$$
       </div>
-      <p>When two of these outcomes land in the same cell, as happens against a wall, their probabilities add. Two cells end the episode: the goal in the top-right corner, worth $+1$, and a pit in the centre, worth $-1$. In the computation their values are simply held fixed at $+1$ and $-1$. Every other move costs $0.04$, so $R^a_s=-0.04$ for every non-terminal state and action, and wandering has a price. The discount is fixed at $\gamma=0.9$.</p>
-      <p>Without the slip this would be a shortest-path problem. With it, the agent has to weigh a short route that passes close to the pit against a longer one that keeps its distance, and which is better depends on the numbers.</p>
-      <p>Start in <b>Optimal $V_*$</b> mode and press <b>Sweep</b> a few times. Each sweep applies the Bellman optimality operator $\mathcal{T}$ once to every cell. Value spreads outward from the goal one cell per sweep, because after $k$ sweeps a cell's value can only reflect what happens within $k$ steps of it. The small arrow in each cell is the greedy action with respect to the current values. Press <b>Run</b> to keep sweeping until no value changes by more than $10^{-5}$, which takes about two dozen sweeps here. Along the diagonal from the bottom-left corner to the goal, the grid is symmetric, so up and right are exactly tied; the arrow there may flip between them, and both are optimal.</p>
-      <p>Next, click a cell and choose an action with the arrow buttons. The right-hand panel draws that action's transition distribution, and the box underneath evaluates $Q(s,a)=R^a_s+\gamma\sum_{s'}P^a_{ss'}V(s')$ from the current values, marking the action with the largest $Q$ as greedy. Cells are labelled (row, column) from the top-left. Try the cell directly above the pit, $(1,2)$, after convergence. Moving right heads straight for the goal, yet the greedy action is up: a right move slips down into the pit one time in ten, and the detour costs less than that risk. The cell to the right of the pit, $(2,3)$, makes the same trade in mirror image.</p>
-      <p>Finally, switch to <b>Evaluate $\pi$ (uniform)</b>. Each sweep now applies the Bellman expectation equation for the policy that picks all four directions with equal probability, replacing $\max_a$ with $\frac14\sum_a$. A random walker wanders long enough, and falls into the pit often enough, that nearly every cell ends up with negative value, and convergence takes about sixty sweeps instead of two dozen. Comparing the two maps shows how much a good policy is worth.</p>
+      <p>Reward: $-0.04$ per step, $+1$ for reaching the goal (top-right), $-1$ for the pit (centre). Both terminal. The slip makes any route brushing the pit a gamble.</p>
     </div>
 
     <div class="panel" style="margin-top:22px">
@@ -499,7 +426,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         </div>
 
         <div class="gw-right">
-          <p class="small muted" style="margin-top:0">Click a cell, then pick an action. Arrows show where the agent can end up and with what probability; each node shows that cell's current value.</p>
+          <p class="small muted" style="margin-top:0">Click a cell beside the pit, then pick an action to see its transition distribution.</p>
           <svg id="localSvg" viewBox="0 0 300 300" style="width:100%;max-width:300px;margin:0 auto"></svg>
 
           <div class="btnrow" style="justify-content:center;margin-top:10px" id="actBtns">
@@ -520,20 +447,18 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 <section id="summary">
   <div class="wrap">
     <h2><span class="num">06</span>Summary</h2>
-    <p>The page has built one structure in three layers. A Markov chain describes how states evolve. Adding rewards gives an MRP, whose values satisfy a linear Bellman equation that can be solved exactly. Adding choice gives an MDP, whose optimal values satisfy an equation with a max in it; that equation has no closed-form solution, but it can be solved by iterating a contraction. The table sets the last two side by side.</p>
     <table class="cmp">
       <tr><th></th><th>Markov Reward Process</th><th>Markov Decision Process</th></tr>
       <tr><td>Tuple</td><td>$(\mathcal{S},P,R,\gamma)$</td><td>$(\mathcal{S},\mathcal{A},P,R,\gamma)$</td></tr>
-      <tr><td>Who acts?</td><td>No one; the chain evolves on its own</td><td>An agent, choosing $A_t\sim\pi(\cdot\mid S_t)$</td></tr>
-      <tr><td>Transitions</td><td>One matrix, $P_{ss'}$</td><td>One matrix per action, $P^{a}_{ss'}$</td></tr>
-      <tr><td>Bellman equation</td><td>$V=R+\gamma PV$</td><td>$V_*=\max_a\left[R^a+\gamma P^a V_*\right]$, max taken per state</td></tr>
-      <tr><td>Structure</td><td>Linear</td><td>Piecewise linear, because of the $\max$</td></tr>
-      <tr><td>Solution</td><td>Closed form $(I-\gamma P)^{-1}R$, or iteration</td><td>Iterative: value iteration or policy iteration</td></tr>
-      <tr><td>Guarantee</td><td>Unique $V$ for $\gamma<1$, since $\|\gamma P\|_\infty=\gamma$</td><td>Unique $V_*$, since $\mathcal{T}$ is a $\gamma$-contraction</td></tr>
+      <tr><td>Who acts?</td><td>Nobody — the chain evolves on its own</td><td>An agent chooses $A_t\sim\pi(\cdot\mid S_t)$</td></tr>
+      <tr><td>Transitions</td><td>$P_{ss'}$</td><td>$P^{a}_{ss'}$</td></tr>
+      <tr><td>Bellman equation</td><td>$V=R+\gamma PV$</td><td>$V_*=\max_a\left[R^a+\gamma P^a V_*\right]$</td></tr>
+      <tr><td>Structure</td><td>Linear</td><td>Piecewise-linear (the $\max$)</td></tr>
+      <tr><td>Solution</td><td>Closed form $(I-\gamma P)^{-1}R$</td><td>Iterative: value / policy iteration</td></tr>
+      <tr><td>Guarantee</td><td>Unique $V$ for $\gamma<1$</td><td>Unique $V_*$; $\mathcal{T}$ is a $\gamma$-contraction</td></tr>
     </table>
 
     <h3>Cheat sheet</h3>
-    <p>Four equations carry most of the weight in what follows: the return, the value of a fixed policy, the optimal value, and the optimal policy read off from it.</p>
     <div class="eqbox">
       $$\begin{aligned}
       G_t &= \sum_{k=0}^{\infty}\gamma^{k}R_{t+k+1}\\[2pt]
@@ -542,12 +467,12 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       \pi_{*}(s) &= \arg\max_{a}\left[R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}V_{*}(s')\right]
       \end{aligned}$$
     </div>
-    <p class="small muted">The rest of the book is about solving these equations when $P$ and $R$ are unknown or the state space is too large to enumerate: temporal-difference learning estimates the second line from sampled transitions, Q-learning does the same for the $Q_*$ form of the third, and policy-gradient methods such as PPO improve $\pi$ directly by following the gradient of its value.</p>
+    <p class="small muted">Everything downstream — TD learning, Q-learning, policy gradients, PPO — is an approximate way of computing, sampling, or differentiating one of these four lines.</p>
   </div>
 </section>
 
 <footer>
-  <div class="wrap">A self-contained interactive note. Every number on this page is computed live in your browser.</div>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
 </footer>
 
 <script>
@@ -872,7 +797,7 @@ function initDiscount() {
       return (v < 0 ? '-' : '+') + '\\, ' + Math.abs(v).toFixed(2);
     }).join(' ');
     T(eqEl,
-      `G_t=\\sum_{k=0}^{4}\\gamma^{k}R_{t+k+1} = ${terms} = \\mathbf{${total.toFixed(3)}}`,
+      `G_0=\\sum_{k=0}^{4}\\gamma^{k}R_{t+k+1} = ${terms} = \\mathbf{${total.toFixed(3)}}`,
       true);
   }
 

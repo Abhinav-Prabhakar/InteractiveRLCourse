@@ -54,33 +54,36 @@ Do not open anything in `outputs/`.
 
 # Writing
 The reader is smart, comfortable with linear algebra, probability and calculus,
-and new to RL. Aim for the quality of the best textbook explanations: precise,
-intuitive, and economical. The reference's voice is the target: clear,
-connected explanatory prose that reads as one argument rather than a list of
-facts. A few habits worth keeping:
-- Motivate each object before defining it (what problem it solves, what goes
-  wrong without it), then give the equation, then say in plain words what it
-  means.
-- Bold a technical term the first time it appears.
-- Derive the important results rather than stating them. Walk through each
-  step, say which assumption or rule it uses, and point at the load-bearing
-  one ("the fourth line is where the Markov property is spent").
-- Use concrete intuition and small examples: a limiting case (γ = 0 vs γ → 1),
-  a two-number counterexample, a failure mode.
-- Use `.note` callouts (bold lead-in) for the few ideas that matter most.
-- Give each interactive a guided walkthrough: what to try, in what order, and
-  what the reader should notice. Every number you quote must match what the
-  page actually computes.
-- Notation follows the reference: μ for stationary/state distributions so π
-  always means a policy; `\mathbb{E}`, `\mid`, `\text{}` for state names.
-- Never write "in this section we will", roadmaps, learning-objective boxes,
-  or bulleted key-takeaway lists. The summary table and cheat sheet do that.
-  Don't pad or hedge.
-- Every number in prose that comes from a computation must come from the page's
-  own code (check it by running the same model in node). Don't invent results.
+and new to RL. Write exactly like `RL.html`: compressed, confident, fast. Study
+its prose before you write a word. The equation does the explaining; prose
+frames it and reads it back.
 
-This chapter can be longer and deeper than the reference — it is a full
-chapter, not a note — but every paragraph should earn its place.
+**Shape of one idea.** One or two framing sentences, then the `.eqbox`, then a
+single interpretive line or a short `.note`. That is the unit. A chapter grows
+by covering more ideas, never by spending more words per idea. If an idea seems
+to need a paragraph, find the sharper sentence or let a visualiser carry it.
+
+**Devices the reference uses (use them, sparingly):**
+- One-sentence lede. No throat-clearing anywhere.
+- Bolded verdicts: "**the state is a sufficient statistic for the future.**",
+  "**The $\max$ is the whole story.**" (at most one per section).
+- Contrastive italics: *where you are* vs. *how you got there*.
+- Pointing at the load-bearing step: "The third line is exactly where the
+  Markov property is spent."
+- A "read it back" line after a dense equation (once or twice per chapter).
+- Terse imperative invitations: "Drag the slider and watch…", "Click a state
+  to plug its numbers into the Bellman equation."
+- Bold a technical term on first use.
+
+**Cut on sight:** restating what an equation already says, previews and
+recaps, "in this section", roadmaps, objective boxes, takeaway lists, hedges,
+transitional filler, step-by-step derivation narration (one pointer to the key
+step is enough).
+
+**Self-check per paragraph:** could `RL.html` have said this in fewer words?
+If yes, rewrite it. Every number quoted in prose must match what the page
+computes (verify by running the same model in node). Notation follows the
+reference; use μ for state distributions so π always means a policy.
 
 # Interactive visualisations
 These are the heart of the chapter. Build 3–5 that each make one idea click,
