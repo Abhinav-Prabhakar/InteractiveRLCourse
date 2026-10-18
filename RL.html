@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Markov Reward Processes &amp; Markov Decision Processes</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- chain diagram ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- discount chart ---------------- */
+.disc{display:flex;gap:10px;justify-content:center;padding:10px 0 0}
+.disc-col{flex:1;max-width:80px;text-align:center}
+.disc-plot{position:relative;height:150px;border-bottom:1px solid #e5e5e5}
+.disc-plot .zl{position:absolute;left:0;right:0;top:50%;height:1px;background:#e5e5e5}
+.disc-ghost{position:absolute;left:14px;right:14px;border:1.5px dashed #d4d4d8;border-radius:4px;transition:all .25s}
+.disc-bar{position:absolute;left:14px;right:14px;border-radius:4px;transition:all .25s}
+.disc-bar.pos{background:#2563eb}
+.disc-bar.neg{background:#dc2626}
+.disc-cap{font-size:11.5px;color:#9ca3af;margin-top:8px;font-family:ui-monospace,monospace}
+.disc-val{font-size:11.5px;font-family:ui-monospace,monospace;font-weight:600}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+.cell{cursor:pointer}
+.cell text{pointer-events:none;user-select:none}
+#gridSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.actbtn{width:44px;height:40px;padding:0;font-size:17px}
+.actbtn.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <span class="brand">MRP &amp; MDP</span>
+    <nav class="nav">
+      <a href="#markov">Markov property</a>
+      <a href="#chain">Chains</a>
+      <a href="#mrp">MRP</a>
+      <a href="#mdp">MDP</a>
+      <a href="#grid">Gridworld</a>
+      <a href="#summary">Summary</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Foundations</p>
+    <h1>Markov Reward Processes<br>&amp; Markov Decision Processes</h1>
+    <p class="lede">The mathematical objects underneath every RL algorithm — built up one piece at a time, with every transition probability you can poke at.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="markov">
+  <div class="wrap">
+    <h2><span class="num">01</span>The Markov property</h2>
+    <p>A stochastic process has the <b>Markov property</b> when the future is conditionally independent of the past given the present:</p>
+    <div class="eqbox">
+      $$\mathbb{P}\!\left(S_{t+1}=s' \;\middle|\; S_t=s,\; S_{t-1}=s_{t-1},\dots,S_0=s_0\right)=\mathbb{P}\!\left(S_{t+1}=s' \;\middle|\; S_t=s\right)$$
+    </div>
+    <p>Equivalently: <b>the state is a sufficient statistic for the future.</b> Knowing <em>where you are</em> makes <em>how you got there</em> irrelevant.</p>
+    <div class="note">
+      <b>Why this single assumption carries the whole theory.</b> It lets us write the expected return from a state as a function of that state alone, $V(s)$. Without it, value would have to depend on the entire history, and nothing that follows would close.
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="chain">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>Markov chains</h2>
+      <p>A Markov chain is the bare skeleton: a set of states $\mathcal{S}$ and a <b>transition matrix</b> $P$ whose entries are</p>
+      <div class="eqbox">
+        $$P_{ss'}=\mathbb{P}\!\left(S_{t+1}=s' \mid S_t=s\right),\qquad P_{ss'}\ge 0,\qquad \sum_{s'\in\mathcal{S}}P_{ss'}=1 .$$
+      </div>
+      <p>Every row of $P$ is a probability distribution. The $n$-step transition matrix is just $P^n$, and a distribution $\pi$ is <b>stationary</b> if $\pi^\top P=\pi^\top$.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · a 4-state chain</span>
+        <div class="btnrow">
+          <button id="chainReset">Reset</button>
+          <button id="chainStep" class="primary">Step ▶</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="chainSvg" class="diagram" viewBox="0 0 400 400" role="img" aria-label="Markov chain diagram"></svg>
+        </div>
+        <div class="col" style="flex:1 1 260px">
+          <p class="small muted" style="margin-top:0">Transition matrix $P$. Hover a cell to highlight the corresponding arrow; click a state to place the token there.</p>
+          <div id="chainMatrix"></div>
+          <p class="small muted" style="margin-top:18px;margin-bottom:0">Sampled trajectory</p>
+          <div class="traj" id="chainTraj"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="mrp">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Markov Reward Processes</h2>
+      <p>Attach a reward to being in each state and you get a <b>Markov Reward Process</b> $\;(\mathcal{S},P,R,\gamma)$.</p>
+      <div class="eqbox">
+        $$R_s=\mathbb{E}\!\left[R_{t+1}\mid S_t=s\right]$$
+      </div>
+
+      <h3>The return and the discount</h3>
+      <p>The <b>return</b> $G_t$ is the total discounted reward from time $t$ onward:</p>
+      <div class="eqbox">
+        $$G_t \;=\; R_{t+1}+\gamma R_{t+2}+\gamma^2R_{t+3}+\cdots \;=\;\sum_{k=0}^{\infty}\gamma^{k}R_{t+k+1}$$
+      </div>
+      <p>The discount $\gamma\in[0,1]$ does two jobs: it keeps the sum finite, and it encodes <em>how much we care about the future</em>. Drag the slider and watch how the same reward sequence changes value.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · discounting a reward stream</span>
+        <div class="slider-row" style="width:220px">
+          <span class="small muted">$\gamma$</span>
+          <input type="range" id="discGamma" min="0" max="0.99" step="0.01" value="0.9">
+          <span class="val" id="discGammaVal">0.90</span>
+        </div>
+      </div>
+      <div class="disc" id="discChart"></div>
+      <p class="small muted" style="text-align:center;margin-bottom:6px">Dashed outline = undiscounted reward $R_{t+k+1}$ &nbsp;·&nbsp; solid = its contribution $\gamma^k R_{t+k+1}$</p>
+      <div class="eqbox" id="discEq"></div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <h3>The value function</h3>
+      <p>The <b>state-value function</b> is the expected return starting from $s$:</p>
+      <div class="eqbox">
+        $$V(s)=\mathbb{E}\!\left[G_t \mid S_t=s\right]$$
+      </div>
+
+      <h3>Deriving the Bellman expectation equation</h3>
+      <p>Split the return into the immediate reward plus the discounted rest, then use the Markov property to throw away the history:</p>
+      <div class="eqbox">
+        $$
+        \begin{aligned}
+        V(s) &= \mathbb{E}\!\left[G_t \mid S_t=s\right] \\[2pt]
+             &= \mathbb{E}\!\left[R_{t+1}+\gamma G_{t+1} \mid S_t=s\right] \\[2pt]
+             &= R_s+\gamma\sum_{s'\in\mathcal{S}}P_{ss'}\;\mathbb{E}\!\left[G_{t+1}\mid S_{t+1}=s'\right] \\[2pt]
+             &= R_s+\gamma\sum_{s'\in\mathcal{S}}P_{ss'}\,V(s')
+        \end{aligned}
+        $$
+      </div>
+      <p>The third line is exactly where the Markov property is spent: conditioning on the whole history collapses to conditioning on $S_{t+1}=s'$.</p>
+
+      <h3>Solving it in closed form</h3>
+      <p>Written over the whole state space, the Bellman equation is a linear system:</p>
+      <div class="eqbox">
+        $$V=R+\gamma PV \quad\Longrightarrow\quad (I-\gamma P)V=R \quad\Longrightarrow\quad \boxed{\;V=(I-\gamma P)^{-1}R\;}$$
+      </div>
+      <p>Because $\gamma<1$, the operator $\gamma P$ has norm $<1$ in the sup-norm, so the Neumann series converges and the inverse always exists:</p>
+      <div class="eqbox">
+        $$(I-\gamma P)^{-1}=\sum_{k=0}^{\infty}\gamma^{k}P^{k} \quad\Longrightarrow\quad V=\sum_{k=0}^{\infty}\gamma^{k}P^{k}R$$
+      </div>
+      <p class="small muted">Read that last line back: $V$ is the sum over horizons $k$ of the $k$-step reward, discounted by $\gamma^k$ and averaged over $P^k$.</p>
+    </div>
+
+    <div class="panel" style="margin-top:26px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · solving an MRP</span>
+        <div class="btnrow" id="mrpModeBtns">
+          <button data-mode="closed" class="active">Closed form</button>
+          <button data-mode="iter">Value iteration</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <svg id="mrpSvg" class="diagram" viewBox="0 0 400 400" role="img" aria-label="MRP diagram"></svg>
+          <p class="small muted" style="text-align:center;margin:8px 0 0">Click a state to plug its numbers into the Bellman equation.</p>
+        </div>
+
+        <div class="col" style="flex:1 1 320px">
+          <div class="slider-row">
+            <span class="small muted">$\gamma$</span>
+            <input type="range" id="mrpGamma" min="0" max="0.99" step="0.01" value="0.9">
+            <span class="val" id="mrpGammaVal">0.90</span>
+          </div>
+
+          <div id="mrpBars" style="margin:16px 0 6px"></div>
+
+          <div id="mrpIterCtl" style="display:none;margin-top:14px">
+            <div class="btnrow">
+              <button id="mrpStep">Step $k\to k+1$</button>
+              <button id="mrpRun" class="primary">Run ▶</button>
+              <button id="mrpReset">Reset</button>
+            </div>
+            <p class="small muted" id="mrpIterInfo" style="margin:12px 0 0;font-family:ui-monospace,monospace"></p>
+          </div>
+
+          <h4 style="margin-bottom:4px">Bellman check</h4>
+          <div class="eqbox" id="mrpEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="mdp">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Markov Decision Processes</h2>
+      <p>Now give the agent a choice. An <b>MDP</b> is $\;(\mathcal{S},\mathcal{A},P,R,\gamma)$ where the transition and reward now depend on the action taken:</p>
+      <div class="eqbox">
+        $$P^{a}_{ss'}=\mathbb{P}\!\left(S_{t+1}=s'\mid S_t=s,\,A_t=a\right),\qquad
+          R^{a}_{s}=\mathbb{E}\!\left[R_{t+1}\mid S_t=s,\,A_t=a\right]$$
+      </div>
+      <p>An MRP is precisely an MDP where every state has exactly one available action. That is the entire difference — and it is the difference that makes the problem hard, because $\max$ is not linear.</p>
+
+      <h3>Policies</h3>
+      <p>A <b>policy</b> $\pi(a\mid s)$ is a distribution over actions for each state; it turns the MDP back into an MRP. Averaging over actions gives the <b>policy-induced</b> transition and reward:</p>
+      <div class="eqbox">
+        $$P^{\pi}_{ss'}=\sum_{a}\pi(a\mid s)\,P^{a}_{ss'},\qquad R^{\pi}_{s}=\sum_{a}\pi(a\mid s)\,R^{a}_{s}$$
+      </div>
+
+      <h3>Two value functions</h3>
+      <div class="eqbox">
+        $$V_{\pi}(s)=\mathbb{E}_{\pi}\!\left[G_t\mid S_t=s\right],\qquad
+          Q_{\pi}(s,a)=\mathbb{E}_{\pi}\!\left[G_t\mid S_t=s,\,A_t=a\right]$$
+      </div>
+      <p>They are related by a simple average and a simple lookahead:</p>
+      <div class="eqbox">
+        $$V_{\pi}(s)=\sum_{a}\pi(a\mid s)\,Q_{\pi}(s,a),\qquad
+          Q_{\pi}(s,a)=R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}\,V_{\pi}(s')$$
+      </div>
+
+      <h3>Bellman expectation equation (policy evaluation)</h3>
+      <div class="eqbox">
+        $$V_{\pi}(s)=\sum_{a}\pi(a\mid s)\left[R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}\,V_{\pi}(s')\right]$$
+      </div>
+      <p>For a fixed policy this is again linear — $V_\pi=(I-\gamma P^{\pi})^{-1}R^{\pi}$ — so evaluating a policy is an MRP solve.</p>
+
+      <h3>Optimality</h3>
+      <p>Define $V_{*}(s)=\max_{\pi}V_{\pi}(s)$ and $Q_{*}(s,a)=\max_{\pi}Q_{\pi}(s,a)$. They satisfy the <b>Bellman optimality equations</b>:</p>
+      <div class="eqbox">
+        $$V_{*}(s)=\max_{a}\left[R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}\,V_{*}(s')\right]$$
+        $$Q_{*}(s,a)=R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}\max_{a'}Q_{*}(s',a')$$
+      </div>
+      <p>and the optimal policy is greedy with respect to $Q_*$:</p>
+      <div class="eqbox">
+        $$\pi_{*}(s)=\arg\max_{a}\;Q_{*}(s,a)$$
+      </div>
+      <div class="note">
+        <b>The $\max$ is the whole story.</b> In an MRP the Bellman equation is linear and has a closed-form solution. In an MDP the $\max$ makes it piecewise-linear and <em>non</em>linear — no matrix inverse exists. Instead we iterate the operator $\mathcal{T}$ defined by the right-hand side, which is a $\gamma$-contraction:
+        $$\|\mathcal{T}V-\mathcal{T}U\|_{\infty}\le\gamma\|V-U\|_{\infty}.$$
+        Banach's fixed-point theorem then guarantees a unique fixed point and geometric convergence at rate $\gamma$ — that's <b>value iteration</b>.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="grid">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>A slippery gridworld</h2>
+      <p>A $5\times5$ grid. The agent moves <em>up, right, down, left</em>, but the world is slippery: the intended action succeeds with probability $0.8$, and with probability $0.1$ each the agent slides perpendicular instead. Bumping a wall leaves you in place.</p>
+      <div class="eqbox">
+        $$\mathbb{P}(s'\mid s,a)=\begin{cases}0.8 & s'=\text{intended}(s,a)\\ 0.1 & s'=\text{perpendicular}(s,a)\ \text{(each)}\\ 0 & \text{otherwise}\end{cases}$$
+      </div>
+      <p>Reward: $-0.04$ per step, $+1$ for reaching the goal (top-right), $-1$ for the pit (centre). Both terminal.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · value iteration</span>
+        <div class="btnrow" id="gwModeBtns">
+          <button data-mode="optimal" class="active">Optimal $V_*$</button>
+          <button data-mode="policy">Evaluate $\pi$ (uniform)</button>
+        </div>
+      </div>
+
+      <div class="gridwrap">
+        <div class="gw-left">
+          <svg id="gridSvg" viewBox="0 0 320 320" role="img" aria-label="Gridworld"></svg>
+          <div class="legend"><span>$-1$</span><span class="grad"></span><span>$+1$</span></div>
+          <div class="btnrow" style="margin-top:16px;justify-content:center">
+            <button id="gwStep">Sweep</button>
+            <button id="gwRun" class="primary">Run ▶</button>
+            <button id="gwReset">Reset</button>
+          </div>
+          <p class="small muted" id="gwInfo" style="text-align:center;margin-top:12px;font-family:ui-monospace,monospace"></p>
+        </div>
+
+        <div class="gw-right">
+          <p class="small muted" style="margin-top:0">Click a cell, then pick an action to see its transition distribution.</p>
+          <svg id="localSvg" viewBox="0 0 300 300" style="width:100%;max-width:300px;margin:0 auto"></svg>
+
+          <div class="btnrow" style="justify-content:center;margin-top:10px" id="actBtns">
+            <button class="actbtn" data-a="0">↑</button>
+            <button class="actbtn" data-a="1">→</button>
+            <button class="actbtn" data-a="2">↓</button>
+            <button class="actbtn" data-a="3">←</button>
+          </div>
+
+          <div class="eqbox" id="qEq" style="margin-top:16px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="summary">
+  <div class="wrap">
+    <h2><span class="num">06</span>Summary</h2>
+    <table class="cmp">
+      <tr><th></th><th>Markov Reward Process</th><th>Markov Decision Process</th></tr>
+      <tr><td>Tuple</td><td>$(\mathcal{S},P,R,\gamma)$</td><td>$(\mathcal{S},\mathcal{A},P,R,\gamma)$</td></tr>
+      <tr><td>Who acts?</td><td>Nobody — the chain evolves on its own</td><td>An agent chooses $A_t\sim\pi(\cdot\mid S_t)$</td></tr>
+      <tr><td>Transitions</td><td>$P_{ss'}$</td><td>$P^{a}_{ss'}$</td></tr>
+      <tr><td>Bellman equation</td><td>$V=R+\gamma PV$</td><td>$V_*=\max_a\left[R^a+\gamma P^a V_*\right]$</td></tr>
+      <tr><td>Structure</td><td>Linear</td><td>Piecewise-linear (the $\max$)</td></tr>
+      <tr><td>Solution</td><td>Closed form $(I-\gamma P)^{-1}R$</td><td>Iterative: value / policy iteration</td></tr>
+      <tr><td>Guarantee</td><td>Unique $V$ for $\gamma<1$</td><td>Unique $V_*$; $\mathcal{T}$ is a $\gamma$-contraction</td></tr>
+    </table>
+
+    <h3>Cheat sheet</h3>
+    <div class="eqbox">
+      $$\begin{aligned}
+      G_t &= \sum_{k=0}^{\infty}\gamma^{k}R_{t+k+1}\\[2pt]
+      V_{\pi}(s) &= \sum_{a}\pi(a\mid s)\left[R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}V_{\pi}(s')\right]\\[2pt]
+      V_{*}(s) &= \max_{a}\left[R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}V_{*}(s')\right]\\[2pt]
+      \pi_{*}(s) &= \arg\max_{a}\left[R^{a}_{s}+\gamma\sum_{s'}P^{a}_{ss'}V_{*}(s')\right]
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Everything downstream — TD learning, Q-learning, policy gradients, PPO — is an approximate way of computing, sampling, or differentiating one of these four lines.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">Built as a self-contained interactive note. Drag every slider.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+/* =====================================================================
+   Shared 4-state chain definition
+   ===================================================================== */
+const CHAIN_NODES = [
+  { id: 'A', x: 200, y: 82,  loop: -90 },
+  { id: 'B', x: 318, y: 200, loop: 0   },
+  { id: 'C', x: 200, y: 318, loop: 90  },
+  { id: 'D', x: 82,  y: 200, loop: 180 }
+];
+const CHAIN_EDGES = [
+  { f: 'A', t: 'A', p: 0.3 },
+  { f: 'A', t: 'B', p: 0.7 },
+  { f: 'B', t: 'B', p: 0.2 },
+  { f: 'B', t: 'C', p: 0.8 },
+  { f: 'C', t: 'C', p: 0.1 },
+  { f: 'C', t: 'A', p: 0.6, curve: 24 },
+  { f: 'C', t: 'D', p: 0.3 },
+  { f: 'D', t: 'D', p: 0.5 },
+  { f: 'D', t: 'A', p: 0.5 }
+];
+const CHAIN_STATES = ['A', 'B', 'C', 'D'];
+const CHAIN_R = 26;
+
+function chainP() {
+  const P = {};
+  CHAIN_STATES.forEach(s => (P[s] = Object.fromEntries(CHAIN_STATES.map(t => [t, 0]))));
+  CHAIN_EDGES.forEach(e => (P[e.f][e.t] = e.p));
+  return P;
+}
+
+function bezierEdge(a, b, curve, r) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  const mx = (a.x + b.x) / 2 - uy * curve;
+  const my = (a.y + b.y) / 2 + ux * curve;
+  const angA = Math.atan2(my - a.y, mx - a.x);
+  const angB = Math.atan2(my - b.y, mx - b.x);
+  const p1 = { x: a.x + r * Math.cos(angA), y: a.y + r * Math.sin(angA) };
+  const p2 = { x: b.x + r * Math.cos(angB), y: b.y + r * Math.sin(angB) };
+  const mid = {
+    x: 0.25 * p1.x + 0.5 * mx + 0.25 * p2.x,
+    y: 0.25 * p1.y + 0.5 * my + 0.25 * p2.y
+  };
+  return { d: `M ${p1.x} ${p1.y} Q ${mx} ${my} ${p2.x} ${p2.y}`, mid };
+}
+function selfLoopPath(n, r) {
+  const th = (n.loop * Math.PI) / 180;
+  const sp = 0.75;
+  const p0 = { x: n.x + r * Math.cos(th - sp), y: n.y + r * Math.sin(th - sp) };
+  const p3 = { x: n.x + r * Math.cos(th + sp), y: n.y + r * Math.sin(th + sp) };
+  const c1 = { x: n.x + 2.5 * r * Math.cos(th - 0.42), y: n.y + 2.5 * r * Math.sin(th - 0.42) };
+  const c2 = { x: n.x + 2.5 * r * Math.cos(th + 0.42), y: n.y + 2.5 * r * Math.sin(th + 0.42) };
+  const mid = {
+    x: (p0.x + 3 * c1.x + 3 * c2.x + p3.x) / 8,
+    y: (p0.y + 3 * c1.y + 3 * c2.y + p3.y) / 8
+  };
+  return {
+    d: `M ${p0.x} ${p0.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p3.x} ${p3.y}`,
+    mid
+  };
+}
+
+/* Draws the 4-state diagram into an <svg>. Returns handles. */
+function drawChainDiagram(svg, uid) {
+  svg.innerHTML = '';
+  const defs = el('defs', {}, svg);
+  const mk = (id, color) => {
+    const m = el('marker', {
+      id, viewBox: '0 0 10 10', refX: 10, refY: 5,
+      markerWidth: 7, markerHeight: 7,
+      orient: 'auto', markerUnits: 'userSpaceOnUse'
+    }, defs);
+    el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: color }, m);
+    return `url(#${id})`;
+  };
+  const ARROW_GRAY = mk(`ar-gray-${uid}`, '#c2c9d4');
+  const ARROW_DARK = mk(`ar-dark-${uid}`, '#111111');
+  const ARROW_BLUE = mk(`ar-blue-${uid}`, '#2563eb');
+
+  const gEdges = el('g', {}, svg);
+  const gLabels = el('g', {}, svg);
+  const gNodes = el('g', {}, svg);
+
+  const byId = Object.fromEntries(CHAIN_NODES.map(n => [n.id, n]));
+  const edgeEls = {};
+
+  CHAIN_EDGES.forEach(e => {
+    const a = byId[e.f], b = byId[e.t];
+    let geo;
+    if (e.f === e.t) geo = selfLoopPath(a, CHAIN_R);
+    else geo = bezierEdge(a, b, e.curve !== undefined ? e.curve : -22, CHAIN_R);
+
+    const path = el('path', {
+      d: geo.d, fill: 'none', stroke: '#c2c9d4',
+      'stroke-width': 1 + 3.2 * e.p,
+      'stroke-linecap': 'round',
+      'marker-end': ARROW_GRAY
+    }, gEdges);
+
+    const lbl = el('text', {
+      x: geo.mid.x, y: geo.mid.y + 4,
+      'text-anchor': 'middle', class: 'edge-label'
+    }, gLabels);
+    lbl.textContent = e.p.toFixed(1);
+
+    edgeEls[e.f + e.t] = { path, lbl, base: 1 + 3.2 * e.p, p: e.p };
+  });
+
+  const nodeEls = {};
+  CHAIN_NODES.forEach(n => {
+    const g = el('g', { style: 'cursor:pointer' }, gNodes);
+    const circ = el('circle', {
+      cx: n.x, cy: n.y, r: CHAIN_R, fill: '#fff',
+      stroke: '#111', 'stroke-width': 1.6, style: 'transition:fill .15s'
+    }, g);
+    const t = el('text', {
+      x: n.x, y: n.y + 5, 'text-anchor': 'middle', class: 'node-label'
+    }, g);
+    t.textContent = n.id;
+    nodeEls[n.id] = { g, circ, t };
+  });
+
+  return { edgeEls, nodeEls, ARROW_GRAY, ARROW_DARK, ARROW_BLUE };
+}
+
+function setEdgeHighlight(handle, key, on, color) {
+  const e = handle.edgeEls[key];
+  if (!e) return;
+  if (on) {
+    e.path.setAttribute('stroke', color === 'dark' ? '#111' : '#2563eb');
+    e.path.setAttribute('stroke-width', e.base + 1.6);
+    e.path.setAttribute('marker-end', color === 'dark' ? handle.ARROW_DARK : handle.ARROW_BLUE);
+    e.lbl.setAttribute('class', 'edge-label on');
+  } else {
+    e.path.setAttribute('stroke', '#c2c9d4');
+    e.path.setAttribute('stroke-width', e.base);
+    e.path.setAttribute('marker-end', handle.ARROW_GRAY);
+    e.lbl.setAttribute('class', 'edge-label');
+  }
+}
+
+/* =====================================================================
+   02 — Markov chain: sampling + matrix
+   ===================================================================== */
+function initChain() {
+  const svg = $('#chainSvg');
+  const handle = drawChainDiagram(svg, 'chain');
+  const P = chainP();
+  const trajEl = $('#chainTraj');
+  const matrixEl = $('#chainMatrix');
+  let current = 'A';
+  let traj = ['A'];
+
+  /* matrix */
+  let html = '<table class="matrix"><tr><th></th>' +
+    CHAIN_STATES.map(s => `<th>${s}</th>`).join('') + '</tr>';
+  CHAIN_STATES.forEach(f => {
+    html += `<tr><th>${f}</th>`;
+    CHAIN_STATES.forEach(t => {
+      const p = P[f][t];
+      html += `<td class="${p ? 'nz' : 'z'}" data-e="${f}${t}">${p ? p.toFixed(1) : '·'}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += `<tr class="sum"><td></td>${CHAIN_STATES.map(() => '<td>1.0</td>').join('')}</tr></table>`;
+  matrixEl.innerHTML = html;
+
+  $$('#chainMatrix td[data-e]').forEach(td => {
+    td.addEventListener('mouseenter', () => {
+      const k = td.dataset.e;
+      if (handle.edgeEls[k]) setEdgeHighlight(handle, k, true, 'blue');
+      td.classList.add('hl');
+    });
+    td.addEventListener('mouseleave', () => {
+      const k = td.dataset.e;
+      if (handle.edgeEls[k] && !(k === lastStep && flash)) setEdgeHighlight(handle, k, false);
+      td.classList.remove('hl');
+    });
+  });
+
+  let lastStep = null;
+  let flash = false;
+
+  function paintNode(id) {
+    CHAIN_STATES.forEach(s => {
+      const n = handle.nodeEls[s];
+      const on = s === id;
+      n.circ.setAttribute('fill', on ? '#111' : '#fff');
+      n.t.setAttribute('fill', on ? '#fff' : '#111');
+    });
+  }
+
+  function renderTraj() {
+    trajEl.innerHTML = traj.slice(-24).map((s, i, arr) =>
+      `<span class="chip ${i === arr.length - 1 ? 'now' : ''}">${s}</span>`
+    ).join('<span class="arw">→</span>');
+  }
+
+  function step() {
+    const r = Math.random();
+    let acc = 0, next = current;
+    for (const t of CHAIN_STATES) {
+      acc += P[current][t];
+      if (r <= acc + 1e-12) { next = t; break; }
+    }
+    const key = current + next;
+    lastStep = key;
+    flash = true;
+    setEdgeHighlight(handle, key, true, 'dark');
+    current = next;
+    traj.push(current);
+    if (traj.length > 60) traj.shift();
+    paintNode(current);
+    renderTraj();
+    setTimeout(() => {
+      flash = false;
+      if (!handle.edgeEls[key].path.matches(':hover')) setEdgeHighlight(handle, key, false);
+    }, 420);
+  }
+
+  CHAIN_STATES.forEach(s => {
+    handle.nodeEls[s].g.addEventListener('click', () => {
+      current = s;
+      traj.push(s);
+      paintNode(current);
+      renderTraj();
+    });
+  });
+
+  $('#chainStep').addEventListener('click', step);
+  $('#chainReset').addEventListener('click', () => {
+    current = 'A'; traj = ['A'];
+    Object.keys(handle.edgeEls).forEach(k => setEdgeHighlight(handle, k, false));
+    paintNode(current); renderTraj();
+  });
+
+  paintNode(current);
+  renderTraj();
+}
+
+/* =====================================================================
+   03a — Discount visualisation
+   ===================================================================== */
+function initDiscount() {
+  const rewards = [2, 0, -1, 3, 1];
+  const chart = $('#discChart');
+  const eqEl = $('#discEq');
+  const slider = $('#discGamma');
+  const valEl = $('#discGammaVal');
+  const MAXR = 3;
+
+  chart.innerHTML = rewards.map((r, k) => `
+    <div class="disc-col">
+      <div class="disc-plot">
+        <div class="zl"></div>
+        <div class="disc-ghost" data-k="${k}"></div>
+        <div class="disc-bar" data-k="${k}"></div>
+      </div>
+      <div class="disc-cap">k=${k}</div>
+      <div class="disc-val" data-v="${k}"></div>
+    </div>`).join('');
+
+  function update() {
+    const g = parseFloat(slider.value);
+    valEl.textContent = g.toFixed(2);
+    let total = 0;
+    rewards.forEach((r, k) => {
+      const disc = Math.pow(g, k) * r;
+      total += disc;
+      const ghost = chart.querySelector(`.disc-ghost[data-k="${k}"]`);
+      const bar = chart.querySelector(`.disc-bar[data-k="${k}"]`);
+      const hFull = (Math.abs(r) / MAXR) * 70;
+      const hDisc = (Math.abs(disc) / MAXR) * 70;
+      ghost.style.height = hFull + 'px';
+      ghost.style[r >= 0 ? 'bottom' : 'top'] = '50%';
+      bar.style.height = Math.max(hDisc, disc === 0 ? 0 : 1) + 'px';
+      bar.style[r >= 0 ? 'bottom' : 'top'] = '50%';
+      bar.className = 'disc-bar ' + (r >= 0 ? 'pos' : 'neg');
+      chart.querySelector(`.disc-val[data-v="${k}"]`).textContent = disc.toFixed(2);
+    });
+    const terms = rewards.map((r, k) => {
+      const v = Math.pow(g, k) * r;
+      return (v < 0 ? '-' : '+') + '\\, ' + Math.abs(v).toFixed(2);
+    }).join(' ');
+    T(eqEl,
+      `G_0=\\sum_{k=0}^{4}\\gamma^{k}R_{t+k+1} = ${terms} = \\mathbf{${total.toFixed(3)}}`,
+      true);
+  }
+
+  slider.addEventListener('input', update);
+  update();
+}
+
+/* =====================================================================
+   03b — MRP solver
+   ===================================================================== */
+function initMRP() {
+  const svg = $('#mrpSvg');
+  const handle = drawChainDiagram(svg, 'mrp');
+  const R = { A: 1, B: 2, C: 0, D: -1 };
+  const P = chainP();
+  const idx = { A: 0, B: 1, C: 2, D: 3 };
+
+  const barsEl = $('#mrpBars');
+  const eqEl = $('#mrpEq');
+  const gammaSlider = $('#mrpGamma');
+  const gammaVal = $('#mrpGammaVal');
+  const iterCtl = $('#mrpIterCtl');
+  const iterInfo = $('#mrpIterInfo');
+
+  let gamma = 0.9;
+  let mode = 'closed';
+  let Vk = [0, 0, 0, 0];
+  let k = 0;
+  let selected = 'A';
+  let running = null;
+
+  /* build bars */
+  barsEl.innerHTML = CHAIN_STATES.map(s => `
+    <div class="vrow" data-s="${s}">
+      <span class="vlabel">${s}</span>
+      <div class="vtrack"><div class="vzero"></div><div class="vbar pos" style="width:0%"></div></div>
+      <span class="vval">0.000</span>
+    </div>`).join('');
+
+  $$('#mrpBars .vrow').forEach(row => {
+    row.addEventListener('click', () => { selected = row.dataset.s; render(); });
+  });
+
+  function closedForm(g) {
+    const n = 4;
+    const M = CHAIN_STATES.map((_, i) =>
+      CHAIN_STATES.map((__, j) => (i === j ? 1 : 0) - g * P[CHAIN_STATES[i]][CHAIN_STATES[j]]));
+    const Mi = inv(M);
+    return Mi.map(row => row.reduce((acc, v, j) => acc + v * R[CHAIN_STATES[j]], 0));
+  }
+
+  function render() {
+    const V = mode === 'closed' ? closedForm(gamma) : Vk;
+    const maxAbs = Math.max(0.05, ...V.map(Math.abs));
+
+    CHAIN_STATES.forEach((s, i) => {
+      const row = barsEl.querySelector(`.vrow[data-s="${s}"]`);
+      const bar = row.querySelector('.vbar');
+      const val = row.querySelector('.vval');
+      const frac = (Math.abs(V[i]) / maxAbs) * 50;
+      bar.style.width = frac + '%';
+      bar.style.left = '50%';
+      bar.style.transform = V[i] >= 0 ? 'none' : 'translateX(-100%)';
+      bar.className = 'vbar ' + (V[i] >= 0 ? 'pos' : 'neg');
+      val.textContent = V[i].toFixed(3);
+      row.classList.toggle('sel', s === selected);
+    });
+
+    /* node selection ring */
+    CHAIN_STATES.forEach(s => {
+      handle.nodeEls[s].circ.setAttribute('stroke-width', s === selected ? 3.4 : 1.6);
+    });
+
+    /* Bellman equation */
+    const s = selected;
+    const row = P[s];
+    const nz = CHAIN_STATES.filter(t => row[t] > 0);
+    const sym = nz.map(t => `${row[t].toFixed(2)}\\,V(\\text{${t}})`).join(' + ');
+    const num = nz.map(t => `${row[t].toFixed(2)}\\cdot ${V[idx[t]].toFixed(3)}`).join(' + ');
+    const inner = nz.reduce((acc, t) => acc + row[t] * V[idx[t]], 0);
+    const Vidx = mode === 'closed' ? V[idx[s]] : Vk[idx[s]];
+    T(eqEl,
+      `\\begin{aligned}
+        V(\\text{${s}}) &= ${R[s].toFixed(2)} + ${gamma.toFixed(2)}\\big[${sym}\\big]\\\\
+        &= ${R[s].toFixed(2)} + ${gamma.toFixed(2)}\\big[${num}\\big]\\\\
+        &= \\mathbf{${(R[s] + gamma * inner).toFixed(3)}}
+      \\end{aligned}`, true);
+
+    iterInfo.textContent =
+      `k = ${k}   ‖V_{k+1} − V_k‖∞ = ${mode === 'iter' ? lastDelta.toFixed(5) : '—'}`;
+  }
+
+  let lastDelta = 0;
+
+  function doStep() {
+    const Rv = CHAIN_STATES.map(s => R[s]);
+    const nv = [0, 1, 2, 3].map(i =>
+      Rv[i] + gamma * CHAIN_STATES.reduce((acc, t, j) => acc + P[CHAIN_STATES[i]][t] * Vk[j], 0));
+    lastDelta = Math.max(...nv.map((v, i) => Math.abs(v - Vk[i])));
+    Vk = nv;
+    k++;
+  }
+
+  function stop() {
+    if (running) { clearInterval(running); running = null; }
+  }
+
+  $('#mrpStep').addEventListener('click', () => { doStep(); render(); });
+  $('#mrpRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(() => {
+      doStep(); render();
+      if (lastDelta < 1e-5) stop();
+    }, 110);
+  });
+  $('#mrpReset').addEventListener('click', () => {
+    stop(); Vk = [0, 0, 0, 0]; k = 0; lastDelta = 0; render();
+  });
+
+  $$('#mrpModeBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      $$('#mrpModeBtns button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      mode = b.dataset.mode;
+      stop();
+      Vk = [0, 0, 0, 0]; k = 0; lastDelta = 0;
+      iterCtl.style.display = mode === 'iter' ? 'block' : 'none';
+      render();
+    });
+  });
+
+  gammaSlider.addEventListener('input', () => {
+    gamma = parseFloat(gammaSlider.value);
+    gammaVal.textContent = gamma.toFixed(2);
+    stop(); Vk = [0, 0, 0, 0]; k = 0; lastDelta = 0;
+    render();
+  });
+
+  CHAIN_STATES.forEach(s => {
+    handle.nodeEls[s].g.addEventListener('click', () => { selected = s; render(); });
+  });
+
+  render();
+}
+
+/* =====================================================================
+   05 — Gridworld MDP
+   ===================================================================== */
+function initGrid() {
+  const N = 5, CELL = 64, SIZE = N * CELL;
+  const GOAL = [0, 4], PIT = [2, 2];
+  const STEP = -0.04;
+  const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; // up right down left
+  const ACTION_NAMES = ['↑', '→', '↓', '←'];
+  const ACTION_TEX = ['\\uparrow', '\\rightarrow', '\\downarrow', '\\leftarrow'];
+
+  let gamma = 0.9;
+  let mode = 'optimal';
+  let V = [];
+  let sel = { r: 1, c: 1 };
+  let selAction = 0;
+  let sweeps = 0;
+  let lastDelta = 0;
+  let running = null;
+
+  const svg = $('#gridSvg');
+  const localSvg = $('#localSvg');
+  const qEq = $('#qEq');
+  const info = $('#gwInfo');
+  const actBtns = $$('#actBtns button');
+
+  const isTerminal = (r, c) =>
+    (r === GOAL[0] && c === GOAL[1]) || (r === PIT[0] && c === PIT[1]);
+
+  function initV() {
+    V = new Array(N * N).fill(0);
+    V[GOAL[0] * N + GOAL[1]] = 1;
+    V[PIT[0] * N + PIT[1]] = -1;
+    sweeps = 0; lastDelta = 0;
+  }
+
+  function trans(r, c, a) {
+    const out = new Map();
+    const moves = [[a, 0.8], [(a + 3) % 4, 0.1], [(a + 1) % 4, 0.1]];
+    for (const [act, p] of moves) {
+      let nr = r + DIRS[act][0], nc = c + DIRS[act][1];
+      if (nr < 0 || nr >= N || nc < 0 || nc >= N) { nr = r; nc = c; }
+      const key = nr * N + nc;
+      out.set(key, (out.get(key) || 0) + p);
+    }
+    return out;
+  }
+
+  function qValue(r, c, a) {
+    const d = trans(r, c, a);
+    let s = 0;
+    for (const [k, p] of d) s += p * V[k];
+    return STEP + gamma * s;
+  }
+
+  function sweep() {
+    const nv = V.slice();
+    let delta = 0;
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        if (isTerminal(r, c)) continue;
+        const i = r * N + c;
+        const qs = [0, 1, 2, 3].map(a => qValue(r, c, a));
+        const val = mode === 'optimal'
+          ? Math.max(...qs)
+          : qs.reduce((x, y) => x + y, 0) / 4;
+        delta = Math.max(delta, Math.abs(val - V[i]));
+        nv[i] = val;
+      }
+    }
+    V = nv;
+    sweeps++;
+    lastDelta = delta;
+    return delta;
+  }
+
+  function colorFor(v) {
+    const t = Math.max(-1, Math.min(1, v));
+    const a = Math.min(0.88, Math.abs(t) * 0.92);
+    return t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
+  }
+  function textColorFor(v) {
+    return Math.abs(v) > 0.5 ? '#fff' : '#111';
+  }
+
+  /* ---- build grid SVG once ---- */
+  svg.innerHTML = '';
+  const cellLayer = el('g', {}, svg);
+  const overlay = el('g', {}, svg);
+
+  const cellEls = [];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const g = el('g', { class: 'cell', 'data-r': r, 'data-c': c }, cellLayer);
+      const rect = el('rect', {
+        x: c * CELL + 1.5, y: r * CELL + 1.5,
+        width: CELL - 3, height: CELL - 3, rx: 6,
+        fill: '#fff', stroke: 'none'
+      }, g);
+      const vt = el('text', {
+        x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 + 5,
+        'text-anchor': 'middle', 'font-size': 13,
+        'font-family': 'ui-monospace, monospace', 'font-weight': 600,
+        fill: '#111'
+      }, g);
+      const at = el('text', {
+        x: c * CELL + CELL - 13, y: r * CELL + 17,
+        'text-anchor': 'middle', 'font-size': 12, fill: '#111', opacity: 0.85
+      }, g);
+      cellEls.push({ g, rect, vt, at, r, c });
+      g.addEventListener('click', () => {
+        sel = { r, c };
+        renderGrid();
+        renderLocal();
+        renderQ();
+      });
+    }
+  }
+
+  function renderGrid() {
+    cellEls.forEach(({ rect, vt, at, r, c }) => {
+      const i = r * N + c;
+      const term = isTerminal(r, c);
+      const v = V[i];
+      rect.setAttribute('fill', term ? (r === GOAL[0] && c === GOAL[1] ? '#1e40af' : '#991b1b') : colorFor(v));
+      if (term) {
+        vt.textContent = (r === GOAL[0] && c === GOAL[1] ? '+1' : '−1');
+        vt.setAttribute('fill', '#fff');
+        at.textContent = '';
+      } else {
+        vt.textContent = v.toFixed(2);
+        vt.setAttribute('fill', textColorFor(v));
+        if (mode === 'optimal') {
+          const qs = [0, 1, 2, 3].map(a => qValue(r, c, a));
+          const best = qs.indexOf(Math.max(...qs));
+          at.textContent = ACTION_NAMES[best];
+          at.setAttribute('fill', textColorFor(v));
+          at.setAttribute('opacity', 0.9);
+        } else {
+          at.textContent = '';
+        }
+      }
+      rect.setAttribute('stroke', (sel.r === r && sel.c === c) ? '#111' : 'none');
+      rect.setAttribute('stroke-width', (sel.r === r && sel.c === c) ? 2.6 : 0);
+    });
+    info.textContent = `sweeps = ${sweeps}   ‖Δ‖∞ = ${lastDelta.toFixed(6)}` +
+      (lastDelta < 1e-5 && sweeps > 0 ? '   ✓ converged' : '');
+  }
+
+  /* ---- local transition view ---- */
+  function renderLocal() {
+    localSvg.innerHTML = '';
+    const defs = el('defs', {}, localSvg);
+    const m = el('marker', {
+      id: 'larrow', viewBox: '0 0 10 10', refX: 10, refY: 5,
+      markerWidth: 7, markerHeight: 7, orient: 'auto', markerUnits: 'userSpaceOnUse'
+    }, defs);
+    el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: '#2563eb' }, m);
+
+    const cx = 150, cy = 150, R = 26;
+    const gEdges = el('g', {}, localSvg);
+    const gNodes = el('g', {}, localSvg);
+
+    const { r, c } = sel;
+
+    if (isTerminal(r, c)) {
+      const g = el('g', {}, gNodes);
+      el('circle', { cx, cy, r: R + 4, fill: '#111' }, g);
+      el('text', {
+        x: cx, y: cy + 5, 'text-anchor': 'middle', 'font-size': 13,
+        fill: '#fff', 'font-weight': 600
+      }, g).textContent = 'terminal';
+      T(qEq, `\\text{Terminal state — no outgoing transitions.}`, true);
+      return;
+    }
+
+    const d = trans(r, c, selAction);
+    const posOf = (idx) => {
+      const rr = Math.floor(idx / N), cc = idx % N;
+      const dr = rr - r, dc = cc - c;
+      if (dr === 0 && dc === 0) return null;
+      return { x: cx + dc * 95, y: cy + dr * 95, rr, cc, idx };
+    };
+
+    let selfP = 0;
+    const draws = [];
+    for (const [idx, p] of d) {
+      const pos = posOf(idx);
+      if (!pos) { selfP += p; }
+      else draws.push({ pos, p, idx });
+    }
+
+    /* self loop at 135deg */
+    if (selfP > 0) {
+      const th = (135 * Math.PI) / 180;
+      const p0 = { x: cx + R * Math.cos(th - 0.7), y: cy + R * Math.sin(th - 0.7) };
+      const p3 = { x: cx + R * Math.cos(th + 0.7), y: cy + R * Math.sin(th + 0.7) };
+      const c1 = { x: cx + 2.4 * R * Math.cos(th - 0.4), y: cy + 2.4 * R * Math.sin(th - 0.4) };
+      const c2 = { x: cx + 2.4 * R * Math.cos(th + 0.4), y: cy + 2.4 * R * Math.sin(th + 0.4) };
+      el('path', {
+        d: `M ${p0.x} ${p0.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p3.x} ${p3.y}`,
+        fill: 'none', stroke: '#2563eb', 'stroke-width': 1 + 5 * selfP,
+        'stroke-linecap': 'round', 'marker-end': 'url(#larrow)'
+      }, gEdges);
+      const lx = (p0.x + 3 * c1.x + 3 * c2.x + p3.x) / 8;
+      const ly = (p0.y + 3 * c1.y + 3 * c2.y + p3.y) / 8;
+      const t = el('text', {
+        x: lx, y: ly + 4, 'text-anchor': 'middle', 'font-size': 11.5,
+        'font-weight': 700, fill: '#111',
+        style: 'paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round'
+      }, gEdges);
+      t.textContent = selfP.toFixed(2);
+    }
+
+    draws.forEach(({ pos, p }) => {
+      const dx = pos.x - cx, dy = pos.y - cy;
+      const len = Math.hypot(dx, dy);
+      const ux = dx / len, uy = dy / len;
+      const x1 = cx + ux * (R + 6), y1 = cy + uy * (R + 6);
+      const x2 = pos.x - ux * (R + 12), y2 = pos.y - uy * (R + 12);
+      el('path', {
+        d: `M ${x1} ${y1} L ${x2} ${y2}`,
+        fill: 'none', stroke: '#2563eb', 'stroke-width': 1 + 5 * p,
+        'stroke-linecap': 'round', 'marker-end': 'url(#larrow)'
+      }, gEdges);
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      const t = el('text', {
+        x: mx, y: my + 4, 'text-anchor': 'middle', 'font-size': 11.5,
+        'font-weight': 700, fill: '#111',
+        style: 'paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round'
+      }, gEdges);
+      t.textContent = p.toFixed(2);
+    });
+
+    /* centre node */
+    const gc = el('g', {}, gNodes);
+    el('circle', { cx, cy, r: R, fill: '#111' }, gc);
+    el('text', {
+      x: cx, y: cy - 1, 'text-anchor': 'middle', 'font-size': 11.5,
+      fill: '#fff', 'font-weight': 600
+    }, gc).textContent = `(${r},${c})`;
+    el('text', {
+      x: cx, y: cy + 13, 'text-anchor': 'middle', 'font-size': 10.5,
+      fill: '#c9c9cf', 'font-family': 'ui-monospace, monospace'
+    }, gc).textContent = V[r * N + c].toFixed(2);
+
+    /* neighbour nodes */
+    draws.forEach(({ pos, idx }) => {
+      const gg = el('g', {}, gNodes);
+      const rr = Math.floor(idx / N), cc = idx % N;
+      const term = isTerminal(rr, cc);
+      el('circle', {
+        cx: pos.x, cy: pos.y, r: R, fill: '#fff',
+        stroke: term ? '#111' : '#c9cfd8', 'stroke-width': term ? 2.5 : 1.4
+      }, gg);
+      el('text', {
+        x: pos.x, y: pos.y - 1, 'text-anchor': 'middle', 'font-size': 11,
+        fill: '#111', 'font-weight': 600
+      }, gg).textContent = `(${rr},${cc})`;
+      el('text', {
+        x: pos.x, y: pos.y + 13, 'text-anchor': 'middle', 'font-size': 10.5,
+        fill: '#6b7280', 'font-family': 'ui-monospace, monospace'
+      }, gg).textContent = V[idx].toFixed(2);
+    });
+  }
+
+  function renderQ() {
+    const { r, c } = sel;
+    if (isTerminal(r, c)) return;
+    const a = selAction;
+    const d = trans(r, c, a);
+    const parts = [];
+    let sum = 0;
+    for (const [idx, p] of d) {
+      const rr = Math.floor(idx / N), cc = idx % N;
+      parts.push(`${p.toFixed(2)}\\,V(${rr},${cc})`);
+      sum += p * V[idx];
+    }
+    const numParts = [];
+    for (const [idx, p] of d) {
+      const rr = Math.floor(idx / N), cc = idx % N;
+      numParts.push(`${p.toFixed(2)}\\,(${V[idx].toFixed(3)})`);
+    }
+    const q = STEP + gamma * sum;
+    const qs = [0, 1, 2, 3].map(x => qValue(r, c, x));
+    const isGreedy = q >= Math.max(...qs) - 1e-9;
+    T(qEq,
+      `\\begin{aligned}
+        Q(s,a) &= R^{a}_{s} + \\gamma\\sum_{s'}P^{a}_{ss'}V(s')\\\\
+        &= ${STEP.toFixed(2)} + ${gamma.toFixed(2)}\\big[${parts.join(' + ')}\\big]\\\\
+        &= ${STEP.toFixed(2)} + ${gamma.toFixed(2)}\\big[${numParts.join(' + ')}\\big]\\\\
+        &= \\mathbf{${q.toFixed(3)}} \\;${isGreedy ? '\\;\\checkmark\\ \\text{greedy}' : ''}
+      \\end{aligned}`, true);
+  }
+
+  function stop() { if (running) { clearInterval(running); running = null; } }
+
+  $('#gwStep').addEventListener('click', () => {
+    stop(); sweep(); renderGrid(); renderLocal(); renderQ();
+  });
+  $('#gwRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(() => {
+      const d = sweep();
+      renderGrid(); renderLocal(); renderQ();
+      if (d < 1e-5) stop();
+    }, 110);
+  });
+  $('#gwReset').addEventListener('click', () => {
+    stop(); initV(); renderGrid(); renderLocal(); renderQ();
+  });
+
+  actBtns.forEach(b => {
+    b.addEventListener('click', () => {
+      selAction = parseInt(b.dataset.a, 10);
+      actBtns.forEach(x => x.classList.toggle('active', x === b));
+      renderLocal(); renderQ();
+    });
+  });
+
+  $$('#gwModeBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      $$('#gwModeBtns button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      mode = b.dataset.mode;
+      stop(); initV();
+      renderGrid(); renderLocal(); renderQ();
+    });
+  });
+
+  actBtns[0].classList.add('active');
+  initV();
+  renderGrid();
+  renderLocal();
+  renderQ();
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initChain();
+  initDiscount();
+  initMRP();
+  initGrid();
+  initScroll();
+});
+</script>
+</body>
+</html>
