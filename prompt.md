@@ -55,21 +55,29 @@ Do not open anything in `outputs/`.
 # Writing
 The reader is smart, comfortable with linear algebra, probability and calculus,
 and new to RL. Aim for the quality of the best textbook explanations: precise,
-intuitive, and economical. The reference's voice is the target — short,
-confident sentences; a framing paragraph, then the equation, then what it
-means. A few habits worth keeping:
+intuitive, and economical. The reference's voice is the target: clear,
+connected explanatory prose that reads as one argument rather than a list of
+facts. A few habits worth keeping:
+- Motivate each object before defining it (what problem it solves, what goes
+  wrong without it), then give the equation, then say in plain words what it
+  means.
 - Bold a technical term the first time it appears.
-- Derive the important results rather than stating them, and point at the
-  load-bearing step ("the third line is exactly where the Markov property is
-  spent").
-- Build intuition before formalism where it helps: a concrete example, a
-  failure case, a question the reader should be asking.
-- Use `.note` callouts (bold lead-in sentence) for the ideas that matter most.
-- Invite interaction concretely: "Drag γ toward 1 and watch…".
+- Derive the important results rather than stating them. Walk through each
+  step, say which assumption or rule it uses, and point at the load-bearing
+  one ("the fourth line is where the Markov property is spent").
+- Use concrete intuition and small examples: a limiting case (γ = 0 vs γ → 1),
+  a two-number counterexample, a failure mode.
+- Use `.note` callouts (bold lead-in) for the few ideas that matter most.
+- Give each interactive a guided walkthrough: what to try, in what order, and
+  what the reader should notice. Every number you quote must match what the
+  page actually computes.
+- Notation follows the reference: μ for stationary/state distributions so π
+  always means a policy; `\mathbb{E}`, `\mid`, `\text{}` for state names.
 - Never write "in this section we will", roadmaps, learning-objective boxes,
   or bulleted key-takeaway lists. The summary table and cheat sheet do that.
+  Don't pad or hedge.
 - Every number in prose that comes from a computation must come from the page's
-  own code. Don't invent results.
+  own code (check it by running the same model in node). Don't invent results.
 
 This chapter can be longer and deeper than the reference — it is a full
 chapter, not a note — but every paragraph should earn its place.
