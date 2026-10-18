@@ -86,9 +86,13 @@ computes (verify by running the same model in node). Notation follows the
 reference; use μ for state distributions so π always means a policy.
 
 # Interactive visualisations
-These are the heart of the chapter. Build 3–5 that each make one idea click,
-including the one suggested in `index.md` (adapt it if a better design teaches
-the same thing). Good visualisers:
+These are the heart of the chapter: the page should be visual-first, with the
+prose as connective tissue between panels. Build plenty — typically 5–7 — so
+that almost every major idea has something to touch, including the one
+suggested in `index.md` (adapt it if a better design teaches the same thing).
+Small focused panels (one slider, one live equation) count as much as big
+sandboxes; mix both. When a visual can replace a paragraph, replace the
+paragraph. Good visualisers:
 - encode exactly the math the surrounding prose just stated;
 - give the reader real parameters to change and something non-obvious to
   discover by changing them;
@@ -111,6 +115,11 @@ interactive), but no generic multiple-choice quiz blocks.
 
 # Before you finish
 - Extract the `<script>` content and run `node --check` on it; fix any errors.
+- Compression pass. Run `sh tools/prose-count.sh <your file>` and
+  `sh tools/prose-count.sh RL.html`, and compare words per section. This is a
+  diagnostic, not a cap: a chapter may legitimately need more. But if your
+  sections run well above the reference's, go back through paragraph by
+  paragraph and cut until each one reads like `RL.html`.
 - Re-read the file top to bottom as a student would: is anything unclear,
   hand-wavy, or wrong? Fix it.
 - Check every interactive control has a working handler and the layout holds
@@ -118,4 +127,4 @@ interactive), but no generic multiple-choice quiz blocks.
 - Confirm the shared conventions above are followed exactly.
 
 Report back in a few lines: file name, section list, the visualisers you built,
-and any assumptions you made.
+prose word count vs. the reference, and any assumptions you made.
