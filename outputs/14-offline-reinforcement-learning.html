@@ -256,7 +256,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       </div>
       <svg id="exSvg" class="plot" viewBox="0 0 540 250" role="img" aria-label="Extrapolation of a value fit beyond the support of the behavior policy"></svg>
       <div class="mlegend">
-        <span><i style="background:#9ca3af"></i>true $Q^*(a)$</span>
+        <span><i class="dash"></i>true $Q^*(a)$</span>
         <span><i style="background:#111"></i>fitted $\hat Q(a)$</span>
         <span><i style="background:#2563eb"></i>data $(a_i,y_i)$</span>
         <span><i style="background:rgba(37,99,235,.18)"></i>support of $\mu$</span>
@@ -286,10 +286,13 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <div class="eqbox">
       $$\hat Q-Q^*=\underbrace{\big(\mathcal{T}\hat Q-\mathcal{T}Q^*\big)}_{\le\,\gamma\|\hat Q-Q^*\|_\infty}+\underbrace{\big(\hat{\mathcal{T}}\hat Q-\mathcal{T}\hat Q\big)}_{\textbf{extrapolation error}}.$$
     </div>
-    <p>The first term is a $\gamma$-contraction and the data repairs it. The second is the <b>extrapolation error</b> identified by BCQ: the gap between the operator you <em>fit</em> — a regression on $\mathcal{D}$ — and the operator you <em>wish</em> you fit. Where the data is thin it is unbounded.</p>
-    <p>The first term is bounded; the second is not. <b>That second term is exactly where the distribution shift is spent.</b></p>
+    <p>The first term is a $\gamma$-contraction: it can only shrink what it is given. The second is the <b>extrapolation error</b> identified by BCQ: the gap between the operator you <em>fit</em> — a regression on $\mathcal{D}$ — and the operator you <em>wish</em> you fit. Where the data is thin it is unbounded. Take norms and rearrange:</p>
+    <div class="eqbox">
+      $$\|\hat Q-Q^*\|_\infty\;\le\;\frac{1}{1-\gamma}\,\big\|\hat{\mathcal{T}}\hat Q-\mathcal{T}\hat Q\big\|_\infty .$$
+    </div>
+    <p>Bootstrapping does not repair the extrapolation error; it amplifies it by the effective horizon $1/(1-\gamma)$. <b>That second term is where the distribution shift does its damage.</b></p>
     <div class="note">
-      <b>The max off-support is the enemy.</b> Restrict the $\arg\max$ to actions $\mu$ actually takes and the error vanishes — at the cost of never improving past $\mu$. Every method below buys back some improvement for some conservatism.
+      <b>The max off-support is the enemy.</b> Restrict the $\arg\max$ to actions $\mu$ actually takes and the error vanishes — at the cost of never improving past the best policy the data supports. Every method below buys back some improvement for some conservatism.
     </div>
   </div>
 </section>
@@ -304,7 +307,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         +\alpha\,\mathbb{E}_{s\sim\mathcal{D}}\Big[\underbrace{\log\!\sum_{a}e^{Q_\theta(s,a)}}_{\text{push every action down}}-\underbrace{\mathbb{E}_{a\sim\mu}[Q_\theta(s,a)]}_{\text{hold data actions up}}\Big].$$
     </div>
     <p>The $\log\sum_a e^{Q}$ is a soft maximum, so lowering it lowers the high end of $Q$; the second term holds $Q$ up only on actions $\mu$ chose. The net pressure lands on unseen actions.</p>
-    <p>Tabularly the effect has a closed form — every unsupported action drops by exactly $\alpha$:</p>
+    <p>With $\alpha$ large enough, the result provably lower-bounds the true value of the learned policy (Kumar et al., 2020): pessimism with a certificate. In a table, an action $\mathcal{D}$ never contains has no Bellman term to resist the penalty, so exact CQL pushes it down without limit. The explorer below uses a bounded stand-in that writes each unsupported action a fixed $\alpha$ below the naive learner's value there:</p>
     <div class="eqbox">
       $$\hat Q_{\mathrm{CQL}}(s,a)=\hat Q(s,a)-\alpha\,\mathbf 1\!\big[a\notin\mathcal{D}(s)\big].$$
     </div>
@@ -320,7 +323,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   <div class="wide">
     <div class="wrap" style="padding:0">
       <h2><span class="num">05</span>The offline data explorer</h2>
-      <p>A 4×4 grid from the bottom-left corner to the top-right goal. A behavior policy $\mu$ collected 1500 transitions by mostly walking toward the goal and mostly avoiding the pit at $(2,2)$ — but it left whole state–action pairs untouched, and those gaps are labelled <b>ood</b> below.</p>
+      <p>A 4×4 grid from the bottom-left corner to the top-right goal. A behavior policy $\mu$ collected 1500 transitions by mostly walking toward the goal and mostly avoiding the pit at $(2,2)$ — but it left whole state–action pairs untouched, and those gaps are marked with a red dot in the value bars.</p>
       <p>Pick a learner, move the sliders, and click any cell. The value bars show what each action is <em>worth to that learner</em>. With the blind max, an action $\mu$ never tried still reads $0.00$ — optimistic next to the genuinely negative values around it — so the greedy arrows curl back on themselves and the agent loops instead of leaving.</p>
     </div>
 
@@ -391,7 +394,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="row" style="margin-top:26px">
         <div class="col">
           <h3 style="margin-top:0">What you should see</h3>
-          <p>At $\varepsilon=0$ the naive learner cannot reach the goal from six of the fourteen cells: unsupported actions still read $0.00$ and out-score the real, negative values beside them, so the arrows point into a loop (the red corners). Set $\alpha$ to $1.2$ and CQL writes $-\alpha$ into exactly those actions; IQL never compares against them at all. Both recover the route.</p>
+          <p>At $\varepsilon=0$ the naive learner cannot reach the goal from six of the fourteen cells: unsupported actions still read $0.00$ and out-score the real, negative values beside them, so the arrows point into a loop (the red corners). At the default $\alpha=1.2$ CQL writes $-\alpha$ into exactly those actions; IQL never compares against them at all. Both recover the route.</p>
         </div>
         <div class="col">
           <h3 style="margin-top:0">What closes the gap</h3>
@@ -411,7 +414,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       $$\mathcal{L}_V(\psi)=\mathbb{E}_{\mathcal{D}}\Big[L_\tau^{\mathrm{exp}}\big(Q_\theta(s,a)-V_\psi(s)\big)\Big],\qquad
         L_\tau^{\mathrm{exp}}(u)=\big|\tau-\mathbf 1[u<0]\big|\,u^{2}.$$
     </div>
-    <p>For $\tau\in(0,1)$ this is a soft maximum: $\tau\to1$ behaves like the max, $\tau=0.5$ like the mean, and every $\tau$ in between leans toward the upper tail <em>without ever querying an action outside the batch</em>. The value head then regresses onto the data's rewards:</p>
+    <p>For $\tau\in(0.5,1)$ this is a soft maximum: $\tau\to1$ behaves like the max over the actions in the data, $\tau=0.5$ like the mean, and every $\tau$ in between leans toward the upper tail <em>without ever querying an action outside the batch</em>. The Q head then regresses onto $r+\gamma V_\psi(s')$, with no max in sight:</p>
     <div class="eqbox">
       $$\mathcal{L}_Q(\theta)=\mathbb{E}_{(s,a,r,s')\sim\mathcal{D}}\Big[\big(r+\gamma V_\psi(s')-Q_\theta(s,a)\big)^2\Big].$$
     </div>
@@ -429,17 +432,17 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <p>CQL and IQL are two entry points into one idea — <b>do not trust $Q$ where $\mu$ did not go</b>. The remaining methods implement the same discipline differently.</p>
 
     <h3>Restrict the action set</h3>
-    <p><b>BCQ</b> trains a generative model $\hat\mu(a\mid s)$ and perturbs only actions near the data manifold, then maximizes over that restricted set — the max can no longer leave $\mathrm{supp}(\mu)$.</p>
+    <p><b>BCQ</b> trains a generative model $\hat\mu(a\mid s)$, samples candidate actions from it, nudges each by a small learned perturbation, then maximizes over that restricted set — the max can no longer leave $\mathrm{supp}(\mu)$.</p>
 
     <h3>Regularize the actor toward the data</h3>
     <p><b>TD3+BC</b> appends a plain behavioral-cloning term to the deterministic actor:</p>
     <div class="eqbox">
-      $$\pi=\arg\max_\pi\;\mathbb{E}_{s\sim\mathcal{D}}\Big[\lambda\,Q(s,\pi(s))-\big(\pi(s)-a\big)^2\Big],\quad \lambda=\frac{\alpha}{\frac1N\sum_s|Q(s,\pi(s))|}.$$
+      $$\pi=\arg\max_\pi\;\mathbb{E}_{(s,a)\sim\mathcal{D}}\Big[\lambda\,Q(s,\pi(s))-\big(\pi(s)-a\big)^2\Big],\quad \lambda=\frac{\alpha}{\frac1N\sum_{i}|Q(s_i,a_i)|}.$$
     </div>
     <p><b>AWAC</b> reweights the actor update by $\exp\!\big(A(s,a)/\lambda\big)$, so the policy moves toward actions the data says are good and ignores the rest.</p>
 
     <h3>Say the word “model”</h3>
-    <p><b>Model-based offline RL</b> (MOPO, MOReL) fits a dynamics model on $\mathcal{D}$ and marks regions of low data density as high-uncertainty; the planner is penalized by that uncertainty, so it never rolls out into the unknown. It is CQL’s pessimism, applied to imagination.</p>
+    <p><b>Model-based offline RL</b> (MOPO, MOReL) fits a dynamics model on $\mathcal{D}$ and marks regions of low data density as high-uncertainty; the policy is penalized there — MOPO subtracts the uncertainty from the reward, MOReL ends the imagined episode in a penalized halt state — so it never profits from rolling out into the unknown. It is CQL’s pessimism, applied to imagination.</p>
 
     <h3>Skip the value function entirely</h3>
     <p>The <b>Decision Transformer</b> models the whole trajectory with a sequence model conditioned on a target return. It never bootstraps and never computes a $\max$ — so it cannot extrapolate a value at all, only replay the patterns in the log at the quality you request.</p>
@@ -474,7 +477,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <li>The dataset is one sample from $\mu$’s state distribution; $\pi$ will induce another.</li>
       <li>The blind $\max_{a'}Q$ queries actions the data never covered, and bootstrapping amplifies the answer.</li>
       <li>The error separates into a contracting on-support part and an unbounded extrapolation part.</li>
-      <li>CQL penalizes off-support actions by $\alpha$; IQL removes the out-of-distribution question by never asking it.</li>
+      <li>CQL pushes off-support values down, with $\alpha$ setting the strength; IQL removes the out-of-distribution question by never asking it.</li>
       <li>Every other method — BCQ, AWAC, TD3+BC, model-based, Decision Transformer — is the same pessimism wearing a different mask.</li>
       <li>Raise behavior coverage and the problem softens; you rarely get to choose the behavior policy.</li>
     </ul>
@@ -489,7 +492,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         <tr><td>Is improvement worth the conservatism?</td><td>tune $\alpha$/$\tau$ until the policy stops leaving the batch.</td></tr>
       </tbody>
     </table>
-    <p style="margin-top:26px"><span class="muted">Next: how an agent with no reward to define — only a person to please — learns a policy from preferences, in Chapter 22.</span></p>
+    <p style="margin-top:26px"><span class="muted">Next: the opposite problem — an agent free to collect any data it likes, deciding where to look, in Chapter 15.</span></p>
   </div>
 </section>
 
@@ -785,7 +788,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
           var Qe = [];
           for (s = 0; s < N * N; s++) {
             Qe.push([0, 0, 0, 0]);
-            for (a = 0; a < NA; a++) Qe[s][a] = support[s][a] ? Q[s][a] : (learner === 'cql' ? -alpha : 0);
+            for (a = 0; a < NA; a++) Qe[s][a] = isTerm(s) ? 0 : support[s][a] ? Q[s][a] : (learner === 'cql' ? -alpha : 0);
           }
           for (s = 0; s < N * N; s++) {
             if (isTerm(s)) continue;
@@ -809,14 +812,15 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         }
       } else { /* iql */
         var tau = state.tau;
-        function expectile(vals) {
-          var v = 0, k;
-          for (k = 0; k < vals.length; k++) v += vals[k];
-          v /= vals.length;
+        /* expectile of Q over the data's actions, weighted by their counts in D */
+        function expectile(vals, wts) {
+          var v = 0, W = 0, k;
+          for (k = 0; k < vals.length; k++) { v += wts[k] * vals[k]; W += wts[k]; }
+          v /= W;
           for (var q = 0; q < 50; q++) {
             var num = 0, den = 0;
             for (k = 0; k < vals.length; k++) {
-              var w = vals[k] > v ? tau : (1 - tau);
+              var w = wts[k] * (vals[k] > v ? tau : (1 - tau));
               num += w * vals[k]; den += w;
             }
             var nv = num / den;
@@ -837,9 +841,9 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
           }
           for (s = 0; s < N * N; s++) {
             if (isTerm(s)) continue;
-            var vals = [];
-            for (a = 0; a < NA; a++) if (support[s][a]) vals.push(Q[s][a]);
-            if (vals.length) V[s] = expectile(vals);
+            var vals = [], wts = [];
+            for (a = 0; a < NA; a++) if (support[s][a]) { vals.push(Q[s][a]); wts.push(count[s][a]); }
+            if (vals.length) V[s] = expectile(vals, wts);
           }
         }
       }

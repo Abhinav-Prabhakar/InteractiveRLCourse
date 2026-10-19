@@ -225,7 +225,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <div class="eqbox">
       $$\delta_t \;=\; R_{t+1}+\gamma\,V(S_{t+1})-V(S_t),\qquad V(S_t)\leftarrow V(S_t)+\alpha\,\delta_t .$$
     </div>
-    <p>Read the target back: $R_{t+1}+\gamma V(S_{t+1})$ keeps the sampled reward and pins everything after it on $V$'s own opinion. At $\gamma=0$ the target is just $R_{t+1}$; replace $V(S_{t+1})$ by the true return and it becomes Monte Carlo. TD is the whole interval in between.</p>
+    <p>Read the target back: $R_{t+1}+\gamma V(S_{t+1})$ keeps the sampled reward and pins everything after it on $V$'s own opinion. At $\gamma=0$ the target is just $R_{t+1}$; replace $V(S_{t+1})$ by the actual return $G_{t+1}$ and the target becomes $G_t$ — Monte Carlo. $n$-step methods (Chapter 7) fill the interval in between.</p>
     <div class="note">
       <b>The bias–variance trade, in one target.</b> $R_{t+1}+\gamma V(S_{t+1})$ is biased — it trusts $V$, which is wrong early — but its variance is tiny, because only one random reward enters. Monte Carlo's target $G_t$ is unbiased but high-variance. TD usually needs far less experience to reach the same accuracy.
     </div>
@@ -241,7 +241,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="eqbox">
         $$\mathbb{P}(S_{t+1}=s\pm 1\mid S_t=s)=\tfrac12,\qquad R_{t+1}=\mathbf{1}\{S_{t+1}=\text{right terminal}\}$$
       </div>
-      <p>Every episode applies the rule of Section 01 to the state it just left. Run it and the estimates crawl toward the true values $V_\pi$.</p>
+      <p>Every step applies the rule of Section 01 to the state it just left; a terminal state has value $0$. Run it and the estimates crawl toward the true values $V_\pi$.</p>
     </div>
 
     <div class="panel" style="margin-top:22px">
@@ -302,6 +302,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       $$Q(S_t,A_t)\;\leftarrow\;Q(S_t,A_t)+\alpha\big[R_{t+1}+\gamma\max_a Q(S_{t+1},a)-Q(S_t,A_t)\big]$$
     </div>
     <p>It evaluates the greedy policy directly, no matter how the data was generated.</p>
+    <p><b>Expected Sarsa</b> sits between them: back up the <em>expectation</em> $\sum_a \pi(a\mid S_{t+1})\,Q(S_{t+1},a)$ under the policy instead of one sampled $A_{t+1}$. Same target in expectation as Sarsa, less variance; with $\pi$ greedy it is exactly Q-learning.</p>
 
     <div class="note">
       <b>The only difference is one symbol: $Q(S_{t+1},A_{t+1})$ versus $\max_a Q(S_{t+1},a)$.</b> Sarsa's target is the value of the policy that is acting, so it prices in the cost of its own $\varepsilon$-exploration. Q-learning's target is the value of the greedy policy, learned from an exploring one. That is exactly what <b>on-policy</b> and <b>off-policy</b> mean.
@@ -318,7 +319,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="eqbox">
         $$\mathbb{E}\Big[\max_a Q(s,a)\Big]\;\ge\;\max_a \mathbb{E}\big[Q(s,a)\big]$$
       </div>
-      <p>with strict inequality the moment the estimates are random. A $\max$ over several errors keeps the most optimistic one, so the bootstrapped target is <b>biased high</b> — and the bias, fed back through the update, can make the agent prefer a genuinely worse action. This is <b>maximization bias</b>.</p>
+      <p>with strict inequality whenever the noise can change which action looks best. A $\max$ over several errors keeps the most optimistic one, so the bootstrapped target is <b>biased high</b> — and the bias, fed back through the update, can make the agent prefer a genuinely worse action. This is <b>maximization bias</b>.</p>
       <p>The canonical trap has two states. From the start $A$ you choose <em>right</em> — the episode ends at once with reward $0$ — or <em>left</em>, which also pays $0$ but moves you to $B$. From $B$ run $k$ actions, every one terminating with a noisy reward $r\sim\mathcal{N}(-0.1,1)$.</p>
       <div class="eqbox">
         $$Q_*(A,\text{right})=0,\qquad Q_*(B,\cdot)=-0.1 \quad\Longrightarrow\quad \text{always take right}$$
@@ -359,7 +360,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
           <div class="legend" style="justify-content:flex-start;margin-top:4px">
             <span style="width:16px;height:3px;background:#dc2626;border-radius:2px;display:inline-block"></span><span>Q-learning</span>
             <span style="width:16px;height:3px;background:#2563eb;border-radius:2px;display:inline-block;margin-left:10px"></span><span>Double Q</span>
-            <span style="margin-left:10px">· dashed = 5% floor</span>
+            <span style="margin-left:10px">· dashed = $\varepsilon/2$ exploration floor</span>
           </div>
           <div id="biasRes" style="margin-top:12px">
             <div class="stat"><span class="k">Q-learning · left actions from A</span><span class="v" id="bQlL">—</span></div>
@@ -442,7 +443,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
     <div class="wrap" style="padding:0">
       <div class="note">
-        <b>The two learners converge to different answers on purpose.</b> Q-learning learns the optimal path along the cliff edge and, while exploring, keeps falling off it. Sarsa learns a longer path that stays a row away from the edge, because its target prices in the $\varepsilon$-greedy mistakes it will actually make. Sarsa is the better policy to <em>run while learning</em>; Q-learning is the better policy to <em>converge to</em>.
+        <b>The two learners converge to different answers on purpose.</b> Q-learning learns the optimal path along the cliff edge and, while exploring, keeps falling off it. Sarsa learns a longer path well away from the edge — at the default settings, usually along the top row — because its target prices in the $\varepsilon$-greedy mistakes it will actually make. Sarsa is the better policy to <em>run while learning</em>; Q-learning is the better policy to <em>converge to</em>.
       </div>
     </div>
   </div>
@@ -458,8 +459,8 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <tr><td>Backs up from</td><td>The action the policy actually takes</td><td>The best action available</td></tr>
       <tr><td>What is evaluated</td><td>The $\varepsilon$-greedy behaviour policy</td><td>The greedy policy</td></tr>
       <tr><td>Policy type</td><td>On-policy</td><td>Off-policy</td></tr>
-      <tr><td>Maximization bias</td><td>Absent — no $\max$ over estimates</td><td>Present; removed by Double Q-learning</td></tr>
-      <tr><td>Cliff-walk path</td><td>Safe, a row from the edge</td><td>Optimal, along the edge</td></tr>
+      <tr><td>Maximization bias</td><td>Also present — $\varepsilon$-greedy selection is an implicit $\max$ over noisy estimates</td><td>Present; removed by Double Q-learning</td></tr>
+      <tr><td>Cliff-walk path</td><td>Safe, well away from the edge</td><td>Optimal, along the edge</td></tr>
       <tr><td>Online return while learning</td><td>Higher — few cliff falls</td><td>Lower — explores into the cliff</td></tr>
     </table>
 
@@ -871,7 +872,7 @@ function initBias() {
     drawSeries(curveSvg, [
       { color: '#dc2626', values: smooth(curveQL, 12) },
       { color: '#2563eb', values: smooth(curveDQ, 12) }
-    ], { min: 0, max: Math.max(0.3, Math.max(...curveQL)), baseline: 0.05, dec: 2, empty: 'run to plot' });
+    ], { min: 0, max: Math.max(0.3, Math.max(...curveQL)), baseline: eps / 2, dec: 2, empty: 'run to plot' });
 
     const tail = arr => {
       let s = 0;
@@ -883,8 +884,8 @@ function initBias() {
 
     T(eqEl,
       `\\begin{aligned}
-        \\text{Q-learning:}\\quad &Q(A,\\text{left})\\leftarrow Q(A,\\text{left})+\\alpha\\big[\\gamma\\max_a Q(B,a)\\big]\\\\[2pt]
-        \\text{Double Q:}\\quad &Q_1(A,\\text{left})\\leftarrow Q_1(A,\\text{left})+\\alpha\\big[\\gamma\\,Q_2(B,\\arg\\max_a Q_1(B,a))\\big]
+        \\text{Q-learning:}\\quad &Q(A,\\text{left})\\leftarrow Q(A,\\text{left})+\\alpha\\big[\\gamma\\max_a Q(B,a)-Q(A,\\text{left})\\big]\\\\[2pt]
+        \\text{Double Q:}\\quad &Q_1(A,\\text{left})\\leftarrow Q_1(A,\\text{left})+\\alpha\\big[\\gamma\\,Q_2(B,\\arg\\max_a Q_1(B,a))-Q_1(A,\\text{left})\\big]
       \\end{aligned}
       \\quad \\alpha=${alpha.toFixed(2)},\\ \\varepsilon=${eps.toFixed(2)},\\ k=${K}`, true);
   }

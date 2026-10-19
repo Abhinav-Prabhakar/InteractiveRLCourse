@@ -231,7 +231,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       &\phantom{\textbf{plan:}}\quad Q(s,a)\leftarrow Q(s,a)+\alpha\big[\hat r+\gamma\max_{a'}Q(\hat s',a')-Q(s,a)\big]
       \end{aligned}$$
     </div>
-    <p>One real transition now produces $n+1$ backups. The third and fourth lines are ordinary TD updates — they simply never touch the environment. The only new ingredient is the sampling of $\hat s'$ from the model instead of the world.</p>
+    <p>One real transition now produces $n+1$ backups. The planning backup is the same TD update as the learn line — it simply never touches the environment. The only new ingredient is the sampling of $\hat s'$ from the model instead of the world.</p>
     <div class="note">
       <b>Planning is just learning from data you did not have to collect.</b> That is the entire source of model-based sample efficiency, and the entire source of its risk: the imagined data inherits every error in the model, and it never pushes back.
     </div>
@@ -243,7 +243,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   <div class="wide">
     <div class="wrap" style="padding:0">
       <h2><span class="num">03</span>The world-model rollout</h2>
-      <p>Fit a model, roll it forward, and measure how far the imagined trajectory drifts from the real one. The task is a pendulum, $\ddot\theta=-10\sin\theta-0.1\,\dot\theta+u$, integrated at $\Delta t=0.05$. The model is a polynomial regression $f_\phi(\theta,\dot\theta,u)$ fit to nine thousand real transitions by least squares.</p>
+      <p>Fit a model, roll it forward, and measure how far the imagined trajectory drifts from the real one. The task is a pendulum, $\ddot\theta=-10\sin\theta-0.1\,\dot\theta+u$, integrated at $\Delta t=0.05$. The model is a polynomial regression in $(\theta,\dot\theta,u)$ that predicts the change $\Delta_\phi=s'-s$, fit to nine thousand real transitions by least squares, so $f_\phi(s,u)=s+\Delta_\phi(s,u)$. The rollout starts at $\theta=2.6$, beyond the $|\theta|\le2$ the data was seeded from.</p>
       <p>Raise the model's degree and the one-step error falls. Raise the horizon and the error compounds anyway. Drag both sliders and watch the blue imagination peel away from the black truth.</p>
     </div>
 
@@ -297,7 +297,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="eqbox">
         $$u^{*}_{0:H-1}=\arg\max_{u_{0:H-1}}\;\mathbb{E}\Big[\sum_{k=0}^{H-1}\gamma^{k}\,\hat r(s_k,u_k)\Big]\quad\text{s.t.}\quad s_{k+1}=f_\phi(s_k,u_k),\qquad u^{*}_0\ \text{executed}.$$
       </div>
-      <p>When the action space is continuous and the model is cheap, you do not need gradients. <b>Random shooting</b> samples $K$ action sequences, rolls each one out, and keeps the best. <b>CEM</b> iterates that idea, refitting a Gaussian to the elite samples. <b>PETS</b> wraps the whole loop in a probabilistic ensemble so the optimizer cannot exploit uncertainty.</p>
+      <p>When the action space is continuous and the model is cheap, you do not need gradients. <b>Random shooting</b> samples $K$ action sequences, rolls each one out, and keeps the best. <b>CEM</b> iterates that idea, refitting a Gaussian to the elite samples. <b>PETS</b> runs CEM through a probabilistic ensemble, propagating sampled particles through randomly chosen members, so a plan must score well under every plausible model — not just the one the optimizer can fool.</p>
       <div class="note">
         <b>The optimizer attacks the model.</b> A horizon-$H$ objective has $H$ chances to find a state where the model is optimistic and the world is not. Short horizons and uncertainty penalties are not conservatism for its own sake — they are the only thing standing between a planner and its model's blind spots.
       </div>
@@ -330,7 +330,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         </div>
 
         <div class="col" style="flex:1 1 300px">
-          <p class="small muted" style="margin-top:0">The pendulum starts tilted near the top. Each plan samples $K$ action sequences of length $H$, rolls them through the learned model, and executes only the first action of the best sequence — then replans.</p>
+          <p class="small muted" style="margin-top:0">The pendulum starts displaced from rest at the bottom ($\theta=0.6$, $\theta=0$ is straight down); the reward penalizes angle, speed and effort, so the planner must damp the swing. Each plan samples $K$ action sequences of length $H$, rolls them through the learned model, and executes only the first action of the best sequence — then replans.</p>
           <p class="small muted" style="font-family:ui-monospace,monospace;line-height:1.9">
             best return&nbsp; <span id="mpcRet">—</span><br>
             chosen $u_0$&nbsp;&nbsp; <span id="mpcAct">—</span><br>
@@ -346,24 +346,25 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 <!-- ==================================================================== -->
 <section id="world">
   <div class="wrap">
-    <h2><span class="num">05</span>Latent world models: PETS, MBPO, Dreamer</h2>
-    <p>Pixels are high-dimensional; the dynamics behind them are not. A <b>latent world model</b> compresses each observation into a small state $z_t$ and learns the dynamics there. Planning then happens in the latent space.</p>
-    <p><b>PETS</b> keeps the model explicit — an ensemble of probabilistic dynamics models — and plans with MPC, adding a penalty wherever the ensemble disagrees. <b>MBPO</b> trusts the model for only a few steps at a time: it branches short rollouts from real replay states and trains the policy on those, mixing imagined and real data.</p>
+    <h2><span class="num">05</span>Learned world models: PETS, MBPO, Dreamer</h2>
+    <p>Pixels are high-dimensional; the dynamics behind them are not. A <b>latent world model</b> compresses each observation into a small state $z_t$ and learns the dynamics there. Planning then happens in the latent space. PETS and MBPO stay in the raw state; Dreamer makes the jump.</p>
+    <p><b>PETS</b> keeps the model explicit — an ensemble of probabilistic dynamics models — and plans with MPC, averaging each candidate's return over particles drawn from the ensemble. <b>MBPO</b> trusts the model for only a few steps at a time: it branches short rollouts from real replay states and trains the policy on those, mixing imagined and real data.</p>
     <div class="eqbox">
-      $$J(\theta)=\mathbb{E}_{s_0\in\mathcal{D}}\Big[\sum_{k=0}^{H-1}\gamma^{k}\,\hat r\big(s_k,\pi_\theta(s_k)\big)\Big],\qquad s_{k+1}=f_\phi\big(s_k,\pi_\theta(s_k)\big).$$
+      $$J(\theta)=\mathbb{E}_{s_0\sim\mathcal{D}}\Big[\sum_{k=0}^{H-1}\gamma^{k}\,\hat r\big(s_k,\pi_\theta(s_k)\big)\Big],\qquad s_{k+1}=f_\phi\big(s_k,\pi_\theta(s_k)\big).$$
     </div>
     <p><b>Dreamer</b> removes the planner entirely. It learns a recurrent state-space model — encode $z_t$, roll $z_{t+1}\sim p_\theta(\cdot\mid z_t,a_t)$, decode — and trains the policy <em>only</em> on rollouts imagined inside the latent space.</p>
     <div class="eqbox">
       $$\begin{aligned}
       &\textbf{representation:}\quad z_t\sim q_\theta(z_t\mid o_{\le t},a_{\lt t})\\[2pt]
-      &\textbf{dynamics:}\quad z_{t+1}\sim p_\theta(z_{t+1}\mid z_t,a_t),\qquad \hat r_t\sim q_\theta(r_t\mid z_t)\\[2pt]
-      &\textbf{imagination:}\quad \max_{\theta}\;\mathbb{E}\Big[\sum_{k\ge 0}\gamma^{k}\,\hat r_\theta(z_k,a_k)\Big]
+      &\textbf{dynamics:}\quad z_{t+1}\sim p_\theta(z_{t+1}\mid z_t,a_t),\qquad \hat r_t\sim p_\theta(r_t\mid z_t)\\[2pt]
+      &\textbf{imagination:}\quad \max_{\pi}\;\mathbb{E}\Big[\sum_{k\ge 0}\gamma^{k}\,\hat r_\theta(z_k,a_k)\Big]
       \end{aligned}$$
     </div>
     <p>Because the model is differentiable, the policy gradient flows straight through it. This is the <b>model-based policy gradient</b>: backpropagation through the unrolled dynamics.</p>
     <div class="eqbox">
-      $$\nabla_\theta J=\mathbb{E}\Big[\sum_{k}\big(\nabla_{s_{k}}J\big)^{\!\top}\,\nabla_\theta f_\phi\big(s_k,\pi_\theta(s_k)\big)\Big].$$
+      $$\nabla_\theta J=\mathbb{E}_{s_0}\Big[\sum_{k=0}^{H-1}\Big(\gamma^{k}\,\frac{\partial\hat r(s_k,a_k)}{\partial a_k}+\frac{\partial J_{k+1}}{\partial s_{k+1}}\,\frac{\partial f_\phi(s_k,a_k)}{\partial a_k}\Big)\frac{\partial\pi_\theta(s_k)}{\partial\theta}\Big],\qquad a_k=\pi_\theta(s_k).$$
     </div>
+    <p>Here $J_{k+1}=\sum_{j>k}\gamma^{j}\hat r(s_j,a_j)$ is the imagined return from step $k+1$ on, as a function of $s_{k+1}$. Each action earns credit twice: for its immediate reward, and for where the model says it sends the state. Backprop through time computes every $\partial J_{k+1}/\partial s_{k+1}$ in one backward pass.</p>
     <p>No environment query appears anywhere in the update — the entire gradient is manufactured inside the model. That is the difference between dreaming and acting.</p>
   </div>
 </section>
@@ -385,12 +386,12 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     </div>
 
     <div class="wrap" style="padding:0">
-      <p>The three functions are trained end-to-end by unrolling the model $K$ steps and matching the search's own improved policy $\pi^{k}$, the observed reward $u$, and the game outcome $z$:</p>
+      <p>The three functions are trained end-to-end by unrolling the model $K$ steps and matching the search's own improved policy $\pi^{k}$, the observed reward $u$, and the value target $z$ (the game outcome, or an $n$-step bootstrapped return):</p>
       <div class="eqbox">
-        $$\mathcal{L}=\sum_{k=0}^{K}\Big[\underbrace{(v^{k}-z)^{2}}_{\text{value}}+\underbrace{\pi^{k\top}\log p^{k}}_{\text{policy}}+\underbrace{(r^{k}-u)^{2}}_{\text{reward}}\Big].$$
+        $$\mathcal{L}=\sum_{k=0}^{K}\Big[\underbrace{(v^{k}-z)^{2}}_{\text{value}}+\underbrace{-\pi^{k\top}\log p^{k}}_{\text{policy}}+\underbrace{(r^{k}-u)^{2}}_{\text{reward}}\Big].$$
       </div>
       <div class="note">
-        <b>MuZero is the punchline of the chapter.</b> The model is no longer a replica of the world — it is a simulator that exists only to be searched, trained by the value it produces. An explicit dynamics model is one way to build it; a neural latent one is another. Both are just $f_\phi$.
+        <b>MuZero is the punchline of the chapter.</b> The model is no longer a replica of the world — it is a simulator that exists only to be searched, trained by the value it produces. An explicit dynamics model is one way to build it; a neural latent one is another. Both are just a learned step to unroll.
       </div>
     </div>
   </div>
@@ -403,7 +404,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <p>Compare the two ways to estimate a return. Model-free Monte Carlo averages <em>actual</em> sampled returns: unbiased, but its variance falls only as $1/n$. Model-based prediction rolls the learned dynamics forward: cheap and low-variance, but every imagined step spends a little of the model's bias.</p>
     <div class="eqbox">
       $$\mathrm{MSE}=\underbrace{\big(\mathbb{E}[\hat J]-J\big)^{2}}_{\text{bias}^{2}}+\underbrace{\mathbb{V}\mathrm{ar}[\hat J]}_{\text{variance}},\qquad
-        \big|\hat J-J\big|\;\approx\;\sum_{k=0}^{H-1}\gamma^{k}\,\epsilon_k\ \ \text{for per-step model error }\epsilon_k.$$
+        \big|\hat J-J\big|\;\approx\;\sum_{k=0}^{H-1}\gamma^{k}\,\epsilon_k\ \ \text{for per-step reward error }\epsilon_k.$$
     </div>
     <p>The bias compounds through the rollout. If the one-step dynamics error is $\epsilon$ and the model is $L$-Lipschitz, the $k$-step state error is bounded by</p>
     <div class="eqbox">
@@ -411,7 +412,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     </div>
     <p class="small muted">Read that last line back: the one-step error is multiplied by an <em>exponential</em> in the horizon. When $L>1$ — exactly the interesting regime — a model that is excellent one step out can be useless twenty steps out. That is the blue curve in the rollout above.</p>
     <div class="note">
-      <b>Planning buys variance with bias.</b> A short model rollout behaves like a noisy but cheap return estimate; a long one behaves like a confident but wrong one. Every real system — MBPO's short branches, Dreamer's imagination horizon, MuZero's search depth — is one chosen point on that curve.
+      <b>Planning buys variance with bias.</b> Real returns are noisy but honest; a long model rollout is smooth but confidently wrong. A short rollout spends little bias and leaves the rest of the return to real data or a learned value. Every real system — MBPO's short branches, Dreamer's imagination horizon, MuZero's search depth — is one chosen point on that curve.
     </div>
   </div>
 </section>
@@ -425,7 +426,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <tr><td>Learns</td><td>$Q_\theta(s,a)$ or $\pi_\theta(a\mid s)$ directly</td><td>$\hat P_\phi(s'\mid s,a)$ and $\hat R_\psi(s,a)$, then plans</td></tr>
       <tr><td>What one real step buys</td><td>One update</td><td>One update plus $n$ imagined ones (Dyna)</td></tr>
       <tr><td>Return estimate</td><td>Unbiased, high variance</td><td>Low variance, biased by model error</td></tr>
-      <tr><td>Error with horizon</td><td>Flat — returns are sampled, not rolled</td><td>Compounds like $L^{k}$</td></tr>
+      <tr><td>Error with horizon</td><td>No compounding bias — returns are sampled, not rolled</td><td>Compounds like $L^{k}$</td></tr>
       <tr><td>Cost per decision</td><td>One forward pass</td><td>Model training plus a search or MPC solve</td></tr>
       <tr><td>Examples</td><td>DQN, Sarsa, PPO</td><td>Dyna, MPC, PETS, MBPO, Dreamer, MuZero</td></tr>
     </table>
@@ -440,7 +441,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       &\text{MuZero:}\quad s^{k},r^{k}=g_\theta(s^{k-1},a_k),\qquad p^{k},v^{k}=f_\theta(s^{k})
       \end{aligned}$$
     </div>
-    <p class="small muted">Everything after this — offline RL, curiosity, hierarchy, and the alignment stack in Part V — is a different answer to the same question: how much of the world should you learn, and how far should you trust what you learned.</p>
+    <p class="small muted">Everything after this — offline RL, curiosity, hierarchy, and the alignment chapters that close Part IV — is a different answer to the same question: how much of the world should you learn, and how far should you trust what you learned.</p>
   </div>
 </section>
 
@@ -736,7 +737,7 @@ function initRollout() {
 
     renderErr(deg, H);
     T(eqEl,
-      `\\hat s_{k+1}=s_k+f_\\phi(s_k,u_k)\\quad(\\text{${LAB[di]}})\\qquad ` +
+      `\\hat s_{k+1}=\\hat s_k+\\Delta_\\phi(\\hat s_k,u_k)\\quad(\\text{${LAB[di]}})\\qquad ` +
       `\\big\\|\\hat s_{${H}}-s_{${H}}\\big\\|=\\mathbf{${eH.toFixed(3)}}`, true);
   }
 
@@ -822,6 +823,7 @@ function initMPC() {
   $('#mpcStep').addEventListener('click', () => { stop(); stepOnce(); });
   $('#mpcAuto').addEventListener('click', () => {
     if (timer) { stop(); return; }
+    ticks = 0;
     $('#mpcAuto').classList.add('active');
     timer = setInterval(() => {
       const s = stepOnce();
