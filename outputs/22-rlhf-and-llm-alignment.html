@@ -224,7 +224,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <p><b>Stage 2 — reward modeling.</b> Show labelers pairs of answers and ask which they prefer. Fit a scalar network $r_\phi(x,y)$ whose differences reproduce those choices.</p>
     <p><b>Stage 3 — reinforcement learning.</b> Treat $r_\phi$ as the reward, sample completions from the policy, and optimize it — with a leash back to the reference policy:</p>
     <div class="eqbox">
-      $$\max_{\pi_\theta}\ \mathbb{E}_{x\sim\mathcal{D}}\ \mathbb{E}_{y\sim\pi_\theta(\cdot\mid x)}\big[r_\phi(x,y)\big]\;-\;\beta\,D_{\mathrm{KL}}\!\big(\pi_\theta(\cdot\mid x)\,\big\|\,\pi_{\mathrm{ref}}(\cdot\mid x)\big)$$
+      $$\max_{\pi_\theta}\ \mathbb{E}_{x\sim\mathcal{D}}\Big[\mathbb{E}_{y\sim\pi_\theta(\cdot\mid x)}\big[r_\phi(x,y)\big]\;-\;\beta\,D_{\mathrm{KL}}\!\big(\pi_\theta(\cdot\mid x)\,\big\|\,\pi_{\mathrm{ref}}(\cdot\mid x)\big)\Big]$$
     </div>
     <p>$\pi_{\mathrm{ref}}$ is the frozen SFT model; $\beta$ prices every nat of divergence from it.</p>
     <div class="note">
@@ -264,7 +264,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         </div>
         <div class="col" style="flex:1 1 300px">
           <div class="eqbox" id="btEq" style="margin-top:0;min-height:92px"></div>
-          <p class="small muted" style="margin-bottom:0">Drag the margin. Near $\Delta=0$ the sigmoid is nearly flat: a near-tie is a single bit of information. Large $|\Delta|$ saturates the loss and the pair stops teaching the model anything.</p>
+          <p class="small muted" style="margin-bottom:0">Drag the margin. Near $\Delta=0$ the sigmoid is steepest: a near-tie is a coin flip, and the loss gradient $\sigma(-\Delta)$ is large. Large positive $\Delta$ saturates the loss and the pair stops teaching; large negative $\Delta$ — a confident wrong ranking — costs linearly and teaches the most.</p>
         </div>
       </div>
     </div>
@@ -279,7 +279,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <div class="eqbox">
       $$\max_{\pi}\ \mathbb{E}_{y\sim\pi}\Big[r(x,y)-\beta\log\frac{\pi(y\mid x)}{\pi_{\mathrm{ref}}(y\mid x)}\Big]$$
     </div>
-    <p>Exponentiate the bracket and divide by a normalizer. Completing the square turns the objective into $-\beta\,D_{\mathrm{KL}}\!\big(\pi\,\Vert\,\pi^*\big)+\beta\log Z(x)$, whose optimum is the <b>Gibbs distribution</b>:</p>
+    <p>Exponentiate the bracket and divide by a normalizer. The objective rewrites exactly as $-\beta\,D_{\mathrm{KL}}\!\big(\pi\,\Vert\,\pi^*\big)+\beta\log Z(x)$, whose optimum is the <b>Gibbs distribution</b>:</p>
     <div class="eqbox">
       $$\pi^*(y\mid x)=\frac{1}{Z(x)}\,\pi_{\mathrm{ref}}(y\mid x)\exp\!\Big(\frac{r(x,y)}{\beta}\Big),\qquad Z(x)=\sum_{y}\pi_{\mathrm{ref}}(y\mid x)\exp\!\Big(\frac{r(x,y)}{\beta}\Big)$$
     </div>
@@ -312,9 +312,9 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <div class="eqbox">
       $$\nabla_\theta\mathcal{L}_{\mathrm{DPO}}=-\beta\,\mathbb{E}\Big[\underbrace{\sigma\big(\hat r_\theta(x,y_l)-\hat r_\theta(x,y_w)\big)}_{\text{how wrong the model still is}}\big(\nabla_\theta\log\pi_\theta(y_w\mid x)-\nabla_\theta\log\pi_\theta(y_l\mid x)\big)\Big]$$
     </div>
-    <p><b>Read the gradient back:</b> it raises the log-probability of the winning answer and lowers the loser's, scaled by how badly the implicit reward currently ranks the pair. Pairs the model already separates get ignored.</p>
+    <p><b>Read the gradient back:</b> it raises the log-probability of the winning answer and lowers the loser's, scaled by how badly the implicit reward currently ranks the pair. Pairs the model already separates barely move it.</p>
     <div class="note">
-      <b>No reward model, no sampling, no RL loop.</b> DPO is one classification loss over a fixed preference dataset — the same shape as stage&nbsp;2 of RLHF, applied to the policy instead of to a reward head. At its optimum $r_\phi$ equals $\hat r_\theta$ and the two pipelines coincide.
+      <b>No reward model, no sampling, no RL loop.</b> DPO is one classification loss over a fixed preference dataset — the same shape as stage&nbsp;2 of RLHF, applied to the policy instead of to a reward head. At the population optimum $\hat r_\theta$ recovers the Bradley&#8211;Terry reward up to the prompt-only $\beta\log Z(x)$, so both pipelines target the same policy.
     </div>
   </div>
 </section>
@@ -333,17 +333,17 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         <span class="panel-title">Interactive · the preference landscape</span>
         <div class="slider-row" style="width:220px">
           <span class="small muted">$\beta$</span>
-          <input type="range" id="landBeta" min="0.2" max="2" step="0.05" value="0.8" aria-label="inverse temperature beta">
+          <input type="range" id="landBeta" min="0.2" max="2" step="0.05" value="0.8" aria-label="KL coefficient beta (temperature)">
           <span class="val" id="landBetaVal">0.80</span>
         </div>
       </div>
       <div class="row">
         <div class="col" style="flex:1 1 340px">
           <svg id="landSvg" role="img" aria-label="Reward landscape with policy mass" style="width:100%;max-width:360px;margin:0 auto"></svg>
-          <div class="legend"><span>$-1$</span><span class="grad"></span><span>$+1$</span><span style="margin-left:10px">area &prop; $\pi_\theta(y)$</span></div>
+          <div class="legend"><span>$r=-2.4$</span><span class="grad"></span><span>$+2.4$</span><span style="margin-left:10px">area &prop; $\pi_\theta(y)$</span></div>
         </div>
         <div class="col" style="flex:1 1 300px">
-          <p class="small muted" style="margin-top:0">The rings mark a held-out pair $(x,y_w,y_l)$; the panel reports the implicit reward on each and the constant that connects it to $r$.</p>
+          <p class="small muted" style="margin-top:0">The rings mark a held-out pair $(x,y_w,y_l)$; the panel reports the implicit reward on each and the constant that connects it to $r$. The constant moves with $\beta$; the margin $\hat r_w-\hat r_l$ does not.</p>
           <p class="small muted" id="landStats" style="font-family:ui-monospace,monospace;font-size:12.5px;margin-top:0"></p>
           <h4 style="margin-bottom:4px">Implicit reward</h4>
           <div class="eqbox" id="landEq" style="margin-top:6px;min-height:140px"></div>
@@ -358,7 +358,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   <div class="wide">
     <div class="wrap" style="padding:0">
       <h2><span class="num">06</span>GRPO and verifiable rewards</h2>
-      <p>PPO optimizes the objective of section&nbsp;01 with an <b>actor&#8211;critic</b> setup: a value network $V_\psi$ estimates the baseline $A=r-\gamma V_\psi$ and must be trained alongside the policy, doubling the memory. <b>Group relative policy optimization</b> (GRPO) deletes the critic. For each prompt it samples a <b>group</b> of $G$ completions, scores them, and uses the group's own statistics as the baseline:</p>
+      <p>PPO optimizes the objective of section&nbsp;01 with an <b>actor&#8211;critic</b> setup: a value network $V_\psi$ supplies the baseline — $\hat A_t$ by GAE, roughly $r-V_\psi(s_t)$ — and must be trained alongside the policy, doubling the memory. <b>Group relative policy optimization</b> (GRPO) deletes the critic. For each prompt it samples a <b>group</b> of $G$ completions, scores them, and uses the group's own statistics as the baseline:</p>
       <div class="eqbox">
         $$\hat A_i=\frac{r_i-\operatorname{mean}(r)}{\operatorname{std}(r)},\qquad i=1,\dots,G$$
       </div>
@@ -366,7 +366,8 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="eqbox">
         $$\mathcal{J}_{\mathrm{GRPO}}(\theta)=\mathbb{E}\Big[\frac{1}{G}\sum_{i=1}^{G}\min\big(\rho_i\hat A_i,\ \operatorname{clip}(\rho_i,\,1-\epsilon,\,1+\epsilon)\,\hat A_i\big)\Big]-\beta\,D_{\mathrm{KL}}\!\big(\pi_\theta\,\Vert\,\pi_{\mathrm{ref}}\big),\quad \rho_i=\frac{\pi_\theta(o_i\mid x)}{\pi_{\theta_{\text{old}}}(o_i\mid x)}$$
       </div>
-      <p>When rewards are <b>verifiable</b> — a unit test passes, a math answer matches, a proof checks — no reward model is needed at all. <b>RL with verifiable rewards</b> (RLVR) feeds a programmatic 0/1 checker straight into GRPO, and it is the workhorse behind reasoning models.</p>
+      <p>Two details of the original. The ratio is per token — each $o_i$'s terms are averaged over its length, all sharing $\hat A_i$ — and the KL is a loss term, not a penalty folded into the reward as in PPO-RLHF.</p>
+      <p>When rewards are <b>verifiable</b> — a unit test passes, a math answer matches, a proof checks — no reward model is needed at all. <b>RL with verifiable rewards</b> (RLVR) feeds a programmatic 0/1 checker straight into GRPO (or PPO), and it is the workhorse behind reasoning models. One catch: a group that is all right or all wrong has $\operatorname{std}(r)=0$ and every $\hat A_i=0$ — no gradient. Prompts must be hard enough to split the group.</p>
       <div class="note">
         <b>A group is a free critic.</b> The baseline you need to reduce variance is just the mean of the group you already sampled. No value network, no bootstrapping, no separate critic loss — the advantage is a statistic of the samples, not a learned prediction.
       </div>
@@ -403,9 +404,9 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <h3>Reward hacking</h3>
     <p><b>Reward hacking</b> is the policy maximizing the proxy $r_\phi$ instead of the goal. The reward model is trained on a finite, biased slice of human preference and is smooth in exactly the wrong places: it rewards length, confident phrasing, and agreement. Optimize it hard enough and you get verbose, sycophantic, confidently-wrong answers that score beautifully. This is Goodhart's law with a gradient.</p>
     <h3>KL drift</h3>
-    <p>As training proceeds, $\pi_\theta$ drifts away from $\pi_{\mathrm{ref}}$. The KL term limits the drift but does not remove it, and past some distance $r_\phi$ is extrapolating. Track the KL every step and stop when it climbs: reward curves that rise while the KL explodes are the signature of a policy exploiting the proxy, not improving.</p>
+    <p>As training proceeds, $\pi_\theta$ drifts away from $\pi_{\mathrm{ref}}$. The KL term limits the drift but does not remove it, and past some distance $r_\phi$ is extrapolating. Track the KL every step and stop when it climbs: reward curves that rise while the KL explodes are the signature of a policy exploiting the proxy, not improving. Gao et al. (2023) measured it against a held-out gold reward model: the proxy climbs monotonically with KL, while the gold reward rises, peaks, and falls.</p>
     <h3>Evaluation</h3>
-    <p>Measure both the proxy and the goal. Report win rate against the SFT and reference policies, use a <em>length-controlled</em> win rate to strip verbosity bias, and hold out a preference set to score $r_\phi$ itself. Plot reward against KL — the frontier — because a single reward number without its KL is uninterpretable.</p>
+    <p>Measure both the proxy and the goal. Report win rate against the SFT reference and a strong baseline, use a <em>length-controlled</em> win rate to strip verbosity bias, and hold out a preference set to score $r_\phi$ itself. Plot reward against KL — the frontier — because a single reward number without its KL is uninterpretable.</p>
     <div class="note">
       <b>The reward model is a proxy, and proxies get gamed.</b> Every alignment method on this page is only as good as the preferences that define it, which is why the field keeps moving from a trained $r_\phi$ toward rewards you can <em>verify</em>: a checker cannot be sweet-talked into high scores.
     </div>
@@ -418,7 +419,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <h2><span class="num">08</span>Summary</h2>
     <table class="cmp">
       <tr><th></th><th>RLHF with a reward model</th><th>DPO (implicit reward)</th></tr>
-      <tr><td>Extra network</td><td>A reward model $r_\phi$ (+ a PPO critic, or a GRPO group)</td><td>None — the policy is its own reward</td></tr>
+      <tr><td>Extra network</td><td>A reward model $r_\phi$ (+ a PPO critic, or a GRPO group)</td><td>None beyond the frozen $\pi_{\mathrm{ref}}$ — the policy is its own reward</td></tr>
       <tr><td>Training signal</td><td>Freshly sampled completions scored by $r_\phi$</td><td>A fixed offline set of pairs $(x,y_w,y_l)$</td></tr>
       <tr><td>Objective</td><td>$\max_\pi \mathbb{E}[r_\phi]-\beta D_{\mathrm{KL}}$ via PPO&nbsp;/&nbsp;GRPO</td><td>Cross-entropy on the log-ratio margin</td></tr>
       <tr><td>Reward at the end</td><td>$r_\phi$, kept separate from $\pi_\theta$</td><td>Implicit $\hat r_\theta=\beta\log(\pi_\theta/\pi_{\mathrm{ref}})$</td></tr>
@@ -437,7 +438,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       \hat A_i &= \frac{r_i-\operatorname{mean}(r)}{\operatorname{std}(r)}
       \end{aligned}$$
     </div>
-    <p class="small muted">Everything downstream — iterative and online DPO, judge-based RLAIF, process reward models, and the full alignment pipeline in Project&nbsp;5 — is a way of steering one of these five lines.</p>
+    <p class="small muted">None of it is new machinery. $\beta$ is Chapter&nbsp;21's price, charged in nats; PPO is Chapter&nbsp;12's; the group mean is Chapter&nbsp;11's baseline; fitting $r_\phi$ to choices is Chapter&nbsp;20's inverse problem. Everything downstream — iterative and online DPO, judge-based RLAIF, process reward models, and the full alignment pipeline in Project&nbsp;5 — is a way of steering one of these five lines.</p>
   </div>
 </section>
 
@@ -540,7 +541,8 @@ function initBT() {
     T(eqEl,
       `\\begin{aligned}
         P(y_w\\succ y_l\\mid x) &= \\sigma\\big(r_\\phi(x,y_w)-r_\\phi(x,y_l)\\big) = \\sigma(${d.toFixed(2)}) = \\mathbf{${p.toFixed(3)}}\\\\[2pt]
-        \\mathcal{L}_{\\mathrm{RM}} &= -\\log\\sigma(${d.toFixed(2)}) = ${(-Math.log(p)).toFixed(3)}
+        \\mathcal{L}_{\\mathrm{RM}} &= -\\log\\sigma(${d.toFixed(2)}) = ${(-Math.log(p)).toFixed(3)}\\\\[2pt]
+        -\\partial\\mathcal{L}_{\\mathrm{RM}}/\\partial\\Delta &= \\sigma(-\\Delta) = ${(1 - p).toFixed(3)}
       \\end{aligned}`, true);
   }
   slider.addEventListener('input', update);
