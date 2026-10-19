@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trust-Region and Proximal Policy Optimization</title>
+<title>Chapter 12 · Trust-Region &amp; Proximal Policy Optimization</title>
 
 <!-- Assumptions: the brief requests a quiz, which prompt.md forbids, so it is skipped and the prose is deepened instead.
      The brief names one visualizer (the PPO Clip Visualizer); two more are added (the surrogate objective, the KL trust
@@ -177,7 +177,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">TRPO &amp; PPO</a>
+    <a class="brand" href="../index.html">Ch. 12 · TRPO &amp; PPO</a>
     <nav class="nav">
       <a href="#step">Step size</a>
       <a href="#surrogate">Surrogate</a>
@@ -192,7 +192,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Policy Optimization</p>
+    <p class="eyebrow">Reinforcement Learning · Part III · Chapter 12</p>
     <h1>Trust-Region and<br>Proximal Policy Optimization</h1>
     <p class="lede">A gradient tells you which way to step, never how far — TRPO and PPO are two ways of drawing that line.</p>
   </div>
@@ -719,6 +719,21 @@ document.addEventListener('DOMContentLoaded', () => {
   initPPO();
   initScroll();
 });
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  var file = location.pathname.split('/').pop();
+  try { localStorage.setItem('rl-last', file); } catch (e) {}
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
 </script>
 </body>
 </html>

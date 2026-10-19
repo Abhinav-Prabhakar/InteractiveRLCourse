@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chapter 21 · Safe and Constrained RL</title>
+<title>Chapter 21 · Safe &amp; Constrained RL</title>
 <!--
   Assumption: per the task instructions, no prev/next footer links are included
   (the design reference RL.html has none). Every visualiser below runs a real
@@ -138,7 +138,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">Ch. 21 · Safe &amp; Constrained RL</a>
+    <a class="brand" href="../index.html">Ch. 21 · Safe RL</a>
     <nav class="nav">
       <a href="#cmdp">CMDPs</a>
       <a href="#lagrangian">Lagrangian</a>
@@ -951,6 +951,21 @@ document.addEventListener('DOMContentLoaded', () => {
   initBudget();
   initScroll();
 });
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  var file = location.pathname.split('/').pop();
+  try { localStorage.setItem('rl-last', file); } catch (e) {}
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
 </script>
 </body>
 </html>

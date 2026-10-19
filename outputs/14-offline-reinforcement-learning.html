@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Offline Reinforcement Learning</title>
+<title>Chapter 14 · Offline Reinforcement Learning</title>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -193,7 +193,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">Offline RL</a>
+    <a class="brand" href="../index.html">Ch. 14 · Offline RL</a>
     <nav class="nav">
       <a href="#setting">The log</a>
       <a href="#shift">Distribution shift</a>
@@ -209,7 +209,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Modern and Advanced Topics</p>
+    <p class="eyebrow">Reinforcement Learning · Part IV · Chapter 14</p>
     <h1>Offline Reinforcement<br>Learning</h1>
     <p class="lede">Learn a policy from a fixed log of experience — with no environment to query and no second chance at the states you never visited.</p>
   </div>
@@ -1077,6 +1077,21 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     initExtrap();
     initExplorer();
     initScroll();
+  });
+})();
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  var file = location.pathname.split('/').pop();
+  try { localStorage.setItem('rl-last', file); } catch (e) {}
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
   });
 })();
 </script>

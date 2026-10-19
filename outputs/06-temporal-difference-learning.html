@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Temporal-Difference Learning</title>
+<title>Chapter 6 · Temporal-Difference Learning</title>
 
 <!--
   Assumptions / notes (self-contained per prompt.md):
@@ -192,7 +192,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">Temporal-Difference</a>
+    <a class="brand" href="../index.html">Ch. 06 · TD Learning</a>
     <nav class="nav">
       <a href="#td">The TD idea</a>
       <a href="#prediction">TD(0)</a>
@@ -207,7 +207,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Sample-Based Control</p>
+    <p class="eyebrow">Reinforcement Learning · Part II · Chapter 6</p>
     <h1>Temporal-Difference<br>Learning</h1>
     <p class="lede">Learn a value estimate from the very next reward — before the episode is over — then let a single $\max$ decide whether the agent plays it safe or plays it best.</p>
   </div>
@@ -1101,6 +1101,21 @@ document.addEventListener('DOMContentLoaded', () => {
   initCliff();
   initScroll();
 });
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  var file = location.pathname.split('/').pop();
+  try { localStorage.setItem('rl-last', file); } catch (e) {}
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
 </script>
 </body>
 </html>

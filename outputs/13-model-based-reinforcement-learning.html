@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Model-Based Reinforcement Learning</title>
+<title>Chapter 13 · Model-Based Reinforcement Learning</title>
 
 <!-- Assumptions (per prompt.md):
      - The brief requests a quiz; prompt.md forbids quizzes, so it is skipped and the
@@ -176,7 +176,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">Model-Based RL</a>
+    <a class="brand" href="../index.html">Ch. 13 · Model-Based RL</a>
     <nav class="nav">
       <a href="#model">The model</a>
       <a href="#dyna">Dyna</a>
@@ -193,7 +193,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Modern Methods</p>
+    <p class="eyebrow">Reinforcement Learning · Part IV · Chapter 13</p>
     <h1>Model-Based<br>Reinforcement Learning</h1>
     <p class="lede">Stop asking the environment what happens. Learn the world once, then answer the question yourself.</p>
   </div>
@@ -927,6 +927,21 @@ document.addEventListener('DOMContentLoaded', () => {
   drawMuZero();
   initScroll();
 });
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  var file = location.pathname.split('/').pop();
+  try { localStorage.setItem('rl-last', file); } catch (e) {}
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
 </script>
 </body>
 </html>
