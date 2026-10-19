@@ -78,6 +78,42 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
 .eqbox .katex-display{margin:.85em 0!important}
 
+/* ---------------- inline tooltips & definitions ----------------
+   Usage:
+     <button type="button" class="tip" data-tip="…">trigger</button>
+     <button type="button" class="def" data-def="…">term</button>
+   Call initExplanations() after KaTeX has rendered. .tip opens on
+   hover (after a short delay), keyboard focus or click (click pins it);
+   .def opens on click only. Both prefer to sit above the trigger. */
+.tip,.def{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;line-height:inherit;border-radius:3px;-webkit-tap-highlight-color:transparent}
+.tip{cursor:help;user-select:text}
+.tip:active,.def:active{transform:none}
+.tip:focus{outline:none}
+.tip:focus-visible,.def:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
+.def{cursor:pointer;padding:0 1px;font-weight:600;text-decoration:underline dotted #a8b2c1;text-decoration-thickness:1px;text-underline-offset:3px;transition:text-decoration-color .15s ease,background .15s ease}
+.def:hover{text-decoration-color:#6b7280}
+.def[aria-expanded="true"]{text-decoration-color:#111;background:#f7f7f8}
+.eq-split{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:0 2.2em;padding:20px 0;margin:0}
+.eq-split .eq-part{line-height:1.2;margin:0}
+.tip.eq-block{display:block;width:100%;text-align:center}
+.pop{position:fixed;left:0;top:0;z-index:200;visibility:hidden;opacity:0;pointer-events:none;transform-origin:var(--arrow-x,50%) 100%;transform:translateY(4px) scale(.97);transition:opacity .1s ease-in,transform .1s ease-in,visibility 0s linear .1s}
+.pop[data-side="below"]{transform-origin:var(--arrow-x,50%) 0;transform:translateY(-4px) scale(.97)}
+.pop.open{visibility:visible;opacity:1;transform:none;pointer-events:auto;transition:opacity .16s cubic-bezier(.2,.8,.2,1),transform .2s cubic-bezier(.2,.8,.2,1),visibility 0s}
+.pop.instant{transition:none}
+.pop-tip{z-index:201;width:max-content;max-width:min(300px,calc(100vw - 24px));background:#111;color:#fff;border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.pop-tip::before{content:"";position:absolute;left:var(--arrow-x,50%);width:8px;height:8px;background:#111;transform:translateX(-50%) rotate(45deg)}
+.pop-tip[data-side="below"]::before{top:-4px}
+.pop-tip[data-side="above"]::before{bottom:-4px}
+.pop-tip::after{content:"";position:absolute;left:0;right:0;height:10px}
+.pop-tip[data-side="above"]::after{top:100%}
+.pop-tip[data-side="below"]::after{bottom:100%}
+.pop-def{width:300px;max-width:calc(100vw - 24px);background:#fff;border:1px solid #e8e8e8;border-radius:14px;padding:13px 15px 14px;box-shadow:0 10px 30px rgba(0,0,0,.1);outline:none}
+.pop-def:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.def-k{display:block;font-size:10.5px;font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:#6b7280}
+.def-body{margin:5px 0 0;font-size:13.5px;line-height:1.55;color:#374151}
+@media(prefers-reduced-motion:reduce){.pop,.pop[data-side="below"]{transform:none}.pop.open{transition:opacity .12s ease,visibility 0s}}
+@media(max-width:640px){.eq-split{gap:0 1.2em}}
+
 /* ---------------- chain diagram ---------------- */
 svg{display:block;max-width:100%;height:auto}
 .diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
@@ -1281,6 +1317,217 @@ function initGrid() {
 }
 
 /* =====================================================================
+   Inline tooltips (.tip) and definition cards (.def)
+
+   .tip  opens after a short hover delay (instantly once a tip has just
+         been open, so sweeping across neighbours doesn't re-animate),
+         on keyboard focus, or on click/tap (which pins it). Moving the
+         pointer onto the tooltip keeps it open. Escape, blur and an
+         outside click dismiss it.
+   .def  opens on click / Enter / Space and moves focus into the card.
+         Escape returns focus to the term; Tab / Shift+Tab leave the card
+         and continue from the term, as if the card sat right after it.
+   Both prefer to sit above the trigger, flip below when there is no
+   room, and close once the trigger scrolls out of view. A tip and a
+   definition can be open at the same time. Content is plain text, so
+   no HTML is injected.
+
+   .tip.eq-block makes a whole display equation the trigger without
+   changing its layout. Use both components sparingly: .def for
+   first-use jargon, .tip for a non-obvious mathematical step. If a
+   fuller treatment is needed, build a variant from the same card
+   tokens (formula, worked example, see-also) rather than adding a new
+   popover style.
+   ===================================================================== */
+function initExplanations() {
+  const tips = $$('[data-tip]');
+  const defs = $$('[data-def]');
+  if (!tips.length && !defs.length) return;
+
+  const OPEN_DELAY = 300, WARM_WINDOW = 400, HIDE_DELAY = 120;
+  let seq = 0, tip = null, def = null, tipTimer = null, lastTipClose = -Infinity;
+  const layer = document.createElement('div');
+  layer.className = 'pop-layer';
+  document.body.appendChild(layer);
+  const topbar = $('.topbar');
+
+  function place(trigger, pop) {
+    const r = trigger.getBoundingClientRect();
+    const gap = 10, edge = 12, vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+    const minTop = (topbar ? Math.max(0, topbar.getBoundingClientRect().bottom) : 0) + edge;
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let left = r.left + r.width / 2 - pw / 2;
+    left = Math.max(edge, Math.min(left, vw - pw - edge));
+    const roomAbove = r.top - gap - minTop, roomBelow = vh - edge - r.bottom - gap;
+    const side = ph <= roomAbove || roomAbove >= roomBelow ? 'above' : 'below';
+    let top = side === 'above' ? r.top - gap - ph : r.bottom + gap;
+    top = Math.max(minTop, Math.min(top, vh - ph - edge));
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.top = Math.round(top) + 'px';
+    pop.dataset.side = side;
+    const ax = Math.max(18, Math.min(pw - 18, r.left + r.width / 2 - left));
+    pop.style.setProperty('--arrow-x', Math.round(ax) + 'px');
+  }
+
+  function show(trigger, pop, instant) {
+    pop.classList.toggle('instant', instant);
+    place(trigger, pop);
+    void pop.offsetWidth; // commit side/origin so the entrance starts from the trigger's side
+    pop.classList.add('open');
+  }
+  function hide(pop, instant) {
+    pop.classList.toggle('instant', instant);
+    pop.classList.remove('open');
+  }
+  const offscreen = el => {
+    const r = el.getBoundingClientRect();
+    return r.bottom < 0 || r.top > document.documentElement.clientHeight;
+  };
+
+  /* ---- tooltips ---- */
+  const isWarm = () => !!tip || performance.now() - lastTipClose < WARM_WINDOW;
+  const tipEngaged = t => t.trigger.matches(':hover') || t.pop.matches(':hover') || t.trigger.matches(':focus-visible');
+
+  function openTip(trigger, pop, pinned) {
+    clearTimeout(tipTimer);
+    if (tip && tip.trigger === trigger) { tip.pinned = tip.pinned || pinned; return; }
+    const warm = isWarm();
+    if (tip) closeTip(true);
+    tip = { trigger, pop, pinned };
+    show(trigger, pop, warm);
+  }
+  function closeTip(instant) {
+    clearTimeout(tipTimer);
+    if (!tip) return;
+    hide(tip.pop, instant);
+    tip = null;
+    lastTipClose = performance.now();
+  }
+  function releaseTip(ms) {
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => {
+      if (tip && !tip.pinned && !tipEngaged(tip)) closeTip(false);
+    }, ms);
+  }
+
+  tips.forEach(trigger => {
+    const pop = document.createElement('div');
+    pop.className = 'pop pop-tip';
+    pop.id = 'tip-' + (++seq);
+    pop.setAttribute('role', 'tooltip');
+    pop.textContent = trigger.dataset.tip;
+    layer.appendChild(pop);
+    trigger.setAttribute('aria-describedby', pop.id);
+
+    trigger.addEventListener('pointerenter', e => {
+      if (e.pointerType !== 'mouse') return;
+      clearTimeout(tipTimer);
+      if (tip && tip.trigger === trigger) return;
+      if (isWarm()) openTip(trigger, pop, false);
+      else tipTimer = setTimeout(() => openTip(trigger, pop, false), OPEN_DELAY);
+    });
+    trigger.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') releaseTip(HIDE_DELAY); });
+    trigger.addEventListener('focus', () => { if (trigger.matches(':focus-visible')) openTip(trigger, pop, false); });
+    trigger.addEventListener('blur', () => {
+      if (tip && tip.trigger === trigger) tip.pinned = false;
+      releaseTip(0);
+    });
+    trigger.addEventListener('click', () => {
+      if (tip && tip.trigger === trigger && tip.pinned) closeTip(false);
+      else openTip(trigger, pop, true);
+    });
+    pop.addEventListener('pointerenter', () => clearTimeout(tipTimer));
+    pop.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') releaseTip(HIDE_DELAY); });
+  });
+
+  /* ---- definition cards ---- */
+  function openDef(trigger, pop) {
+    if (def) closeDef(false, true);
+    def = { trigger, pop };
+    pop.removeAttribute('aria-hidden');
+    trigger.setAttribute('aria-expanded', 'true');
+    show(trigger, pop, false);
+    pop.focus({ preventScroll: true });
+  }
+  function closeDef(refocus, instant) {
+    if (!def) return;
+    const { trigger, pop } = def;
+    def = null;
+    const hadFocus = pop.contains(document.activeElement);
+    hide(pop, instant);
+    pop.setAttribute('aria-hidden', 'true');
+    trigger.setAttribute('aria-expanded', 'false');
+    if (refocus && hadFocus) trigger.focus({ preventScroll: true });
+  }
+  const tabbable = () => $$('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]')
+    .filter(n => n.tabIndex >= 0 && !layer.contains(n) && n.getClientRects().length);
+
+  defs.forEach(trigger => {
+    const pop = document.createElement('div');
+    pop.className = 'pop pop-def';
+    pop.id = 'def-' + (++seq);
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-modal', 'false');
+    pop.setAttribute('aria-label', 'Definition: ' + trigger.textContent.trim());
+    pop.setAttribute('aria-describedby', pop.id + '-body');
+    pop.setAttribute('aria-hidden', 'true');
+    pop.tabIndex = -1;
+    const kicker = document.createElement('span');
+    kicker.className = 'def-k';
+    kicker.textContent = 'Definition';
+    const body = document.createElement('p');
+    body.className = 'def-body';
+    body.id = pop.id + '-body';
+    body.textContent = trigger.dataset.def;
+    pop.append(kicker, body);
+    layer.appendChild(pop);
+    trigger.setAttribute('aria-controls', pop.id);
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-haspopup', 'dialog');
+
+    trigger.addEventListener('click', () => {
+      if (def && def.trigger === trigger) closeDef(true);
+      else openDef(trigger, pop);
+    });
+    // The card lives at the end of <body>; keep Tab order as if it sat right after the term.
+    pop.addEventListener('keydown', e => {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      closeDef(false);
+      if (e.shiftKey) { trigger.focus(); return; }
+      const list = tabbable();
+      (list[list.indexOf(trigger) + 1] || trigger).focus();
+    });
+  });
+
+  /* ---- shared dismissal & tracking ---- */
+  document.addEventListener('pointerdown', e => {
+    const t = e.target;
+    if (tip && !tip.trigger.contains(t) && !tip.pop.contains(t)) closeTip(false);
+    // Jumping straight to another term swaps cards without a cross-fade.
+    if (def && !def.trigger.contains(t) && !def.pop.contains(t)) closeDef(false, !!(t.closest && t.closest('[data-def]')));
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (tip) { e.preventDefault(); closeTip(false); }
+    else if (def) { e.preventDefault(); closeDef(true); }
+  });
+
+  let raf = null;
+  const reposition = () => {
+    if ((!tip && !def) || raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = null;
+      if (tip) { if (offscreen(tip.trigger)) closeTip(true); else place(tip.trigger, tip.pop); }
+      if (def) { if (offscreen(def.trigger)) closeDef(true, true); else place(def.trigger, def.pop); }
+    });
+  };
+  // Capture so scrolling inside overflow containers (e.g. wide .eqbox) also repositions.
+  document.addEventListener('scroll', reposition, { passive: true, capture: true });
+  window.addEventListener('resize', reposition);
+}
+
+/* =====================================================================
    Scroll progress
    ===================================================================== */
 function initScroll() {
@@ -1309,6 +1556,7 @@ document.addEventListener('DOMContentLoaded', () => {
       throwOnError: false
     });
   }
+  initExplanations();
   initChain();
   initDiscount();
   initMRP();

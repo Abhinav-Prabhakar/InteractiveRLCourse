@@ -91,6 +91,42 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
 .eqbox .katex-display{margin:.85em 0!important}
 
+/* ---------------- inline tooltips & definitions ----------------
+   Usage:
+     <button type="button" class="tip" data-tip="…">trigger</button>
+     <button type="button" class="def" data-def="…">term</button>
+   Call initExplanations() after KaTeX has rendered. .tip opens on
+   hover (after a short delay), keyboard focus or click (click pins it);
+   .def opens on click only. Both prefer to sit above the trigger. */
+.tip,.def{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;line-height:inherit;border-radius:3px;-webkit-tap-highlight-color:transparent}
+.tip{cursor:help;user-select:text}
+.tip:active,.def:active{transform:none}
+.tip:focus{outline:none}
+.tip:focus-visible,.def:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
+.def{cursor:pointer;padding:0 1px;font-weight:600;text-decoration:underline dotted #a8b2c1;text-decoration-thickness:1px;text-underline-offset:3px;transition:text-decoration-color .15s ease,background .15s ease}
+.def:hover{text-decoration-color:#6b7280}
+.def[aria-expanded="true"]{text-decoration-color:#111;background:#f7f7f8}
+.eq-split{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:0 2.2em;padding:20px 0;margin:0}
+.eq-split .eq-part{line-height:1.2;margin:0}
+.tip.eq-block{display:block;width:100%;text-align:center}
+.pop{position:fixed;left:0;top:0;z-index:200;visibility:hidden;opacity:0;pointer-events:none;transform-origin:var(--arrow-x,50%) 100%;transform:translateY(4px) scale(.97);transition:opacity .1s ease-in,transform .1s ease-in,visibility 0s linear .1s}
+.pop[data-side="below"]{transform-origin:var(--arrow-x,50%) 0;transform:translateY(-4px) scale(.97)}
+.pop.open{visibility:visible;opacity:1;transform:none;pointer-events:auto;transition:opacity .16s cubic-bezier(.2,.8,.2,1),transform .2s cubic-bezier(.2,.8,.2,1),visibility 0s}
+.pop.instant{transition:none}
+.pop-tip{z-index:201;width:max-content;max-width:min(300px,calc(100vw - 24px));background:#111;color:#fff;border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.pop-tip::before{content:"";position:absolute;left:var(--arrow-x,50%);width:8px;height:8px;background:#111;transform:translateX(-50%) rotate(45deg)}
+.pop-tip[data-side="below"]::before{top:-4px}
+.pop-tip[data-side="above"]::before{bottom:-4px}
+.pop-tip::after{content:"";position:absolute;left:0;right:0;height:10px}
+.pop-tip[data-side="above"]::after{top:100%}
+.pop-tip[data-side="below"]::after{bottom:100%}
+.pop-def{width:300px;max-width:calc(100vw - 24px);background:#fff;border:1px solid #e8e8e8;border-radius:14px;padding:13px 15px 14px;box-shadow:0 10px 30px rgba(0,0,0,.1);outline:none}
+.pop-def:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.def-k{display:block;font-size:10.5px;font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:#6b7280}
+.def-body{margin:5px 0 0;font-size:13.5px;line-height:1.55;color:#374151}
+@media(prefers-reduced-motion:reduce){.pop,.pop[data-side="below"]{transform:none}.pop.open{transition:opacity .12s ease,visibility 0s}}
+@media(max-width:640px){.eq-split{gap:0 1.2em}}
+
 /* ---------------- chain diagram ---------------- */
 svg{display:block;max-width:100%;height:auto}
 .diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
@@ -229,9 +265,9 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Part I · Chapter 1</p>
+    <p class="eyebrow">Part I · Chapter 1</p>
     <h1>What Reinforcement Learning<br>Really Is</h1>
-    <p class="lede">An agent acts, the world pushes back, and a single scalar is the only teacher — here is the language of that loop, and why the loss functions you already know cannot fill in for it.</p>
+    <p class="lede">Introducing the agent–environment loop, and understanding why supervised learning is not enough.</p>
   </div>
 </header>
 
@@ -240,12 +276,13 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   <div class="wide">
     <div class="wrap" style="padding:0">
       <h2><span class="num">01</span>The agent–environment loop</h2>
-      <p>Reinforcement learning is one loop repeated forever. An <b>agent</b> observes a <b>state</b>, takes an <b>action</b>, and the <b>environment</b> answers with a <b>reward</b> and a <b>next state</b>. Nothing else is handed over.</p>
-      <p>Formally, at each step $t$ the agent receives $S_t\in\mathcal{S}$ and picks $A_t\in\mathcal{A}$ from its <b>policy</b> $\pi(a\mid s)$. The environment then samples the next state and reward from its <b>dynamics</b>:</p>
-      <div class="eqbox">
-        $$S_{t+1}\sim P(\cdot\mid S_t,A_t),\qquad R_{t+1}=R(S_t,A_t,S_{t+1})$$
+      <p>RL, at its most basic level is essentially this: You have an <button type="button" class="def" data-def="The decision-maker. It observes, chooses actions, and updates what it knows; everything it cannot control belongs to the environment.">agent</button>. It observes the <button type="button" class="def" data-def="A snapshot of everything in the environment that can affect what happens next. In an MDP it is the input to both the policy and the dynamics.">state</button>, takes an <button type="button" class="def" data-def="One of the choices available to the agent at a given step. The set of legal actions is part of the problem, not something the agent learns.">action</button>, and the <button type="button" class="def" data-def="Everything outside the agent: it receives the action, returns the reward, and samples the next state.">environment</button> gives you a <button type="button" class="def" data-def="A scalar score for the last transition. Evaluative, not instructive: it says how good the outcome was, never which action was right.">reward</button> and changes the state.</p>
+      <p>Formally, at each step $t$, the agent receives $S_t\in\mathcal{S}$ and picks $A_t\in\mathcal{A}$ from its <button type="button" class="def" data-def="The agent's rule for choosing actions, written π(a | s): a distribution over actions given the current state.">policy</button> $\pi(a\mid s)$. The environment then samples the next state and reward from its <button type="button" class="def" data-def="The environment's rule for what happens next, P(s′ | s, a): a distribution over next states given the current state and action.">dynamics</button>:</p>
+      <div class="eqbox eq-split">
+        <button type="button" class="tip" aria-label="Transition dynamics: S at t plus one is sampled from P, given S at t and A at t" data-tip="The dynamics: given the current state and action, the environment samples the next state from this distribution. The agent never chooses it.">$S_{t+1}\sim P(\cdot\mid S_t,A_t),$</button>
+        <span class="eq-part">$R_{t+1}=R(S_t,A_t,S_{t+1})$</span>
       </div>
-      <p>Unroll the loop and you get a <b>trajectory</b> — the only data RL ever sees:</p>
+      <p>Learning is thus a sequence of these three steps, repeated over and over again:</p>
       <div class="eqbox">
         $$\tau=(S_0,A_0,R_1,S_1,A_1,R_2,S_2,\dots)$$
       </div>
@@ -297,15 +334,15 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   <div class="wide">
     <div class="wrap" style="padding:0">
       <h2><span class="num">02</span>The reward, and what it buys you</h2>
-      <p>A <b>reward</b> is a scalar and nothing more — no gradient, no label, no hint about which action was correct. The <b>reward hypothesis</b> says every goal worth pursuing can be written as maximizing expected cumulative reward. That cumulative total is the <b>return</b>:</p>
+      <p>A <b>reward</b> is a scalar and nothing more — no gradient, no label, no hint about which action was correct. The <button type="button" class="def" data-def="The modelling claim that any goal can be written as maximizing expected cumulative reward. It is an assumption about what you can specify, not a theorem.">reward hypothesis</button> says every goal worth pursuing can be written as maximizing expected cumulative reward. That cumulative total is the <button type="button" class="def" data-def="The discounted sum of rewards from step t onward, G_t. One trajectory produces one return; the agent's objective is to make its expectation large.">return</button>:</p>
       <div class="eqbox">
         $$G_t=\sum_{k=0}^{\infty}\gamma^{k}R_{t+k+1},\qquad 0\le\gamma<1$$
       </div>
       <p>The discount $\gamma$ keeps the sum finite and prices how much the agent cares about the future. How much it matters depends on whether the task ends. An <b>episodic</b> task stops at a terminal time $T$ — a game is won, a robot reaches the door — and the sum runs only to $k=T-t-1$, so $\gamma=1$ is allowed. A <b>continuing</b> task has $T=\infty$, and only $\gamma<1$ keeps the return bounded:</p>
       <div class="eqbox">
-        $$|G_t|\;\le\;\sum_{k=0}^{\infty}\gamma^{k}R_{\max}\;=\;\frac{R_{\max}}{1-\gamma}$$
+        <button type="button" class="tip eq-block" aria-label="Bounded return: the absolute return is at most R max over one minus gamma" data-tip="Worst case, every reward sits at Rmax and the sum is geometric. It converges to Rmax/(1−γ); at γ=1 it diverges, so a continuing task needs γ<1.">$$|G_t|\;\le\;\sum_{k=0}^{\infty}\gamma^{k}R_{\max}\;=\;\frac{R_{\max}}{1-\gamma}$$</button>
       </div>
-      <p>So $1/(1-\gamma)$ is an <b>effective horizon</b>: rewards much further out barely register. Push $\gamma$ toward $1$ in each mode.</p>
+      <p>So $1/(1-\gamma)$ is an <button type="button" class="def" data-def="The scale 1/(1−γ): how far into the future the discount still gives meaningful weight. Larger γ means a longer horizon.">effective horizon</button>: rewards much further out barely register. Push $\gamma$ toward $1$ in each mode.</p>
     </div>
 
     <div class="panel" style="margin-top:22px">
@@ -395,7 +432,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     </div>
 
     <div class="wrap" style="padding:0">
-      <p>Things to find. In <em>Goal &amp; pit</em>, raise the step reward past $+0.05$ and the agent never finishes; push it below about $-0.3$ and it dives into the pit to stop paying. In <em>Cliff</em>, set slip to $0$ and the path hugs the edge. In <em>Coin</em>, the agent paces beside a $+0.3$ coin forever and never collects the $+1$. That is <b>reward hacking</b>, and a coin worth only $0.1$ still wins.</p>
+      <p>Things to find. In <em>Goal &amp; pit</em>, raise the step reward past $+0.05$ and the agent never finishes; push it below about $-0.3$ and it dives into the pit to stop paying. In <em>Cliff</em>, set slip to $0$ and the path hugs the edge. In <em>Coin</em>, the agent paces beside a $+0.3$ coin forever and never collects the $+1$. That is <button type="button" class="def" data-def="Optimizing the written reward while defeating the intended goal: the agent finds the cheapest way to score, not the behaviour you meant.">reward hacking</button>, and a coin worth only $0.1$ still wins.</p>
 
       <h3>Shaping without changing the answer</h3>
       <p>The tempting fix — a bonus for progress — is the classic source of hacks. One form of <b>reward shaping</b> is provably safe: a potential difference, because it telescopes:</p>
@@ -535,7 +572,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     </div>
 
     <div class="wrap" style="padding:0">
-      <p>Strip the states away and the dilemma has an exact price. With arm means $\mu_a$, best mean $\mu^*$ and gaps $\Delta_a=\mu^*-\mu_a$, the <b>regret</b> after $T$ pulls is</p>
+      <p>Strip the states away and the dilemma has an exact price. With arm means $\mu_a$, best mean $\mu^*$ and gaps $\Delta_a=\mu^*-\mu_a$, the <button type="button" class="def" data-def="The expected reward lost by not always playing the best arm. Each pull of a suboptimal arm adds its gap.">regret</button> after $T$ pulls is</p>
       <div class="eqbox">
         $$L_T\;=\;T\mu^*-\mathbb{E}\!\Big[\sum_{t=1}^{T}R_t\Big]\;=\;\sum_{a}\Delta_a\,\mathbb{E}\big[N_T(a)\big]$$
       </div>
@@ -1571,6 +1608,210 @@ function initTaxonomy() {
 }
 
 /* =====================================================================
+   Inline tooltips (.tip) and definition cards (.def)
+
+   .tip  opens after a short hover delay (instantly once a tip has just
+         been open, so sweeping across neighbours doesn't re-animate),
+         on keyboard focus, or on click/tap (which pins it). Moving the
+         pointer onto the tooltip keeps it open. Escape, blur and an
+         outside click dismiss it.
+   .def  opens on click / Enter / Space and moves focus into the card.
+         Escape returns focus to the term; Tab / Shift+Tab leave the card
+         and continue from the term, as if the card sat right after it.
+   Both prefer to sit above the trigger, flip below when there is no
+   room, and close once the trigger scrolls out of view. A tip and a
+   definition can be open at the same time. Content is plain text, so
+   no HTML is injected.
+   ===================================================================== */
+function initExplanations() {
+  const tips = $$('[data-tip]');
+  const defs = $$('[data-def]');
+  if (!tips.length && !defs.length) return;
+
+  const OPEN_DELAY = 300, WARM_WINDOW = 400, HIDE_DELAY = 120;
+  let seq = 0, tip = null, def = null, tipTimer = null, lastTipClose = -Infinity;
+  const layer = document.createElement('div');
+  layer.className = 'pop-layer';
+  document.body.appendChild(layer);
+  const topbar = $('.topbar');
+
+  function place(trigger, pop) {
+    const r = trigger.getBoundingClientRect();
+    const gap = 10, edge = 12, vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+    const minTop = (topbar ? Math.max(0, topbar.getBoundingClientRect().bottom) : 0) + edge;
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let left = r.left + r.width / 2 - pw / 2;
+    left = Math.max(edge, Math.min(left, vw - pw - edge));
+    const roomAbove = r.top - gap - minTop, roomBelow = vh - edge - r.bottom - gap;
+    const side = ph <= roomAbove || roomAbove >= roomBelow ? 'above' : 'below';
+    let top = side === 'above' ? r.top - gap - ph : r.bottom + gap;
+    top = Math.max(minTop, Math.min(top, vh - ph - edge));
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.top = Math.round(top) + 'px';
+    pop.dataset.side = side;
+    const ax = Math.max(18, Math.min(pw - 18, r.left + r.width / 2 - left));
+    pop.style.setProperty('--arrow-x', Math.round(ax) + 'px');
+  }
+
+  function show(trigger, pop, instant) {
+    pop.classList.toggle('instant', instant);
+    place(trigger, pop);
+    void pop.offsetWidth; // commit side/origin so the entrance starts from the trigger's side
+    pop.classList.add('open');
+  }
+  function hide(pop, instant) {
+    pop.classList.toggle('instant', instant);
+    pop.classList.remove('open');
+  }
+  const offscreen = el => {
+    const r = el.getBoundingClientRect();
+    return r.bottom < 0 || r.top > document.documentElement.clientHeight;
+  };
+
+  /* ---- tooltips ---- */
+  const isWarm = () => !!tip || performance.now() - lastTipClose < WARM_WINDOW;
+  const tipEngaged = t => t.trigger.matches(':hover') || t.pop.matches(':hover') || t.trigger.matches(':focus-visible');
+
+  function openTip(trigger, pop, pinned) {
+    clearTimeout(tipTimer);
+    if (tip && tip.trigger === trigger) { tip.pinned = tip.pinned || pinned; return; }
+    const warm = isWarm();
+    if (tip) closeTip(true);
+    tip = { trigger, pop, pinned };
+    show(trigger, pop, warm);
+  }
+  function closeTip(instant) {
+    clearTimeout(tipTimer);
+    if (!tip) return;
+    hide(tip.pop, instant);
+    tip = null;
+    lastTipClose = performance.now();
+  }
+  function releaseTip(ms) {
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => {
+      if (tip && !tip.pinned && !tipEngaged(tip)) closeTip(false);
+    }, ms);
+  }
+
+  tips.forEach(trigger => {
+    const pop = document.createElement('div');
+    pop.className = 'pop pop-tip';
+    pop.id = 'tip-' + (++seq);
+    pop.setAttribute('role', 'tooltip');
+    pop.textContent = trigger.dataset.tip;
+    layer.appendChild(pop);
+    trigger.setAttribute('aria-describedby', pop.id);
+
+    trigger.addEventListener('pointerenter', e => {
+      if (e.pointerType !== 'mouse') return;
+      clearTimeout(tipTimer);
+      if (tip && tip.trigger === trigger) return;
+      if (isWarm()) openTip(trigger, pop, false);
+      else tipTimer = setTimeout(() => openTip(trigger, pop, false), OPEN_DELAY);
+    });
+    trigger.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') releaseTip(HIDE_DELAY); });
+    trigger.addEventListener('focus', () => { if (trigger.matches(':focus-visible')) openTip(trigger, pop, false); });
+    trigger.addEventListener('blur', () => {
+      if (tip && tip.trigger === trigger) tip.pinned = false;
+      releaseTip(0);
+    });
+    trigger.addEventListener('click', () => {
+      if (tip && tip.trigger === trigger && tip.pinned) closeTip(false);
+      else openTip(trigger, pop, true);
+    });
+    pop.addEventListener('pointerenter', () => clearTimeout(tipTimer));
+    pop.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') releaseTip(HIDE_DELAY); });
+  });
+
+  /* ---- definition cards ---- */
+  function openDef(trigger, pop) {
+    if (def) closeDef(false, true);
+    def = { trigger, pop };
+    pop.removeAttribute('aria-hidden');
+    trigger.setAttribute('aria-expanded', 'true');
+    show(trigger, pop, false);
+    pop.focus({ preventScroll: true });
+  }
+  function closeDef(refocus, instant) {
+    if (!def) return;
+    const { trigger, pop } = def;
+    def = null;
+    const hadFocus = pop.contains(document.activeElement);
+    hide(pop, instant);
+    pop.setAttribute('aria-hidden', 'true');
+    trigger.setAttribute('aria-expanded', 'false');
+    if (refocus && hadFocus) trigger.focus({ preventScroll: true });
+  }
+  const tabbable = () => $$('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]')
+    .filter(n => n.tabIndex >= 0 && !layer.contains(n) && n.getClientRects().length);
+
+  defs.forEach(trigger => {
+    const pop = document.createElement('div');
+    pop.className = 'pop pop-def';
+    pop.id = 'def-' + (++seq);
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-modal', 'false');
+    pop.setAttribute('aria-label', 'Definition: ' + trigger.textContent.trim());
+    pop.setAttribute('aria-describedby', pop.id + '-body');
+    pop.setAttribute('aria-hidden', 'true');
+    pop.tabIndex = -1;
+    const kicker = document.createElement('span');
+    kicker.className = 'def-k';
+    kicker.textContent = 'Definition';
+    const body = document.createElement('p');
+    body.className = 'def-body';
+    body.id = pop.id + '-body';
+    body.textContent = trigger.dataset.def;
+    pop.append(kicker, body);
+    layer.appendChild(pop);
+    trigger.setAttribute('aria-controls', pop.id);
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-haspopup', 'dialog');
+
+    trigger.addEventListener('click', () => {
+      if (def && def.trigger === trigger) closeDef(true);
+      else openDef(trigger, pop);
+    });
+    // The card lives at the end of <body>; keep Tab order as if it sat right after the term.
+    pop.addEventListener('keydown', e => {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+      closeDef(false);
+      if (e.shiftKey) { trigger.focus(); return; }
+      const list = tabbable();
+      (list[list.indexOf(trigger) + 1] || trigger).focus();
+    });
+  });
+
+  /* ---- shared dismissal & tracking ---- */
+  document.addEventListener('pointerdown', e => {
+    const t = e.target;
+    if (tip && !tip.trigger.contains(t) && !tip.pop.contains(t)) closeTip(false);
+    // Jumping straight to another term swaps cards without a cross-fade.
+    if (def && !def.trigger.contains(t) && !def.pop.contains(t)) closeDef(false, !!(t.closest && t.closest('[data-def]')));
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (tip) { e.preventDefault(); closeTip(false); }
+    else if (def) { e.preventDefault(); closeDef(true); }
+  });
+
+  let raf = null;
+  const reposition = () => {
+    if ((!tip && !def) || raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = null;
+      if (tip) { if (offscreen(tip.trigger)) closeTip(true); else place(tip.trigger, tip.pop); }
+      if (def) { if (offscreen(def.trigger)) closeDef(true, true); else place(def.trigger, def.pop); }
+    });
+  };
+  // Capture so scrolling inside overflow containers (e.g. wide .eqbox) also repositions.
+  document.addEventListener('scroll', reposition, { passive: true, capture: true });
+  window.addEventListener('resize', reposition);
+}
+
+/* =====================================================================
    Scroll progress
    ===================================================================== */
 function initScroll() {
@@ -1599,6 +1840,7 @@ document.addEventListener('DOMContentLoaded', () => {
       throwOnError: false
     });
   }
+  initExplanations();
   initLoop();
   initReturn();
   initExplorer();

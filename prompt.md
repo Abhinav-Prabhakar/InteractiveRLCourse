@@ -34,6 +34,11 @@ Do not open anything in `outputs/`.
   (eyebrow, h1, one-sentence lede), numbered `section`s with
   `<h2><span class="num">NN</span>Title</h2>`, a final Summary section with a
   `table.cmp` and a "Cheat sheet" `.eqbox`, then `footer`.
+- Reuse the reference's `.tip` and `.def` components with `initExplanations()`:
+  `.def` for first-use jargon, `.tip` for a non-obvious mathematical step
+  (`.eq-split` when only part of a display equation is the trigger,
+  `.tip.eq-block` for the whole display). Both are accessible and restrained;
+  do not underline every bold term or explain every formula.
 - No emoji, icons, decorative gradients, or illustrations.
 
 # Shared conventions (keep these identical across chapters)

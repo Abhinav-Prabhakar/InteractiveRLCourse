@@ -15,7 +15,9 @@ every one of them is built from the existing palette. No new colours.
    them. Copy their `<style>` base verbatim: base, topbar, hero, panels, controls,
    math, plots/readouts, `table.cmp`, `.note`, footer, media queries, and the
    inter-chapter pager CSS. Match their DOCTYPE, `lang`, viewport, KaTeX CDN
-   (0.16.9), boot script, and prose voice.
+   (0.16.9), boot script, and prose voice. The base also carries `.tip`/`.def`
+   and `initExplanations()`; keep them, but use them only where a project term
+   or formula genuinely needs an inline explanation.
 2. `index.md` — the curriculum outline (Part V), for project numbering and context.
 3. The CHAPTER_BRIEF below.
 

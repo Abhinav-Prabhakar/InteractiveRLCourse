@@ -7,7 +7,7 @@ An interactive-first reinforcement learning curriculum, from MDPs to RLHF. Each 
 - `index.html` — the table of contents / landing page
 - `outputs/` — the 22 chapters (`NN-slug.html`), each fully self-contained
 - `projects/` — the 6 guided project labs (`NN-slug.html`), slotted between parts on the contents page
-- `RL.html` — the design reference every page is matched against
+- `RL.html` — the design reference every page is matched against, including the shared `.tip` / `.def` inline-explanation components
 - `prompt.md` — the brief each chapter is written from
 - `prompt-projects.md` — the brief each project is written from
 - `index.md` — the curriculum outline
