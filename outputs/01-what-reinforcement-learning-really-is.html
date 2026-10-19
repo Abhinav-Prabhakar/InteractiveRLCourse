@@ -5,10 +5,9 @@
    · Quizzes are omitted; they are replaced with deeper prose and extra interactives.
    · Design tokens, component class names, KaTeX CDN, and the section skeleton are
      reproduced verbatim from RL.html.
-   · Interactives: agent–environment loop (gridworld with slip), episodic vs continuing
-     returns, Reward-Signal Explorer (presets, terminals, walls), reward shaping corridor,
-     instructive vs evaluative learners, exploit/explore index, ε-greedy regret, and a
-     data-flow taxonomy. Eight visualizers total.
+   · Beyond the required Reward-Signal Explorer, three chapter-specific interactives
+     are added (one per 2–3 prose sections): an agent–environment loop stepper, an
+     exploit/explore index explorer, and a taxonomy combinator. Four visualizers total.
    · The Summary table.cmp compares the chapter's two conceptual objects:
      supervised learning vs. reinforcement learning.
 -->
@@ -16,7 +15,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chapter 1 · What Reinforcement Learning Really Is</title>
+<title>What Reinforcement Learning Really Is</title>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -149,37 +148,11 @@ table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;heigh
 .actbtn{width:44px;height:40px;padding:0;font-size:17px}
 .actbtn.active{background:#111;color:#fff;border-color:#111}
 
-/* ---------------- plots, readouts, segmented controls ---------------- */
-input[type=range]:disabled{opacity:.35}
-.sliders{display:flex;gap:6px 26px;flex-wrap:wrap}
-.sliders .slider-row{flex:1 1 200px}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.readout{font-family:ui-monospace,monospace;font-size:12.5px;color:#6b7280;margin:10px 0 0;line-height:1.6}
-.readout b{color:#111;font-weight:650}
-.plot-cap{font-size:12.5px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
-.chip.act{background:#fff;border:1px solid #e5e5e5}
-.chip.pos{background:#eef2ff;color:#1e3a8a}
-.chip.neg{color:#dc2626;background:#fff;border:1px solid #fde2e2}
-.chip.zero{color:#9ca3af;background:#fff;border:1px solid #f0f0f0}
-#rxSvg{border-radius:12px;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:470px;margin:0 auto;touch-action:none;cursor:ns-resize}
-#rxSvg.tool-click{cursor:pointer}
-.outcome{font-size:14.5px;margin:12px 0 0;text-align:center}
-.outcome b{font-weight:650}
-.axis-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.axis-row .small{min-width:58px}
-.algos{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-.algo{font-size:13px;padding:5px 11px;border-radius:8px;background:#eef2ff;color:#1e3a8a;font-weight:600}
-.algo span{color:#6b7280;font-weight:500;margin-left:6px}
-@media(max-width:640px){
-  .panel-head .slider-row{width:100%!important}
-}
-
 /* ---------------- table ---------------- */
 table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
 table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
 table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
 table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
-table.cmp.ax td:first-child{width:18%}
 
 .note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
 .note b{color:#111}
@@ -192,8 +165,6 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   .hero{padding:52px 0 0}
   .nav{display:none}
   .panel{padding:16px;border-radius:13px}
-  table.cmp{font-size:13.5px}
-  table.cmp th,table.cmp td{padding:9px 6px}
 }
 /* ---------------- inter-chapter navigation ---------------- */
 .brand{text-decoration:none}
@@ -213,7 +184,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">Ch. 01 · What RL Really Is</a>
+    <a class="brand" href="../index.html">What RL Really Is</a>
     <nav class="nav">
       <a href="#loop">The loop</a>
       <a href="#reward">Reward</a>
@@ -228,7 +199,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Part I · Chapter 1</p>
+    <p class="eyebrow">Reinforcement Learning · Foundations</p>
     <h1>What Reinforcement Learning<br>Really Is</h1>
     <p class="lede">An agent acts, the world pushes back, and a single scalar is the only teacher — here is the language of that loop, and why the loss functions you already know cannot fill in for it.</p>
   </div>
@@ -251,42 +222,31 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="note">
         <b>The reward is the only teacher.</b> The policy is what the agent controls; the scalar is everything it is told. Change the reward and you have changed the problem — not merely its difficulty.
       </div>
-      <p>Two distributions write every trajectory: the agent owns $\pi$, the environment owns $P$. Run both policies below in the same 4×4 world, then raise the slip. The policy stays put; the dynamics change the outcome.</p>
     </div>
 
-    <div class="panel" style="margin-top:22px">
+    <div class="panel" style="margin-top:26px">
       <div class="panel-head">
-        <span class="panel-title">Interactive · the loop, running</span>
-        <div class="btnrow">
-          <span class="btnrow" id="loopPolBtns">
-            <button data-p="rand" class="active">Random $\pi$</button>
-            <button data-p="good">Optimal $\pi$</button>
-          </span>
-          <button id="loopReset">Reset</button>
-          <button id="loopStep">Step</button>
-          <button id="loopRun" class="primary">Run ▶</button>
-        </div>
+        <span class="panel-title">Interactive · the loop in a 3-state world</span>
+        <div class="btnrow"><button id="loopReset">Reset</button></div>
       </div>
       <div class="row">
         <div class="col" style="flex:1 1 320px">
-          <svg id="loopSvg" viewBox="0 0 320 250" style="max-width:360px;margin:0 auto" role="img" aria-label="Agent and environment exchanging action, reward and state"></svg>
+          <svg id="loopSvg" class="diagram" viewBox="0 0 400 200" role="img" aria-label="A three-state world with left and right moves"></svg>
+          <p class="small muted" style="text-align:center;margin:8px 0 0" id="loopInfo"></p>
         </div>
-        <div class="col" style="flex:1 1 280px">
-          <svg id="loopGrid" viewBox="0 0 200 200" style="max-width:220px;margin:0 auto" role="img" aria-label="Four by four gridworld with goal and pit"></svg>
-          <div class="slider-row" style="max-width:300px;margin:6px auto 0">
-            <span class="small muted">slip</span>
-            <input type="range" id="loopSlip" min="0" max="0.6" step="0.05" value="0.2" aria-label="Slip probability">
-            <span class="val" id="loopSlipVal">0.20</span>
+        <div class="col" style="flex:1 1 320px">
+          <div class="btnrow" style="justify-content:center;margin-bottom:14px">
+            <button id="loopLeft">◀ Move left</button>
+            <button id="loopRight" class="primary">Move right ▶</button>
           </div>
-          <p class="readout" id="loopStats" style="text-align:center"></p>
+          <p class="small muted" style="margin:0 0 6px">State sequence</p>
+          <div class="traj" id="loopTraj"></div>
+          <p class="small muted" style="margin:16px 0 6px">Reward received on each step</p>
+          <div class="traj" id="loopRew"></div>
+          <h4 style="margin:20px 0 4px">Trajectory</h4>
+          <div class="eqbox" id="loopEq"></div>
         </div>
       </div>
-      <p class="small muted" style="margin:14px 0 0">Trajectory $S_0,A_0,R_1,S_1,\dots$ &nbsp;·&nbsp; $-0.04$ per step, $+1$ goal, $-1$ pit, both terminal. Slip: the move goes sideways with this probability. $G$ is the episode's return, defined next; the optimal $\pi$ comes from value iteration (Chapter 4).</p>
-      <div class="traj" id="loopTraj"></div>
-    </div>
-
-    <div class="wrap" style="padding:0">
-      <p class="small muted">The line between agent and environment is control, not anatomy: a robot's motors and its reward sensor sit on the environment side.</p>
     </div>
   </div>
 </section>
@@ -300,129 +260,52 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="eqbox">
         $$G_t=\sum_{k=0}^{\infty}\gamma^{k}R_{t+k+1},\qquad 0\le\gamma<1$$
       </div>
-      <p>The discount $\gamma$ keeps the sum finite and prices how much the agent cares about the future. How much it matters depends on whether the task ends. An <b>episodic</b> task stops at a terminal time $T$ — a game is won, a robot reaches the door — and the sum runs only to $k=T-t-1$, so $\gamma=1$ is allowed. A <b>continuing</b> task has $T=\infty$, and only $\gamma<1$ keeps the return bounded:</p>
-      <div class="eqbox">
-        $$|G_t|\;\le\;\sum_{k=0}^{\infty}\gamma^{k}R_{\max}\;=\;\frac{R_{\max}}{1-\gamma}$$
-      </div>
-      <p>So $1/(1-\gamma)$ is an <b>effective horizon</b>: rewards much further out barely register. Push $\gamma$ toward $1$ in each mode.</p>
-    </div>
-
-    <div class="panel" style="margin-top:22px">
-      <div class="panel-head">
-        <span class="panel-title">Interactive · +1 every step, weighted by $\gamma^k$</span>
-        <div class="btnrow" id="retModeBtns">
-          <button data-mode="epi" class="active">Episodic</button>
-          <button data-mode="cont">Continuing</button>
-        </div>
-      </div>
-      <div class="sliders">
-        <div class="slider-row">
-          <span class="small muted">$\gamma$</span>
-          <input type="range" id="retGamma" min="0" max="1" step="0.01" value="0.9" aria-label="Discount factor gamma">
-          <span class="val" id="retGammaVal">0.90</span>
-        </div>
-        <div class="slider-row" id="retTRow">
-          <span class="small muted">$T$</span>
-          <input type="range" id="retT" min="1" max="60" step="1" value="25" aria-label="Episode length T">
-          <span class="val" id="retTVal">25</span>
-        </div>
-      </div>
-      <svg id="retSvg" viewBox="0 0 640 190" role="img" aria-label="Discount weights over time steps"></svg>
-      <div class="eqbox" id="retEq"></div>
-    </div>
-
-    <div class="wrap" style="padding:0">
-      <p>The job, then, is to pick a policy that makes the return large in expectation:</p>
+      <p>The discount $\gamma$ keeps the sum finite and prices how much the agent cares about the future. The job, then, is to pick a policy that makes the return large in expectation:</p>
       <div class="eqbox">
         $$J(\pi)=\mathbb{E}_{\tau\sim\pi}\!\big[G_0\big]=\mathbb{E}\!\Big[\textstyle\sum_{t\ge0}\gamma^{t}R_{t+1}\Big]$$
       </div>
       <p class="small muted">Read that last line back: $J$ averages over trajectories the policy <em>itself</em> generates — the thing being graded decides which data it gets to see.</p>
-      <p>Because $G$ is built from $R$, the optimal policy is a function of the reward. The agent optimizes the reward you wrote, not the one you meant. Below, $\pi_*$ is recomputed on every change; drag any cell up or down to set the reward for stepping onto it.</p>
+      <p>Because $G$ is built from $R$, the optimal policy is a function of the reward. Drag one reward and the greedy arrows swing.</p>
     </div>
 
-    <div class="panel" style="margin-top:22px">
+    <div class="panel" style="margin-top:26px">
       <div class="panel-head">
         <span class="panel-title">Interactive · Reward-Signal Explorer</span>
-        <div class="btnrow" id="rxPresets">
-          <button data-preset="pit" class="active">Goal &amp; pit</button>
-          <button data-preset="cliff">Cliff</button>
-          <button data-preset="coin">Coin</button>
+        <div class="btnrow">
+          <button id="rwdReset">Reset</button>
+          <button id="rwdRandom">Random</button>
         </div>
       </div>
       <div class="row">
-        <div class="col" style="flex:1 1 400px">
-          <svg id="rxSvg" viewBox="0 0 350 250" role="img" aria-label="Editable reward grid with optimal policy arrows"></svg>
+        <div class="col" style="flex:1 1 340px">
+          <svg id="rwdSvg" viewBox="0 0 320 320" role="img" aria-label="Reward grid with greedy policy arrows"
+               style="width:100%;max-width:340px;margin:0 auto;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed"></svg>
           <div class="legend"><span>$-1$</span><span class="grad"></span><span>$+1$</span></div>
-          <p class="outcome" id="rxOutcome"></p>
+          <p class="small muted" style="text-align:center;margin:12px 0 0" id="rwdInfo"></p>
         </div>
-        <div class="col" style="flex:1 1 260px">
-          <div class="axis-row">
-            <span class="small muted">Edit</span>
-            <span class="btnrow" id="rxTools">
-              <button data-tool="reward" class="active">Drag reward</button>
-              <button data-tool="term">Terminal</button>
-              <button data-tool="wall">Wall</button>
-            </span>
-          </div>
-          <div class="axis-row" style="margin-top:8px">
-            <span class="small muted">Show</span>
-            <span class="btnrow" id="rxShow">
-              <button data-show="r" class="active">$r$</button>
-              <button data-show="v">$V_*$</button>
-            </span>
+        <div class="col" style="flex:1 1 320px">
+          <p class="small muted" style="margin-top:0">Drag a cell <em>up or down</em> to change its reward, or select a cell and use the slider. Fill colour is $V$, arrows are the greedy action $a_*=\arg\max_a Q(s,a)$.</p>
+          <div class="slider-row">
+            <span class="small muted">$\gamma$</span>
+            <input type="range" id="rwdGamma" min="0.5" max="0.95" step="0.01" value="0.75" aria-label="discount factor">
+            <span class="val" id="rwdGammaVal">0.75</span>
           </div>
           <div class="slider-row">
-            <span class="small muted" style="min-width:58px">step</span>
-            <input type="range" id="rxStep" min="-1" max="0.3" step="0.01" value="-0.04" aria-label="Reward per step">
-            <span class="val" id="rxStepVal">−0.04</span>
-          </div>
-          <div class="slider-row">
-            <span class="small muted" style="min-width:58px">$\gamma$</span>
-            <input type="range" id="rxGamma" min="0.5" max="0.99" step="0.01" value="0.95" aria-label="Discount factor gamma">
-            <span class="val" id="rxGammaVal">0.95</span>
-          </div>
-          <div class="slider-row">
-            <span class="small muted" style="min-width:58px">slip</span>
-            <input type="range" id="rxSlip" min="0" max="0.4" step="0.02" value="0.1" aria-label="Slip probability">
-            <span class="val" id="rxSlipVal">0.10</span>
+            <span class="small muted">$r$</span>
+            <input type="range" id="rwdVal" min="-1" max="1" step="0.05" value="0" aria-label="reward of the selected cell">
+            <span class="val" id="rwdValVal">0.00</span>
           </div>
           <h4 style="margin-bottom:4px">Bellman optimality check</h4>
-          <div class="eqbox" id="rxEq" style="margin-top:8px"></div>
-          <p class="small muted" style="margin:0">Tap a cell to read its action values. Dark border = terminal. Arrows are $a_*=\arg\max_a Q_*(s,a)$; $\pi_*$ comes from value iteration (Chapter 4).</p>
+          <div class="eqbox" id="rwdEq"></div>
         </div>
       </div>
-    </div>
-
-    <div class="wrap" style="padding:0">
-      <p>Things to find. In <em>Goal &amp; pit</em>, raise the step reward past $+0.05$ and the agent never finishes; push it below about $-0.3$ and it dives into the pit to stop paying. In <em>Cliff</em>, set slip to $0$ and the path hugs the edge. In <em>Coin</em>, the agent paces beside a $+0.3$ coin forever and never collects the $+1$. That is <b>reward hacking</b>, and a coin worth only $0.1$ still wins.</p>
-
-      <h3>Shaping without changing the answer</h3>
-      <p>The tempting fix — a bonus for progress — is the classic source of hacks. One form of <b>reward shaping</b> is provably safe: a potential difference, because it telescopes:</p>
-      <div class="eqbox">
-        $$F(s,s')=\gamma\Phi(s')-\Phi(s)\quad\Longrightarrow\quad\sum_{t=0}^{T-1}\gamma^{t}F(S_t,S_{t+1})=\gamma^{T}\Phi(S_T)-\Phi(S_0)$$
-      </div>
-      <p>Set $\Phi=0$ at terminal states and the bonus collapses to $-\Phi(S_0)$, a constant no policy can change, so $\pi_*$ survives (Ng, Harada &amp; Russell, 1999). A raw bonus $\beta\,\phi(s')$ for being near the goal has no such guarantee. Raise $\beta$: past about $0.15$ the raw bonus pays more for pacing than for finishing.</p>
-    </div>
-
-    <div class="panel" style="margin-top:22px">
-      <div class="panel-head">
-        <span class="panel-title">Interactive · same corridor, three rewards</span>
-        <div class="slider-row" style="width:240px">
-          <span class="small muted">$\beta$</span>
-          <input type="range" id="shBeta" min="0" max="1" step="0.01" value="0.05" aria-label="Shaping strength beta">
-          <span class="val" id="shBetaVal">0.05</span>
-        </div>
-      </div>
-      <svg id="shSvg" viewBox="0 0 400 214" style="max-width:560px;margin:0 auto" role="img" aria-label="Optimal corridor policies under three reward functions"></svg>
-      <p class="small muted" style="text-align:center;margin-bottom:0">Start at the left, $+1$ at the right end, $\gamma=0.9$, $\phi(s)=s/7$, $\Phi=\beta\phi$.</p>
     </div>
   </div>
 </section>
 
 <!-- ==================================================================== -->
 <section id="feedback">
-  <div class="wide">
-  <div class="wrap" style="padding:0">
+  <div class="wrap">
     <h2><span class="num">03</span>Evaluative vs. instructive feedback</h2>
     <p>Supervised learning is told the right answer for every input — <b>instructive feedback</b>. RL is told only how good the last action turned out — <b>evaluative feedback</b>. The two objectives look similar on the page and are nothing alike in practice:</p>
     <div class="eqbox">
@@ -446,45 +329,10 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <span class="chip" style="background:#fdecec;color:#dc2626">$-0.5$</span><span class="arw">·</span>
       <span class="chip" style="background:#eef2ff;color:#2563eb">$+0.2$</span>
     </div>
-    <p>Watch the difference play out. Two learners hunt the best action on $[0,10]$ under the same hidden $r(a)$. One is told $a^*$ every step. The other is told only the score of the action it tried.</p>
-  </div>
 
-    <div class="panel" style="margin-top:22px">
-      <div class="panel-head">
-        <span class="panel-title">Interactive · two learners, one hidden $r(a)$</span>
-        <div class="btnrow">
-          <button id="fbReveal">Reveal $r(a)$</button>
-          <button id="fbReset">Reset</button>
-          <button id="fbStep">Step</button>
-          <button id="fbRun" class="primary">Run ▶</button>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col">
-          <p class="plot-cap">Instructive · told $a^*$</p>
-          <svg id="fbSvgI" viewBox="0 0 320 190" role="img" aria-label="Instructive learner moving to the announced target"></svg>
-          <p class="readout" id="fbInfoI"></p>
-        </div>
-        <div class="col">
-          <p class="plot-cap">Evaluative · told $r(a_t)$</p>
-          <svg id="fbSvgE" viewBox="0 0 320 190" role="img" aria-label="Evaluative learner sampling actions and observing rewards"></svg>
-          <p class="readout" id="fbInfoE"></p>
-        </div>
-      </div>
-      <div class="slider-row" style="max-width:420px;margin:8px auto 0">
-        <span class="small muted">$\sigma$</span>
-        <input type="range" id="fbSigma" min="0.2" max="3" step="0.1" value="2" aria-label="Exploration width sigma">
-        <span class="val" id="fbSigmaVal">2.0</span>
-      </div>
-      <div class="eqbox" id="fbEq"></div>
-      <p class="small muted" style="margin:0">Both start at $\mu=1.5$. The instructive learner steps toward $a^*$. The evaluative one samples $a_t\sim\mathcal{N}(\mu,\sigma^2)$ and nudges $\mu$ toward actions that scored above its running average. Shrink $\sigma$ below about $1$ and it settles on the nearer, lower hill — it never tried far enough to learn the other exists.</p>
-    </div>
-
-  <div class="wrap" style="padding:0">
     <div class="note">
       <b>A label is a teacher; a scalar is a grade.</b> Supervised learning can copy the label directly. RL must first discover which action earned the grade — usually by trying it, and living with the cost of having tried it.
     </div>
-  </div>
   </div>
 </section>
 
@@ -508,7 +356,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="panel-head"><span class="panel-title">Interactive · exploit vs. explore</span></div>
       <div class="row">
         <div class="col" style="flex:1 1 320px">
-          <p class="small muted" style="margin-top:0">Action $A$ pays a known $1.00$: its count is effectively infinite, so its bonus is zero. Action $B$ looks worse, but it is under-sampled — its estimate is noisy and its bonus is large. To keep one knob, $\sqrt{\ln t}$ is folded into $c$.</p>
+          <p class="small muted" style="margin-top:0">Action $A$ pays a known $1.00$. Action $B$ looks worse, but it is under-sampled — its estimate is noisy and its bonus is large.</p>
           <div id="expBars" style="margin:16px 0 6px"></div>
           <p class="small muted" id="expInfo" style="font-family:ui-monospace,monospace"></p>
         </div>
@@ -532,37 +380,6 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         </div>
       </div>
     </div>
-
-    <div class="wrap" style="padding:0">
-      <p>Strip the states away and the dilemma has an exact price. With arm means $\mu_a$, best mean $\mu^*$ and gaps $\Delta_a=\mu^*-\mu_a$, the <b>regret</b> after $T$ pulls is</p>
-      <div class="eqbox">
-        $$L_T\;=\;T\mu^*-\mathbb{E}\!\Big[\sum_{t=1}^{T}R_t\Big]\;=\;\sum_{a}\Delta_a\,\mathbb{E}\big[N_T(a)\big]$$
-      </div>
-      <p>Every pull of a worse arm costs its gap; never pulling it risks never learning it was better. Pure exploitation can lock onto a bad arm and pay linearly. Pure exploration pays linearly by design. No consistent method beats logarithmic growth (Lai &amp; Robbins, 1985) — Chapter 2 makes that precise. Below, $\varepsilon$-greedy explores uniformly at random with probability $\varepsilon$. Slide it: final regret is U-shaped in $\varepsilon$, and that U is the dilemma.</p>
-    </div>
-
-    <div class="panel" style="margin-top:22px">
-      <div class="panel-head">
-        <span class="panel-title">Interactive · 3 arms, $\mu=(0.4,\,0.5,\,0.7)$, 300 runs</span>
-        <div class="slider-row" style="width:260px">
-          <span class="small muted">$\varepsilon$</span>
-          <input type="range" id="rgEps" min="0" max="10" step="1" value="4" aria-label="Exploration rate epsilon">
-          <span class="val" id="rgEpsVal">0.10</span>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col" style="flex:1 1 380px">
-          <p class="plot-cap">Regret $L_t$ vs. $t$</p>
-          <svg id="rgCurve" viewBox="0 0 400 220" role="img" aria-label="Average regret over time"></svg>
-        </div>
-        <div class="col" style="flex:1 1 280px">
-          <p class="plot-cap">$L_{1000}$ vs. $\varepsilon$</p>
-          <svg id="rgU" viewBox="0 0 300 220" role="img" aria-label="Final regret as a function of epsilon"></svg>
-        </div>
-      </div>
-      <div class="eqbox" id="rgEq"></div>
-      <p class="small muted" style="margin:0">Bernoulli arms A, B, C; C is best. Each curve averages 300 runs of 1000 pulls. The $\varepsilon$ axis on the right is not to scale.</p>
-    </div>
   </div>
 </section>
 
@@ -572,30 +389,36 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <div class="wrap" style="padding:0">
       <h2><span class="num">05</span>A first taxonomy</h2>
       <p>Three axes run through every algorithm in this book. Each answers one question about what the agent knows and how it is allowed to use its data. Everything later is a point in this cube.</p>
-      <table class="cmp ax">
-        <tr><th>Axis</th><th></th><th></th></tr>
-        <tr><td>Model</td><td><b>Model-free</b>: learn $Q$ or $\pi$ straight from samples.</td><td><b>Model-based</b>: learn (or be given) $\hat P,\hat R$ and plan with them.</td></tr>
-        <tr><td>Policy</td><td><b>On-policy</b>: learn about the policy collecting the data, $b=\pi$.</td><td><b>Off-policy</b>: learn about $\pi$ from data collected by a behaviour policy $b\ne\pi$.</td></tr>
-        <tr><td>Data</td><td><b>Online</b>: keep interacting while learning.</td><td><b>Offline</b>: learn from a fixed dataset $\mathcal{D}$; act only at deployment.</td></tr>
-      </table>
-      <p>The axes are not independent. Offline data was logged by someone else's policy, so offline forces off-policy — one corner of the cube is empty. Flip the switches and watch the data flow rewire.</p>
     </div>
 
     <div class="panel" style="margin-top:22px">
-      <div class="panel-head">
-        <span class="panel-title">Interactive · where the data comes from</span>
+      <div class="panel-head"><span class="panel-title">Interactive · the three axes</span></div>
+      <svg id="taxSvg" viewBox="0 0 900 220" role="img" aria-label="Three taxonomy axes: model, policy, and data" style="width:100%;height:auto"></svg>
+      <div class="row" style="margin-top:16px">
+        <div class="col" style="flex:1 1 200px">
+          <h4 style="margin-top:0">Model</h4>
+          <div class="btnrow" id="taxModel">
+            <button data-v="0" class="active">Model-free</button>
+            <button data-v="1">Model-based</button>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 200px">
+          <h4 style="margin-top:0">Policy</h4>
+          <div class="btnrow" id="taxPolicy">
+            <button data-v="0" class="active">On-policy</button>
+            <button data-v="1">Off-policy</button>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 200px">
+          <h4 style="margin-top:0">Data</h4>
+          <div class="btnrow" id="taxData">
+            <button data-v="0" class="active">Online</button>
+            <button data-v="1">Offline</button>
+          </div>
+        </div>
       </div>
-      <div style="display:flex;gap:10px 26px;flex-wrap:wrap">
-        <div class="axis-row"><span class="small muted">Model</span>
-          <span class="btnrow" id="taxModel"><button data-v="free" class="active">free</button><button data-v="based">based</button></span></div>
-        <div class="axis-row"><span class="small muted">Policy</span>
-          <span class="btnrow" id="taxPolicy"><button data-v="on" class="active">on</button><button data-v="off">off</button></span></div>
-        <div class="axis-row"><span class="small muted">Data</span>
-          <span class="btnrow" id="taxData"><button data-v="online" class="active">online</button><button data-v="offline">offline</button></span></div>
-      </div>
-      <svg id="taxSvg" viewBox="0 0 640 250" style="margin-top:16px" role="img" aria-label="Data flow between environment, behaviour policy, data, model and learner"></svg>
-      <p class="small" id="taxCap" style="margin:12px 0 0"></p>
-      <div class="algos" id="taxAlgos"></div>
+      <p class="small" id="taxDesc" style="margin-top:16px"></p>
+      <div class="eqbox" id="taxEq"></div>
     </div>
   </div>
 </section>
@@ -680,679 +503,267 @@ function textColorFor(v) {
   return Math.abs(Math.tanh(v)) > 0.5 ? '#fff' : '#111';
 }
 
-/* seeded RNG and small formatting / drawing helpers */
-function mulberry32(a) {
-  return function () {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-function gauss(rng) {
-  const u = Math.max(rng(), 1e-12), v = rng();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-}
-const fmt = (v, d = 2) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
-const fmtS = (v, d = 2) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
-function pickSeg(group, val) {
-  $$(`#${group} button`).forEach(b => b.classList.toggle('active', Object.values(b.dataset)[0] === val));
-}
-function arrowMarker(defs, id, color) {
-  const m = el('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto', markerUnits: 'userSpaceOnUse' }, defs);
-  el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: color }, m);
-  return `url(#${id})`;
-}
-
 /* =====================================================================
-   Grid MDP core (shared by the loop and the reward explorer)
-   W = { R, C, rew[], term[], wall[], step, gamma, slip }
-   Reward for a move s -> s' is  step + rew[s']  (rew paid only on entering a new cell)
-   ===================================================================== */
-const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
-const ARW = ['↑', '→', '↓', '←'];
-const ARW_TEX = ['\\uparrow', '\\rightarrow', '\\downarrow', '\\leftarrow'];
-
-function gridMove(W, s, a) {
-  const r = Math.floor(s / W.C) + DIRS[a][0], c = (s % W.C) + DIRS[a][1];
-  if (r < 0 || r >= W.R || c < 0 || c >= W.C) return s;
-  const s2 = r * W.C + c;
-  return W.wall[s2] ? s : s2;
-}
-function gridTrans(W, s, a) {
-  const out = new Map();
-  [[a, 1 - W.slip], [(a + 1) % 4, W.slip / 2], [(a + 3) % 4, W.slip / 2]].forEach(([b, p]) => {
-    if (p <= 0) return;
-    const s2 = gridMove(W, s, b);
-    out.set(s2, (out.get(s2) || 0) + p);
-  });
-  return out;
-}
-const gridReward = (W, s, s2) => W.step + (s2 !== s ? W.rew[s2] : 0);
-
-function gridSolve(W) {
-  const n = W.R * W.C;
-  const live = s => !W.term[s] && !W.wall[s];
-  const trans = [];
-  for (let s = 0; s < n; s++) trans.push(live(s) ? [0, 1, 2, 3].map(a => [...gridTrans(W, s, a)]) : null);
-  let V = new Float64Array(n);
-  const Q = Array.from({ length: n }, () => [0, 0, 0, 0]);
-  for (let it = 0; it < 6000; it++) {
-    let delta = 0;
-    const nv = new Float64Array(n);
-    for (let s = 0; s < n; s++) {
-      if (!trans[s]) continue;
-      let best = -Infinity;
-      for (let a = 0; a < 4; a++) {
-        let q = 0;
-        for (const [s2, p] of trans[s][a]) q += p * (gridReward(W, s, s2) + W.gamma * V[s2]);
-        Q[s][a] = q;
-        if (q > best) best = q;
-      }
-      nv[s] = best;
-      delta = Math.max(delta, Math.abs(best - V[s]));
-    }
-    V = nv;
-    if (delta < 1e-10) break;
-  }
-  const first = Q.map((q, s) => (trans[s] ? q.indexOf(Math.max(...q)) : -1));
-  const pol = Q.map((q, s) => (trans[s] && Math.max(...q) - Math.min(...q) > 1e-7 ? first[s] : -1));
-  return { V, Q, pol, first };
-}
-function gridPath(W, sol, start) {
-  const path = [start], seen = new Map([[start, 0]]);
-  let s = start;
-  for (let k = 0; k < 120; k++) {
-    if (W.term[s]) return { type: 'term', path, steps: path.length - 1, cell: s };
-    const s2 = gridMove(W, s, sol.first[s]);
-    path.push(s2);
-    if (seen.has(s2)) return { type: 'loop', path, cycle: path.length - 1 - seen.get(s2) };
-    seen.set(s2, path.length - 1);
-    s = s2;
-  }
-  return { type: 'loop', path, cycle: 0 };
-}
-
-/* =====================================================================
-   01 — the agent–environment loop, running
+   01 — the agent–environment loop
    ===================================================================== */
 function initLoop() {
-  const W = { R: 4, C: 4, rew: new Array(16).fill(0), term: new Array(16).fill(false), wall: new Array(16).fill(false), step: -0.04, gamma: 0.95, slip: 0.2 };
-  const START = 12, GOAL = 3, PIT = 6;
-  W.rew[GOAL] = 1; W.term[GOAL] = true;
-  W.rew[PIT] = -1; W.term[PIT] = true;
-  const name = s => `(${Math.floor(s / 4)},${s % 4})`;
-  const rng = mulberry32(7);
-
-  let sol = gridSolve(W);
-  let pol = 'rand', s = START, t = 0, G = 0, ep = 1, phase = 0, pendingA = -1, running = null, stepTimer = null;
-  let traj = [];
-  const stats = { rand: { n: 0, sum: 0 }, good: { n: 0, sum: 0 } };
-
-  /* --- loop diagram --- */
   const svg = $('#loopSvg');
+  const order = ['A', 'B', 'C'];
+  const pos = { A: { x: 70, y: 100 }, B: { x: 200, y: 100 }, C: { x: 330, y: 100 } };
+  const REW = { A: -1, B: 0, C: 1 };
+  const R = 26;
+  let cur = 'B';
+  let hist = [];
+  let seq = [{ t: 'S', tex: '\\text{B}' }];
+
+  svg.innerHTML = '';
   const defs = el('defs', {}, svg);
-  const MK = { gray: arrowMarker(defs, 'lp-g', '#c2c9d4'), dark: arrowMarker(defs, 'lp-d', '#111'), blue: arrowMarker(defs, 'lp-b', '#2563eb'), red: arrowMarker(defs, 'lp-r', '#dc2626') };
-  const COL = { gray: '#c2c9d4', dark: '#111', blue: '#2563eb', red: '#dc2626' };
-  const box = (y, title, sub) => {
-    el('rect', { x: 95, y, width: 130, height: 54, rx: 12, fill: '#fff', stroke: '#111', 'stroke-width': 1.5 }, svg);
-    el('text', { x: 160, y: y + 24, 'text-anchor': 'middle', 'font-size': 15, 'font-weight': 650 }, svg).textContent = title;
-    el('text', { x: 160, y: y + 42, 'text-anchor': 'middle', 'font-size': 12, fill: '#6b7280' }, svg).textContent = sub;
-  };
-  box(18, 'Agent', 'π(a | s)');
-  box(178, 'Environment', 'P(s′ | s, a)');
-  const actPath = el('path', { d: 'M225,45 H272 Q290,45 290,63 V187 Q290,205 272,205 H229', fill: 'none', 'stroke-width': 2.4, 'stroke-linecap': 'round' }, svg);
-  const envPath = el('path', { d: 'M95,205 H48 Q30,205 30,187 V63 Q30,45 48,45 H91', fill: 'none', 'stroke-width': 2.4, 'stroke-linecap': 'round' }, svg);
-  const lbl = (x, y, anchor, size, weight, fill) => el('text', { x, y, 'text-anchor': anchor, 'font-size': size, 'font-weight': weight, fill, class: 'mono' }, svg);
-  lbl(278, 112, 'end', 12, 600, '#6b7280').textContent = 'Aₜ';
-  const aVal = lbl(278, 134, 'end', 20, 650, '#111');
-  lbl(42, 104, 'start', 12, 600, '#6b7280').textContent = 'Rₜ₊₁';
-  const rVal = lbl(42, 122, 'start', 14, 650, '#111');
-  lbl(42, 146, 'start', 12, 600, '#6b7280').textContent = 'Sₜ₊₁';
-  const sVal = lbl(42, 164, 'start', 14, 650, '#111');
-  const tVal = lbl(160, 134, 'middle', 13, 600, '#9ca3af');
-  function arrows(act, env) {
-    actPath.setAttribute('stroke', COL[act]); actPath.setAttribute('marker-end', MK[act]);
-    envPath.setAttribute('stroke', COL[env]); envPath.setAttribute('marker-end', MK[env]);
-  }
+  const m = el('marker', {
+    id: 'lp-gray', viewBox: '0 0 10 10', refX: 10, refY: 5,
+    markerWidth: 7, markerHeight: 7, orient: 'auto', markerUnits: 'userSpaceOnUse'
+  }, defs);
+  el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: '#c2c9d4' }, m);
+  const AR = 'url(#lp-gray)';
 
-  /* --- gridworld --- */
-  const g = $('#loopGrid');
-  const CELL = 50;
-  const arrowTxt = [];
-  for (let i = 0; i < 16; i++) {
-    const r = Math.floor(i / 4), c = i % 4;
-    const fill = i === GOAL ? '#1e40af' : i === PIT ? '#991b1b' : '#fafafa';
-    el('rect', { x: c * CELL + 1.5, y: r * CELL + 1.5, width: CELL - 3, height: CELL - 3, rx: 6, fill }, g);
-    const tx = el('text', { x: c * CELL + 25, y: r * CELL + 31, 'text-anchor': 'middle', 'font-size': i === GOAL || i === PIT ? 14 : 15, 'font-weight': 600, fill: i === GOAL || i === PIT ? '#fff' : '#c2c9d4' }, g);
-    if (i === GOAL) tx.textContent = '+1';
-    else if (i === PIT) tx.textContent = '−1';
-    arrowTxt.push(tx);
-  }
-  el('text', { x: 6, y: 3 * CELL + 13, 'font-size': 9.5, fill: '#9ca3af', 'font-weight': 600 }, g).textContent = 'start';
-  const token = el('g', { style: 'transition:transform .22s cubic-bezier(.4,0,.2,1)' }, g);
-  el('circle', { cx: 0, cy: 0, r: 11, fill: '#111' }, token);
-  const placeToken = () => { token.style.transform = `translate(${(s % 4) * CELL + 25}px,${Math.floor(s / 4) * CELL + 25}px)`; };
+  const edge = (x1, y1, x2, y2) => el('path', {
+    d: `M ${x1} ${y1} L ${x2} ${y2}`, fill: 'none', stroke: '#c2c9d4',
+    'stroke-width': 1.6, 'stroke-linecap': 'round', 'marker-end': AR
+  }, svg);
+  edge(96, 94, 174, 94);
+  edge(174, 106, 96, 106);
+  edge(226, 94, 304, 94);
+  edge(304, 106, 226, 106);
+  const loop = x => el('path', {
+    d: `M ${x - 11} ${100 - R} Q ${x} ${100 - R - 34} ${x + 11} ${100 - R}`,
+    fill: 'none', stroke: '#c2c9d4', 'stroke-width': 1.6, 'stroke-linecap': 'round', 'marker-end': AR
+  }, svg);
+  loop(70); loop(330);
 
-  function paintPolicy() {
-    for (let i = 0; i < 16; i++) {
-      if (i === GOAL || i === PIT) continue;
-      arrowTxt[i].textContent = pol === 'good' ? ARW[sol.first[i]] : '·';
-    }
-  }
-  function chooseAction() {
-    return pol === 'good' ? sol.first[s] : Math.floor(rng() * 4);
-  }
-  function sampleNext(a) {
-    let u = rng(), acc = 0;
-    for (const [s2, p] of gridTrans(W, s, a)) { acc += p; if (u <= acc + 1e-12) return s2; }
-    return s;
-  }
+  const nodeEls = {};
+  order.forEach(s => {
+    const g = el('g', {}, svg);
+    const c = el('circle', { cx: pos[s].x, cy: pos[s].y, r: R, fill: '#fff', stroke: '#111', 'stroke-width': 1.6, style: 'transition:fill .15s' }, g);
+    const t = el('text', { x: pos[s].x, y: pos[s].y + 5, 'text-anchor': 'middle', class: 'node-label' }, g);
+    t.textContent = s;
+    const rl = el('text', { x: pos[s].x, y: pos[s].y + R + 17, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace, monospace' }, g);
+    rl.textContent = 'R=' + (REW[s] > 0 ? '+' : '') + REW[s];
+    nodeEls[s] = { c, t };
+  });
 
+  const trajEl = $('#loopTraj');
+  const rewEl = $('#loopRew');
+  const eqEl = $('#loopEq');
+  const infoEl = $('#loopInfo');
+
+  function paint() {
+    order.forEach(s => {
+      const on = s === cur;
+      nodeEls[s].c.setAttribute('fill', on ? '#111' : '#fff');
+      nodeEls[s].t.setAttribute('fill', on ? '#fff' : '#111');
+    });
+  }
   function renderTraj() {
-    const items = [];
-    items.push(`<span class="chip">${name(traj.length ? traj[0].s : s)}</span>`);
-    traj.forEach(st => {
-      const cls = st.r > 0 ? 'pos' : st.r < -0.5 ? 'neg' : 'zero';
-      items.push(`<span class="chip act">${ARW[st.a]}</span>`, `<span class="chip ${cls}">${fmtS(st.r)}</span>`, `<span class="chip">${name(st.s2)}</span>`);
-    });
-    const shown = items.slice(-19);
-    if (shown.length) shown[shown.length - 1] = shown[shown.length - 1].replace('class="chip"', 'class="chip now"');
-    $('#loopTraj').innerHTML = (items.length > 19 ? '<span class="arw" style="color:#c4c4c8">…</span>' : '') + shown.join('');
+    const show = hist.slice(-18);
+    trajEl.innerHTML = (show.length ? show : [{ s2: 'B' }]).map((h, i, arr) =>
+      `<span class="chip ${i === arr.length - 1 ? 'now' : ''}">${h.s2}</span>`
+    ).join('<span class="arw">→</span>');
+    rewEl.innerHTML = show.length
+      ? show.map(h => {
+          const c = h.r > 0 ? '#2563eb' : h.r < 0 ? '#dc2626' : '#6b7280';
+          const bg = h.r > 0 ? '#eef2ff' : h.r < 0 ? '#fdecec' : '#f4f4f5';
+          return `<span class="chip" style="background:${bg};color:${c}">${h.r > 0 ? '+' : ''}${h.r}</span>`;
+        }).join('<span class="arw">·</span>')
+      : '<span class="small muted">no steps yet</span>';
   }
-  function renderStats() {
-    const m = k => stats[k].n ? `${fmt(stats[k].sum / stats[k].n)} <span style="color:#9ca3af">(${stats[k].n} ep.)</span>` : '—';
-    $('#loopStats').innerHTML = `episode ${ep} · t = ${t} · G = <b>${fmt(G)}</b><br>mean return · random: <b>${m('rand')}</b> · optimal: <b>${m('good')}</b>`;
-    tVal.textContent = `t = ${t}`;
+  function renderEq() {
+    const inner = seq.slice(-13).map(t => t.tex).join(',\\,');
+    T(eqEl, `\\tau = (\\dots,\\, ${inner})`, true);
+  }
+  function act(dir) {
+    const i = order.indexOf(cur);
+    const ni = Math.max(0, Math.min(2, i + dir));
+    const s2 = order[ni];
+    const rr = REW[s2];
+    hist.push({ s: cur, a: dir, r: rr, s2 });
+    if (hist.length > 40) hist.shift();
+    seq.push({ t: 'A', tex: dir < 0 ? '{\\leftarrow}' : '{\\rightarrow}' });
+    seq.push({ t: 'R', tex: (rr >= 0 ? '+' : '') + rr });
+    seq.push({ t: 'S', tex: `\\text{${s2}}` });
+    if (seq.length > 40) seq.splice(0, seq.length - 40);
+    cur = s2;
+    paint(); renderTraj(); renderEq();
+    infoEl.textContent = `S_t = ${cur}   ·   last reward R_{t+1} = ${rr >= 0 ? '+' : ''}${rr}`;
   }
 
-  function newEpisode() { s = START; t = 0; G = 0; traj = []; placeToken(); }
-
-  /* one call = one phase: 0 agent acts, 1 environment answers, 2 rest (or reset after terminal) */
-  function tick() {
-    if (phase === 0) {
-      if (W.term[s] || t >= 60) {
-        stats[pol].n++; stats[pol].sum += G; ep++;
-        newEpisode();
-        arrows('gray', 'gray'); aVal.textContent = ''; rVal.textContent = ''; sVal.textContent = '';
-        renderTraj(); renderStats();
-        if (stats.rand.n + stats.good.n >= 300) stop();
-        return;
-      }
-      pendingA = chooseAction();
-      aVal.textContent = ARW[pendingA];
-      rVal.textContent = ''; sVal.textContent = '';
-      arrows('dark', 'gray');
-      phase = 1;
-    } else if (phase === 1) {
-      const s2 = sampleNext(pendingA);
-      const r = gridReward(W, s, s2);
-      traj.push({ s, a: pendingA, r, s2 });
-      if (traj.length > 40) traj.shift();
-      G += r; t++; s = s2;
-      rVal.textContent = fmtS(r); rVal.setAttribute('fill', r > 0 ? '#2563eb' : r < -0.5 ? '#dc2626' : '#111');
-      sVal.textContent = name(s2) + (W.term[s2] ? ' end' : '');
-      arrows('gray', r > 0 ? 'blue' : r < -0.5 ? 'red' : 'dark');
-      placeToken(); renderTraj(); renderStats();
-      phase = 2;
-    } else {
-      arrows('gray', 'gray');
-      phase = 0;
-    }
-  }
-  function stop() { clearTimeout(stepTimer); stepTimer = null; if (running) { clearInterval(running); running = null; $('#loopRun').textContent = 'Run ▶'; } }
-
-  $('#loopRun').addEventListener('click', () => {
-    if (running) { stop(); return; }
-    running = setInterval(tick, 110);
-    $('#loopRun').textContent = 'Pause';
-  });
-  $('#loopStep').addEventListener('click', () => {
-    stop();
-    if (phase === 2) tick();
-    tick();
-    if (phase === 1) stepTimer = setTimeout(() => { stepTimer = null; tick(); }, 260);
-  });
+  $('#loopLeft').addEventListener('click', () => act(-1));
+  $('#loopRight').addEventListener('click', () => act(1));
   $('#loopReset').addEventListener('click', () => {
-    stop(); stats.rand = { n: 0, sum: 0 }; stats.good = { n: 0, sum: 0 }; ep = 1; phase = 0;
-    newEpisode(); arrows('gray', 'gray'); aVal.textContent = ''; rVal.textContent = ''; sVal.textContent = '';
-    renderTraj(); renderStats();
-  });
-  $$('#loopPolBtns button').forEach(b => b.addEventListener('click', () => {
-    if (b.dataset.p === pol) return;
-    pol = b.dataset.p; pickSeg('loopPolBtns', pol); paintPolicy();
-    /* restart the episode so its return is credited to one policy only */
-    phase = 0; newEpisode(); arrows('gray', 'gray'); aVal.textContent = ''; rVal.textContent = ''; sVal.textContent = '';
-    renderTraj(); renderStats();
-  }));
-  $('#loopSlip').addEventListener('input', e => {
-    W.slip = parseFloat(e.target.value);
-    $('#loopSlipVal').textContent = W.slip.toFixed(2);
-    sol = gridSolve(W); paintPolicy();
-    phase = 0; newEpisode(); arrows('gray', 'gray'); aVal.textContent = ''; rVal.textContent = ''; sVal.textContent = '';
-    renderTraj();
-    stats.rand = { n: 0, sum: 0 }; stats.good = { n: 0, sum: 0 };
-    renderStats();
+    cur = 'B'; hist = []; seq = [{ t: 'S', tex: '\\text{B}' }];
+    paint(); renderTraj(); renderEq();
+    infoEl.textContent = 'S_t = B';
   });
 
-  arrows('gray', 'gray'); placeToken(); paintPolicy(); renderTraj(); renderStats();
+  paint(); renderTraj(); renderEq();
+  infoEl.textContent = 'S_t = B';
 }
 
 /* =====================================================================
-   02a — episodic vs continuing returns
+   02 — Reward-Signal Explorer (grid MDP + value iteration)
    ===================================================================== */
-function initReturn() {
-  const svg = $('#retSvg'), eq = $('#retEq');
-  const K = 60, X0 = 20, BW = 600 / K, H = 130, Y0 = 150;
-  let mode = 'epi';
-  const bars = [];
-  for (let k = 0; k < K; k++) bars.push(el('rect', { x: X0 + k * BW + 1, width: BW - 2, rx: 1.5 }, svg));
-  el('line', { x1: X0, x2: X0 + 600, y1: Y0, y2: Y0, stroke: '#e5e5e5' }, svg);
-  [0, 10, 20, 30, 40, 50].forEach(k => {
-    el('text', { x: X0 + k * BW + BW / 2, y: Y0 + 16, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af', class: 'mono' }, svg).textContent = 'k=' + k;
-  });
-  const tLine = el('line', { y1: 8, y2: Y0, stroke: '#111', 'stroke-width': 1.6 }, svg);
-  const tLbl = el('text', { y: 18, 'font-size': 11.5, 'font-weight': 650, class: 'mono' }, svg);
-  const hLine = el('line', { y1: 26, y2: Y0, stroke: '#2563eb', 'stroke-width': 1.2, 'stroke-dasharray': '4 3' }, svg);
-  const hLbl = el('text', { y: 38, 'font-size': 11, 'font-weight': 600, fill: '#2563eb', class: 'mono' }, svg);
-  const inf = el('text', { x: 632, y: Y0 - 6, 'text-anchor': 'end', 'font-size': 12, fill: '#6b7280', class: 'mono' }, svg);
+function initReward() {
+  const N = 4, CELL = 80;
+  const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; // up right down left
+  const NAMES = ['\\uparrow', '\\rightarrow', '\\downarrow', '\\leftarrow'];
+  let rewards = new Array(N * N).fill(0);
+  rewards[3] = 1;                       // one +1 in the top-right
+  let gamma = 0.75;
+  let V = new Array(N * N).fill(0);
+  let sel = 3;
+  let drag = null;
 
-  function update() {
-    const g = parseFloat($('#retGamma').value), Tn = parseInt($('#retT').value, 10);
-    $('#retGammaVal').textContent = g.toFixed(2);
-    $('#retTVal').textContent = Tn;
-    const epi = mode === 'epi';
-    $('#retT').disabled = !epi;
-    $('#retTRow').style.opacity = epi ? 1 : 0.35;
-    bars.forEach((b, k) => {
-      const w = Math.pow(g, k);
-      const on = !epi || k < Tn;
-      const h = Math.max(on ? w * H : 0, on && w > 0 ? 0.8 : 0);
-      b.setAttribute('y', Y0 - h); b.setAttribute('height', h);
-      b.setAttribute('fill', on ? '#2563eb' : '#c2c9d4');
-    });
-    if (epi) {
-      const x = X0 + Tn * BW;
-      tLine.setAttribute('x1', x); tLine.setAttribute('x2', x); tLine.style.display = '';
-      tLbl.setAttribute('x', x + 5); tLbl.textContent = 'T = ' + Tn + '  (terminal)'; tLbl.style.display = '';
-      if (Tn > 44) { tLbl.setAttribute('text-anchor', 'end'); tLbl.setAttribute('x', x - 5); } else tLbl.setAttribute('text-anchor', 'start');
-      inf.textContent = '';
-    } else {
-      tLine.style.display = 'none'; tLbl.style.display = 'none';
-      inf.textContent = '… → ∞';
+  const svg = $('#rwdSvg');
+  const eqEl = $('#rwdEq');
+  const infoEl = $('#rwdInfo');
+  const rSlider = $('#rwdVal');
+  const rVal = $('#rwdValVal');
+  const gSlider = $('#rwdGamma');
+  const gVal = $('#rwdGammaVal');
+
+  function nxt(r, c, a) {
+    let nr = r + DIRS[a][0], nc = c + DIRS[a][1];
+    if (nr < 0 || nr >= N || nc < 0 || nc >= N) { nr = r; nc = c; }
+    return nr * N + nc;
+  }
+  function solve() {
+    V = new Array(N * N).fill(0);
+    for (let it = 0; it < 4000; it++) {
+      let delta = 0;
+      const nv = new Array(N * N);
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        const i = r * N + c;
+        let best = -Infinity;
+        for (let a = 0; a < 4; a++) {
+          const j = nxt(r, c, a);
+          const q = (j === i ? 0 : rewards[j]) + gamma * V[j];
+          if (q > best) best = q;
+        }
+        nv[i] = best;
+        delta = Math.max(delta, Math.abs(best - V[i]));
+      }
+      V = nv;
+      if (delta < 1e-7) break;
     }
-    const hz = g < 1 ? 1 / (1 - g) : Infinity;
-    if (hz <= K) {
-      const x = X0 + hz * BW;
-      hLine.setAttribute('x1', x); hLine.setAttribute('x2', x); hLine.style.display = '';
-      hLbl.setAttribute('x', x + 5); hLbl.textContent = '1/(1−γ) = ' + hz.toFixed(1); hLbl.style.display = '';
-      hLbl.setAttribute('text-anchor', hz > 44 ? 'end' : 'start');
-      if (hz > 44) hLbl.setAttribute('x', x - 5);
-    } else { hLine.style.display = 'none'; hLbl.style.display = 'none'; }
-
-    let tex;
-    if (epi) {
-      const val = g === 1 ? Tn : (1 - Math.pow(g, Tn)) / (1 - g);
-      tex = g === 1
-        ? `G_0=\\sum_{k=0}^{${Tn - 1}}1^k = T = \\mathbf{${Tn}}`
-        : `G_0=\\sum_{k=0}^{${Tn - 1}}\\gamma^{k}=\\frac{1-\\gamma^{T}}{1-\\gamma}=\\frac{1-${g.toFixed(2)}^{${Tn}}}{${(1 - g).toFixed(2)}}=\\mathbf{${val.toFixed(3)}}`;
-    } else {
-      tex = g === 1
-        ? `G_0=\\sum_{k=0}^{\\infty}1^k=\\mathbf{\\infty}\\quad\\text{(diverges: no policy can be compared)}`
-        : `G_0=\\sum_{k=0}^{\\infty}\\gamma^{k}=\\frac{1}{1-\\gamma}=\\frac{1}{${(1 - g).toFixed(2)}}=\\mathbf{${(1 / (1 - g)).toFixed(3)}}`;
+  }
+  function bestA(r, c) {
+    let best = -Infinity, bi = 0;
+    for (let a = 0; a < 4; a++) {
+      const j = nxt(r, c, a);
+      const q = (j === r * N + c ? 0 : rewards[j]) + gamma * V[j];
+      if (q > best) { best = q; bi = a; }
     }
-    T(eq, tex, true);
-  }
-  $$('#retModeBtns button').forEach(b => b.addEventListener('click', () => {
-    mode = b.dataset.mode; pickSeg('retModeBtns', mode); update();
-  }));
-  $('#retGamma').addEventListener('input', update);
-  $('#retT').addEventListener('input', update);
-  update();
-}
-
-/* =====================================================================
-   02b — Reward-Signal Explorer (grid MDP + value iteration)
-   ===================================================================== */
-const RX_R = 5, RX_C = 7, RX_START = 28;
-function rxPreset(name) {
-  const n = RX_R * RX_C;
-  const W = { R: RX_R, C: RX_C, rew: new Array(n).fill(0), term: new Array(n).fill(false), wall: new Array(n).fill(false), step: -0.04, gamma: 0.95, slip: 0.1 };
-  const at = (r, c) => r * RX_C + c;
-  const T_ = (r, c, v) => { W.rew[at(r, c)] = v; W.term[at(r, c)] = true; };
-  if (name === 'pit') {
-    T_(0, 6, 1);
-    T_(2, 2, -1); T_(2, 3, -1); T_(2, 4, -1);
-    W.wall[at(1, 1)] = true;
-  } else if (name === 'cliff') {
-    T_(4, 6, 1);
-    for (let c = 1; c <= 5; c++) T_(4, c, -1);
-  } else if (name === 'coin') {
-    T_(0, 6, 1);
-    W.rew[at(3, 2)] = 0.3;
-    W.wall[at(2, 3)] = true; W.wall[at(3, 4)] = true;
-    W.step = 0; W.slip = 0;
-  }
-  return W;
-}
-
-function initExplorer() {
-  const svg = $('#rxSvg');
-  const CELL = 50, n = RX_R * RX_C;
-  let W = rxPreset('pit'), sol = null, tool = 'reward', show = 'r', sel = RX_START, drag = null;
-
-  const cellLayer = el('g', {}, svg);
-  const pathLayer = el('g', {}, svg);
-  const textLayer = el('g', { style: 'pointer-events:none' }, svg);
-  const pathLine = el('polyline', { fill: 'none', stroke: 'rgba(17,17,17,.13)', 'stroke-width': 14, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, pathLayer);
-  const cells = [];
-  for (let i = 0; i < n; i++) {
-    const r = Math.floor(i / RX_C), c = i % RX_C;
-    const rect = el('rect', { x: c * CELL + 1.5, y: r * CELL + 1.5, width: CELL - 3, height: CELL - 3, rx: 6 }, cellLayer);
-    const border = el('rect', { x: c * CELL + 3, y: r * CELL + 3, width: CELL - 6, height: CELL - 6, rx: 5, fill: 'none' }, textLayer);
-    const arrow = el('text', { x: c * CELL + 25, y: r * CELL + 27, 'text-anchor': 'middle', 'font-size': 18, 'font-weight': 600 }, textLayer);
-    const val = el('text', { x: c * CELL + 25, y: r * CELL + 43, 'text-anchor': 'middle', 'font-size': 10.5, 'font-weight': 600, class: 'mono' }, textLayer);
-    cells.push({ rect, border, arrow, val, r, c });
-  }
-  el('text', { x: 6, y: 4 * CELL + 13, 'font-size': 9.5, 'font-weight': 700, fill: '#6b7280' }, textLayer).textContent = 'S';
-  const selRing = el('rect', { width: CELL - 1, height: CELL - 1, rx: 7, fill: 'none', stroke: '#111', 'stroke-width': 2.2, 'stroke-dasharray': '3 2' }, textLayer);
-
-  function syncSliders() {
-    $('#rxStep').value = W.step; $('#rxStepVal').textContent = fmt(W.step);
-    $('#rxGamma').value = W.gamma; $('#rxGammaVal').textContent = W.gamma.toFixed(2);
-    $('#rxSlip').value = W.slip; $('#rxSlipVal').textContent = W.slip.toFixed(2);
+    return { a: bi, q: best };
   }
 
   function render() {
-    sol = gridSolve(W);
-    const maxV = Math.max(1e-6, ...Array.from(sol.V).map(Math.abs));
-    cells.forEach((ce, i) => {
-      const { rect, border, arrow, val } = ce;
-      if (W.wall[i]) {
-        rect.setAttribute('fill', '#d4d4d8');
-        border.setAttribute('stroke', 'none');
-        arrow.textContent = ''; val.textContent = '';
-        return;
-      }
-      const showV = show === 'v' && !W.term[i];
-      const shade = showV ? sol.V[i] / maxV : W.rew[i];
-      rect.setAttribute('fill', W.rew[i] === 0 && !showV ? '#fafafa' : colorFor(shade));
-      const ink = textColorFor(shade);
-      border.setAttribute('stroke', W.term[i] ? '#111' : 'none');
-      border.setAttribute('stroke-width', W.term[i] ? 2.4 : 0);
-      if (W.term[i]) {
-        arrow.textContent = '';
-        val.setAttribute('y', ce.r * CELL + 30); val.setAttribute('font-size', 13);
-        val.textContent = fmtS(W.rew[i]);
-      } else {
-        arrow.textContent = sol.pol[i] >= 0 ? ARW[sol.pol[i]] : '·';
-        val.setAttribute('y', ce.r * CELL + 43); val.setAttribute('font-size', 10.5);
-        val.textContent = showV ? fmt(sol.V[i]) : (W.rew[i] === 0 ? '' : fmtS(W.rew[i]));
-      }
-      arrow.setAttribute('fill', ink); val.setAttribute('fill', ink);
-    });
-    selRing.setAttribute('x', (sel % RX_C) * CELL + 0.5);
-    selRing.setAttribute('y', Math.floor(sel / RX_C) * CELL + 0.5);
-
-    const pth = gridPath(W, sol, RX_START);
-    pathLine.setAttribute('points', pth.path.map(s => `${(s % RX_C) * CELL + 25},${Math.floor(s / RX_C) * CELL + 25}`).join(' '));
-    let txt;
-    if (pth.type === 'term') {
-      const v = W.rew[pth.cell];
-      txt = `From S: <b>${v >= 0 ? 'reaches' : 'falls into'} the ${fmtS(v)} terminal</b> in ${pth.steps} steps`;
-    } else if (pth.type === 'loop') {
-      txt = `From S: <b>never finishes</b>${pth.cycle > 1 ? `, loops on a ${pth.cycle}-step cycle` : ''}`;
-    }
-    $('#rxOutcome').innerHTML = `${txt} &nbsp;·&nbsp; <span class="mono">V*(S) = ${fmt(sol.V[RX_START], 3)}</span>`;
-    renderEq();
-  }
-
-  function renderEq() {
-    const eq = $('#rxEq');
-    const r = Math.floor(sel / RX_C), c = sel % RX_C;
-    if (W.wall[sel]) { T(eq, `(${r},${c})\\ \\text{is a wall}`, true); return; }
-    if (W.term[sel]) { T(eq, `(${r},${c})\\ \\text{is terminal: } V_*=0\\ \\text{after entry}`, true); return; }
-    const q = sol.Q[sel], best = sol.pol[sel];
-    const parts = q.map((v, a) => `${ARW_TEX[a]}\\;${a === best ? '\\mathbf{' + fmt(v, 3) + '}' : fmt(v, 3)}`);
-    T(eq, `\\begin{aligned}&Q_*\\big((${r},${c}),a\\big)=\\textstyle\\sum_{s'}p(s'\\mid s,a)\\big[r+\\gamma V_*(s')\\big]\\\\&${parts.slice(0, 2).join(',\\quad ')},\\\\&${parts.slice(2).join(',\\quad ')}\\end{aligned}`, true);
-  }
-
-  function cellAt(e) {
-    const b = svg.getBoundingClientRect();
-    const x = (e.clientX - b.left) / b.width * 350, y = (e.clientY - b.top) / b.height * 250;
-    const c = Math.floor(x / CELL), r = Math.floor(y / CELL);
-    if (r < 0 || r >= RX_R || c < 0 || c >= RX_C) return -1;
-    return r * RX_C + c;
-  }
-  svg.addEventListener('pointerdown', e => {
-    const i = cellAt(e);
-    if (i < 0) return;
-    svg.setPointerCapture(e.pointerId);
-    drag = { i, y0: e.clientY, v0: W.rew[i], moved: false, scale: 250 / svg.getBoundingClientRect().height };
-  });
-  svg.addEventListener('pointermove', e => {
-    if (!drag || tool !== 'reward' || W.wall[drag.i]) return;
-    const dy = (drag.y0 - e.clientY) * drag.scale;
-    if (Math.abs(dy) > 3) drag.moved = true;
-    if (!drag.moved) return;
-    let v = Math.round((drag.v0 + dy / CELL * 0.5) / 0.05) * 0.05;
-    v = Math.max(-2, Math.min(2, v));
-    if (Math.abs(v) < 1e-9) v = 0;
-    if (v !== W.rew[drag.i]) { W.rew[drag.i] = v; sel = drag.i; render(); }
-  });
-  const endDrag = () => {
-    if (!drag) return;
-    const i = drag.i;
-    if (!drag.moved) {
-      if (tool === 'term' && i !== RX_START) { W.term[i] = !W.term[i]; W.wall[i] = false; }
-      else if (tool === 'wall' && i !== RX_START) { W.wall[i] = !W.wall[i]; W.term[i] = false; }
-      sel = i;
-      render();
-    }
-    drag = null;
-  };
-  svg.addEventListener('pointerup', endDrag);
-  svg.addEventListener('pointercancel', () => { drag = null; });
-
-  $$('#rxPresets button').forEach(b => b.addEventListener('click', () => {
-    W = rxPreset(b.dataset.preset); pickSeg('rxPresets', b.dataset.preset);
-    sel = b.dataset.preset === 'coin' ? 23 : RX_START;
-    syncSliders(); render();
-  }));
-  $$('#rxTools button').forEach(b => b.addEventListener('click', () => {
-    tool = b.dataset.tool; pickSeg('rxTools', tool);
-    svg.classList.toggle('tool-click', tool !== 'reward');
-  }));
-  $$('#rxShow button').forEach(b => b.addEventListener('click', () => {
-    show = b.dataset.show; pickSeg('rxShow', show); render();
-  }));
-  $('#rxStep').addEventListener('input', e => { W.step = parseFloat(e.target.value); $('#rxStepVal').textContent = fmt(W.step); render(); });
-  $('#rxGamma').addEventListener('input', e => { W.gamma = parseFloat(e.target.value); $('#rxGammaVal').textContent = W.gamma.toFixed(2); render(); });
-  $('#rxSlip').addEventListener('input', e => { W.slip = parseFloat(e.target.value); $('#rxSlipVal').textContent = W.slip.toFixed(2); render(); });
-
-  syncSliders(); render();
-}
-
-/* =====================================================================
-   02c — shaping on a corridor
-   ===================================================================== */
-const SH_N = 8, SH_GAMMA = 0.9;
-function shapingSolve(beta, kind) {
-  const G = SH_N - 1;
-  const phi = s => s / G;
-  const Phi = s => (s === G ? 0 : beta * phi(s));
-  const rew = (s, s2) => {
-    let r = s2 === G ? 1 : 0;
-    if (kind === 'naive' && s2 !== s) r += beta * phi(s2);
-    if (kind === 'pot') r += SH_GAMMA * Phi(s2) - Phi(s);
-    return r;
-  };
-  const move = (s, a) => Math.max(0, Math.min(G, s + (a ? 1 : -1)));
-  let V = new Float64Array(SH_N);
-  const Q = Array.from({ length: SH_N }, () => [0, 0]);
-  for (let it = 0; it < 3000; it++) {
-    let d = 0;
-    const nv = new Float64Array(SH_N);
-    for (let s = 0; s < G; s++) {
-      for (let a = 0; a < 2; a++) { const s2 = move(s, a); Q[s][a] = rew(s, s2) + SH_GAMMA * V[s2]; }
-      nv[s] = Math.max(Q[s][0], Q[s][1]);
-      d = Math.max(d, Math.abs(nv[s] - V[s]));
-    }
-    V = nv;
-    if (d < 1e-11) break;
-  }
-  const pol = Q.map((q, s) => (s === G ? -1 : q[1] >= q[0] - 1e-12 ? 1 : 0));
-  const path = [0], seen = new Set([0]);
-  let s = 0, out = null;
-  while (!out) {
-    const s2 = move(s, pol[s]);
-    path.push(s2);
-    if (s2 === G) out = { type: 'goal', steps: path.length - 1 };
-    else if (seen.has(s2)) out = { type: 'loop', a: Math.min(s, s2), b: Math.max(s, s2) };
-    seen.add(s2); s = s2;
-  }
-  return { pol, path, out };
-}
-
-function initShaping() {
-  const svg = $('#shSvg');
-  const CW = 50, ROWS = [
-    { kind: 'none', label: 'r' },
-    { kind: 'naive', label: 'r + β·φ(s′)' },
-    { kind: 'pot', label: 'r + γΦ(s′) − Φ(s)' }
-  ];
-  const H = [];
-  ROWS.forEach((row, k) => {
-    const y0 = k * 72;
-    const lab = el('text', { x: 0, y: y0 + 12, 'font-size': 12, class: 'mono', fill: '#111', 'font-weight': 600 }, svg);
-    const res = el('text', { x: 400, y: y0 + 12, 'font-size': 12, 'text-anchor': 'end', 'font-weight': 600 }, svg);
-    lab.textContent = row.label;
-    const cs = [];
-    for (let s = 0; s < SH_N; s++) {
-      const goal = s === SH_N - 1;
-      const rect = el('rect', { x: s * CW + 1.5, y: y0 + 20, width: CW - 3, height: 42, rx: 6, fill: goal ? '#1e40af' : '#fafafa' }, svg);
-      const t = el('text', { x: s * CW + 25, y: y0 + 47, 'text-anchor': 'middle', 'font-size': goal ? 13 : 18, 'font-weight': 600, fill: goal ? '#fff' : '#111' }, svg);
-      if (goal) t.textContent = '+1';
-      cs.push({ rect, t });
-    }
-    H.push({ res, cs });
-  });
-  function update() {
-    const beta = parseFloat($('#shBeta').value);
-    $('#shBetaVal').textContent = beta.toFixed(2);
-    ROWS.forEach((row, k) => {
-      const { pol, path, out } = shapingSolve(beta, row.kind);
-      const onPath = new Set(path);
-      H[k].cs.forEach((c, s) => {
-        if (s === SH_N - 1) return;
-        const inLoop = out.type === 'loop' && (s === out.a || s === out.b);
-        c.rect.setAttribute('fill', inLoop ? '#fee2e2' : onPath.has(s) ? '#eef2ff' : '#fafafa');
-        c.t.textContent = pol[s] ? '→' : '←';
-        c.t.setAttribute('fill', inLoop ? '#dc2626' : onPath.has(s) ? '#1e3a8a' : '#9ca3af');
-      });
-      if (out.type === 'goal') { H[k].res.textContent = `reaches +1 in ${out.steps} steps`; H[k].res.setAttribute('fill', '#2563eb'); }
-      else { H[k].res.textContent = `paces ${out.a}↔${out.b} forever`; H[k].res.setAttribute('fill', '#dc2626'); }
-    });
-  }
-  $('#shBeta').addEventListener('input', update);
-  update();
-}
-
-/* =====================================================================
-   03 — evaluative vs instructive feedback
-   ===================================================================== */
-const FB_A_STAR = 7.5;
-function fbReward(a) {
-  return 0.55 * Math.exp(-((a - 2.5) ** 2) / (2 * 0.6 * 0.6)) + 1.0 * Math.exp(-((a - 7.5) ** 2) / (2 * 0.8 * 0.8));
-}
-function fbNew(seed) { return { muI: 1.5, muE: 1.5, b: null, t: 0, samples: [], last: null, rng: mulberry32(seed) }; }
-function fbStep(S, sigma) {
-  S.muI += 0.12 * (FB_A_STAR - S.muI);
-  const a = Math.max(0, Math.min(10, S.muE + sigma * gauss(S.rng)));
-  const r = fbReward(a) + 0.05 * gauss(S.rng);
-  if (S.b === null) S.b = r;
-  S.muE = Math.max(0, Math.min(10, S.muE + 0.6 * (r - S.b) * (a - S.muE)));
-  S.b += 0.1 * (r - S.b);
-  S.t++;
-  S.last = { a, r };
-  S.samples.push({ a, r });
-  if (S.samples.length > 60) S.samples.shift();
-}
-
-function initFeedback() {
-  const L = 28, R = 8, TOP = 10, B = 26, VW = 320, VH = 190;
-  const xs = a => L + a / 10 * (VW - L - R);
-  const ys = r => TOP + (1.15 - r) / 1.3 * (VH - TOP - B);
-  let S = fbNew(3), reveal = false, running = null;
-
-  function frame(svg) {
     svg.innerHTML = '';
     const defs = el('defs', {}, svg);
-    el('line', { x1: L, x2: VW - R, y1: ys(0), y2: ys(0), stroke: '#e5e5e5' }, svg);
-    [0, 2.5, 5, 7.5, 10].forEach(a => el('text', { x: xs(a), y: VH - 8, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = a);
-    el('text', { x: VW - R, y: VH - 8, 'text-anchor': 'end', 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg);
-    el('text', { x: 4, y: ys(1) + 4, 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = '1';
-    el('text', { x: 4, y: ys(0) + 4, 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = '0';
-    if (reveal) {
-      const pts = [];
-      for (let i = 0; i <= 200; i++) { const a = i / 20; pts.push(`${xs(a).toFixed(1)},${ys(fbReward(a)).toFixed(1)}`); }
-      el('polyline', { points: pts.join(' '), fill: 'none', stroke: '#c2c9d4', 'stroke-width': 1.8, 'stroke-dasharray': '5 3' }, svg);
+    const mk = (id, col) => {
+      const mm = el('marker', {
+        id, viewBox: '0 0 10 10', refX: 10, refY: 5,
+        markerWidth: 6, markerHeight: 6, orient: 'auto', markerUnits: 'userSpaceOnUse'
+      }, defs);
+      el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: col }, mm);
+      return `url(#${id})`;
+    };
+    const dark = mk('rw-dark', '#111'), white = mk('rw-white', '#ffffff');
+
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const i = r * N + c;
+      const g = el('g', { style: 'cursor:ns-resize' }, svg);
+      el('rect', {
+        x: c * CELL + 3, y: r * CELL + 3, width: CELL - 6, height: CELL - 6, rx: 9,
+        fill: colorFor(V[i]), stroke: i === sel ? '#111' : '#ededed',
+        'stroke-width': i === sel ? 2.6 : 1
+      }, g);
+      const rtxt = el('text', {
+        x: c * CELL + 11, y: r * CELL + 20, 'font-size': 12, 'font-weight': 600,
+        'font-family': 'ui-monospace, monospace', fill: textColorFor(V[i]), opacity: 0.85
+      }, g);
+      rtxt.textContent = (rewards[i] > 0 ? '+' : '') + rewards[i].toFixed(1);
+
+      const ba = bestA(r, c);
+      const cx = c * CELL + CELL / 2 + 3, cy = r * CELL + CELL / 2 + 7;
+      const dx = DIRS[ba.a][1], dy = DIRS[ba.a][0];
+      const col = textColorFor(V[i]) === '#fff' ? '#ffffff' : '#111111';
+      el('path', {
+        d: `M ${cx - dx * 9} ${cy - dy * 9} L ${cx + dx * 9} ${cy + dy * 9}`,
+        fill: 'none', stroke: col, 'stroke-width': 2.4, 'stroke-linecap': 'round',
+        'marker-end': col === '#ffffff' ? white : dark
+      }, g);
+
+      g.addEventListener('pointerdown', e => {
+        sel = i;
+        drag = { i, y: e.clientY, r0: rewards[i], moved: false };
+        rSlider.value = rewards[i]; rVal.textContent = rewards[i].toFixed(2);
+        e.preventDefault();
+        render(); updateEq();
+      });
     }
-    return defs;
-  }
-  function muLine(svg, mu) {
-    el('line', { x1: xs(mu), x2: xs(mu), y1: TOP, y2: ys(0), stroke: '#111', 'stroke-width': 1.8 }, svg);
-    el('text', { x: xs(mu), y: TOP + 8, 'text-anchor': mu > 8.5 ? 'end' : 'start', dx: mu > 8.5 ? -5 : 5, 'font-size': 11, 'font-weight': 650, class: 'mono' }, svg).textContent = 'μ';
+    infoEl.textContent = `γ = ${gamma.toFixed(2)}   ·   selected cell r = ${rewards[sel].toFixed(2)}`;
   }
 
-  function render() {
-    const sigma = parseFloat($('#fbSigma').value);
-    /* instructive */
-    const sI = $('#fbSvgI');
-    const defs = frame(sI);
-    const mk = arrowMarker(defs, 'fb-arr', '#2563eb');
-    el('line', { x1: xs(FB_A_STAR), x2: xs(FB_A_STAR), y1: TOP, y2: ys(0), stroke: '#2563eb', 'stroke-width': 1.4, 'stroke-dasharray': '4 3' }, sI);
-    el('text', { x: xs(FB_A_STAR) + 5, y: ys(0) - 8, 'font-size': 11, fill: '#2563eb', 'font-weight': 650, class: 'mono' }, sI).textContent = 'a* (told)';
-    if (Math.abs(FB_A_STAR - S.muI) > 0.15) {
-      el('line', { x1: xs(S.muI) + 3, x2: xs(FB_A_STAR) - 4, y1: ys(0.55), y2: ys(0.55), stroke: '#2563eb', 'stroke-width': 1.6, 'marker-end': mk }, sI);
+  function updateEq() {
+    const r = Math.floor(sel / N), c = sel % N;
+    const cands = [];
+    for (let a = 0; a < 4; a++) {
+      const j = nxt(r, c, a);
+      cands.push((j === sel ? 0 : rewards[j]) + gamma * V[j]);
     }
-    muLine(sI, S.muI);
-    $('#fbInfoI').innerHTML = `t = ${S.t} · μ = <b>${S.muI.toFixed(2)}</b> · r(μ) = <b>${fbReward(S.muI).toFixed(2)}</b>`;
-
-    /* evaluative */
-    const sE = $('#fbSvgE');
-    frame(sE);
-    const dens = [];
-    const peak = 1 / (sigma * Math.sqrt(2 * Math.PI));
-    for (let i = 0; i <= 200; i++) {
-      const a = i / 20;
-      const d = Math.exp(-((a - S.muE) ** 2) / (2 * sigma * sigma)) * peak;
-      dens.push(`${xs(a).toFixed(1)},${(ys(0) - Math.min(d / Math.max(peak, 0.4), 1) * 0.35 * (ys(0) - ys(1))).toFixed(1)}`);
-    }
-    el('polygon', { points: `${xs(0)},${ys(0)} ${dens.join(' ')} ${xs(10)},${ys(0)}`, fill: '#eef2ff', stroke: 'none' }, sE);
-    S.samples.forEach((p, i) => {
-      const last = i === S.samples.length - 1;
-      el('circle', { cx: xs(p.a), cy: ys(p.r), r: last ? 4.5 : 3, fill: last ? '#2563eb' : '#111', opacity: last ? 1 : 0.15 + 0.6 * i / S.samples.length }, sE);
-    });
-    muLine(sE, S.muE);
-    $('#fbInfoE').innerHTML = `t = ${S.t} · μ = <b>${S.muE.toFixed(2)}</b> · r(μ) = <b>${fbReward(S.muE).toFixed(2)}</b>`;
-
-    T($('#fbEq'), S.last
-      ? `\\text{instructive: } a^*=${FB_A_STAR.toFixed(2)}\\ \\text{(whatever you did)}\\qquad \\text{evaluative: } r(a_t{=}${S.last.a.toFixed(2)})=${S.last.r.toFixed(2)}`
-      : `\\text{instructive: } a^*=\\;?\\qquad \\text{evaluative: } r(a_t)=\\;?`, true);
+    const ba = bestA(r, c);
+    T(eqEl,
+      `\\begin{aligned}
+        V(${r},${c}) &= \\max_{a}\\big[R(s')+\\gamma V(s')\\big]\\\\
+        &= \\max\\{\\,${cands.map(v => v.toFixed(2)).join(',\\,')}\\,\\}\\\\
+        &= \\mathbf{${V[sel].toFixed(3)}} \\qquad a_*=${NAMES[ba.a]}
+      \\end{aligned}`, true);
   }
-  function step() { fbStep(S, parseFloat($('#fbSigma').value)); render(); }
-  function stop() { if (running) { clearInterval(running); running = null; $('#fbRun').textContent = 'Run ▶'; } }
-  $('#fbRun').addEventListener('click', () => {
-    if (running) { stop(); return; }
-    running = setInterval(() => { step(); if (S.t >= 400) stop(); }, 110);
-    $('#fbRun').textContent = 'Pause';
+
+  window.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dy = drag.y - e.clientY;
+    if (Math.abs(dy) > 3) drag.moved = true;
+    if (!drag.moved) return;
+    rewards[drag.i] = Math.max(-1, Math.min(1, drag.r0 + dy * 0.01));
+    sel = drag.i;
+    rSlider.value = rewards[sel];
+    rVal.textContent = rewards[sel].toFixed(2);
+    solve(); render(); updateEq();
   });
-  $('#fbStep').addEventListener('click', () => { stop(); step(); });
-  $('#fbReset').addEventListener('click', () => { stop(); S = fbNew(3); render(); });
-  $('#fbReveal').addEventListener('click', () => { reveal = !reveal; $('#fbReveal').classList.toggle('active', reveal); render(); });
-  $('#fbSigma').addEventListener('input', e => { $('#fbSigmaVal').textContent = parseFloat(e.target.value).toFixed(1); render(); });
-  render();
+  window.addEventListener('pointerup', () => { drag = null; });
+
+  rSlider.addEventListener('input', () => {
+    rewards[sel] = parseFloat(rSlider.value);
+    rVal.textContent = rewards[sel].toFixed(2);
+    solve(); render(); updateEq();
+  });
+  gSlider.addEventListener('input', () => {
+    gamma = parseFloat(gSlider.value);
+    gVal.textContent = gamma.toFixed(2);
+    solve(); render(); updateEq();
+  });
+  $('#rwdReset').addEventListener('click', () => {
+    rewards = new Array(N * N).fill(0);
+    rewards[3] = 1; sel = 3;
+    rSlider.value = rewards[sel]; rVal.textContent = rewards[sel].toFixed(2);
+    solve(); render(); updateEq();
+  });
+  $('#rwdRandom').addEventListener('click', () => {
+    rewards = rewards.map(() => Math.round((Math.random() * 2 - 1) * 10) / 10);
+    rSlider.value = rewards[sel]; rVal.textContent = rewards[sel].toFixed(2);
+    solve(); render(); updateEq();
+  });
+
+  solve(); render(); updateEq();
 }
 
 /* =====================================================================
@@ -1396,8 +807,8 @@ function initExplore() {
 
     T(eqEl,
       `\\begin{aligned}
-        a_t &= \\arg\\max_{a}\\Big[\\hat Q_t(a)+\\tfrac{c}{\\sqrt{N_t(a)}}\\Big]\\qquad(\\sqrt{\\ln t}\\ \\text{folded into } c)\\\\
-        &= \\arg\\max\\Big\\{\\,A:${iA.toFixed(2)},\\; B:${state.qB.toFixed(2)}+\\tfrac{${state.c.toFixed(2)}}{\\sqrt{${state.n}}}=${iB.toFixed(2)}\\,\\Big\\}\\\\
+        a_t &= \\arg\\max_{a}\\Big[\\hat Q_t(a)+c\\sqrt{\\tfrac{\\ln t}{N_t(a)}}\\Big]\\\\
+        &= \\arg\\max\\Big\\{\\,A:${iA.toFixed(2)},\\; B:${state.qB.toFixed(2)}+\\tfrac{${state.c.toFixed(2)}}{\\sqrt{${state.n}}}=${iB.toFixed(2)}\\,\\Big\}\\\\
         &= \\mathbf{${pick}}
       \\end{aligned}`, true);
   }
@@ -1409,163 +820,71 @@ function initExplore() {
 }
 
 /* =====================================================================
-   04b — ε-greedy regret
+   05 — taxonomy combinator
    ===================================================================== */
-const RG_MU = [0.4, 0.5, 0.7], RG_T = 1000, RG_RUNS = 300;
-const RG_EPS = [0, 0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1];
-function regretSim(eps, seed) {
-  const rng = mulberry32(seed);
-  const best = Math.max(...RG_MU), K = RG_MU.length;
-  const curve = new Float64Array(RG_T), Nbar = new Float64Array(K);
-  let bestFinal = 0;
-  for (let run = 0; run < RG_RUNS; run++) {
-    const Q = new Float64Array(K), N = new Float64Array(K);
-    let reg = 0;
-    for (let t = 0; t < RG_T; t++) {
-      let a;
-      if (rng() < eps) a = Math.floor(rng() * K);
-      else {
-        let mx = -Infinity, nt = 0;
-        for (let i = 0; i < K; i++) {
-          if (Q[i] > mx + 1e-12) { mx = Q[i]; nt = 1; a = i; }
-          else if (Q[i] > mx - 1e-12 && rng() * ++nt < 1) a = i;
-        }
-      }
-      const r = rng() < RG_MU[a] ? 1 : 0;
-      N[a]++; Q[a] += (r - Q[a]) / N[a];
-      reg += best - RG_MU[a];
-      curve[t] += reg / RG_RUNS;
-    }
-    for (let i = 0; i < K; i++) Nbar[i] += N[i] / RG_RUNS;
-    if (Q.indexOf(Math.max(...Q)) === K - 1) bestFinal++;
-  }
-  return { curve, Nbar, final: curve[RG_T - 1], bestFrac: bestFinal / RG_RUNS };
-}
-
-function initRegret() {
-  const sims = RG_EPS.map((e, i) => regretSim(e, 1000 + i));
-  const yMax = Math.ceil(Math.max(...sims.map(s => s.final)) / 50) * 50;
-
-  function drawCurve(idx) {
-    const svg = $('#rgCurve');
-    svg.innerHTML = '';
-    const L = 40, R = 12, TOP = 10, B = 28, VW = 400, VH = 220;
-    const xs = t => L + t / RG_T * (VW - L - R), ys = v => TOP + (1 - v / yMax) * (VH - TOP - B);
-    el('line', { x1: L, x2: VW - R, y1: ys(0), y2: ys(0), stroke: '#e5e5e5' }, svg);
-    el('line', { x1: L, x2: L, y1: TOP, y2: ys(0), stroke: '#e5e5e5' }, svg);
-    for (let v = 0; v <= yMax; v += yMax / 4) el('text', { x: L - 6, y: ys(v) + 4, 'text-anchor': 'end', 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = Math.round(v);
-    [0, 250, 500, 750, 1000].forEach(t => el('text', { x: xs(t), y: VH - 9, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = t);
-    const line = (s, attrs) => {
-      const pts = [];
-      for (let t = 0; t < RG_T; t += 10) pts.push(`${xs(t + 1).toFixed(1)},${ys(s.curve[t]).toFixed(1)}`);
-      pts.push(`${xs(RG_T).toFixed(1)},${ys(s.final).toFixed(1)}`);
-      el('polyline', Object.assign({ points: pts.join(' '), fill: 'none', 'stroke-linejoin': 'round' }, attrs), svg);
-    };
-    const lab = (s, txt, fill) => el('text', { x: VW - R - 2, y: ys(s.final) - 6, 'text-anchor': 'end', 'font-size': 11, 'font-weight': 600, fill, class: 'mono' }, svg).textContent = txt;
-    if (idx !== 0) { line(sims[0], { stroke: '#c2c9d4', 'stroke-width': 1.6, 'stroke-dasharray': '5 3' }); lab(sims[0], 'ε = 0', '#9ca3af'); }
-    if (idx !== RG_EPS.length - 1) { line(sims[RG_EPS.length - 1], { stroke: '#c2c9d4', 'stroke-width': 1.6, 'stroke-dasharray': '2 3' }); lab(sims[RG_EPS.length - 1], 'ε = 1', '#9ca3af'); }
-    line(sims[idx], { stroke: '#111', 'stroke-width': 2.4 });
-    lab(sims[idx], 'ε = ' + RG_EPS[idx], '#111');
-  }
-
-  function drawU(idx) {
-    const svg = $('#rgU');
-    svg.innerHTML = '';
-    const L = 40, R = 14, TOP = 10, B = 28, VW = 300, VH = 220, K = RG_EPS.length;
-    const xs = i => L + i / (K - 1) * (VW - L - R), ys = v => TOP + (1 - v / yMax) * (VH - TOP - B);
-    el('line', { x1: L, x2: VW - R, y1: ys(0), y2: ys(0), stroke: '#e5e5e5' }, svg);
-    el('line', { x1: L, x2: L, y1: TOP, y2: ys(0), stroke: '#e5e5e5' }, svg);
-    for (let v = 0; v <= yMax; v += yMax / 4) el('text', { x: L - 6, y: ys(v) + 4, 'text-anchor': 'end', 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = Math.round(v);
-    [0, 2, 4, 6, 8, 10].forEach(i => el('text', { x: xs(i), y: VH - 9, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af', class: 'mono' }, svg).textContent = RG_EPS[i]);
-    el('polyline', { points: sims.map((s, i) => `${xs(i)},${ys(s.final)}`).join(' '), fill: 'none', stroke: '#c2c9d4', 'stroke-width': 1.6 }, svg);
-    sims.forEach((s, i) => el('circle', { cx: xs(i), cy: ys(s.final), r: i === idx ? 6 : 3.2, fill: i === idx ? '#111' : '#c2c9d4', stroke: '#fff', 'stroke-width': 1.5 }, svg));
-  }
-
-  function update() {
-    const idx = parseInt($('#rgEps').value, 10);
-    $('#rgEpsVal').textContent = RG_EPS[idx].toFixed(2);
-    drawCurve(idx); drawU(idx);
-    const s = sims[idx];
-    T($('#rgEq'), `L_{1000}=0.3\\,\\mathbb{E}[N(\\text{A})]+0.2\\,\\mathbb{E}[N(\\text{B})]=0.3(${s.Nbar[0].toFixed(1)})+0.2(${s.Nbar[1].toFixed(1)})=\\mathbf{${s.final.toFixed(1)}}\\qquad \\text{best arm ranked first in } ${Math.round(s.bestFrac * 100)}\\%\\text{ of runs}`, true);
-  }
-  $('#rgEps').addEventListener('input', update);
-  update();
-}
-
-/* =====================================================================
-   05 — taxonomy: rewiring the data flow
-   ===================================================================== */
-const TAX_ALGOS = {
-  'free-on-online': [['Monte Carlo control', 5], ['Sarsa', 6], ['REINFORCE', 11], ['Actor–critic', 11], ['PPO', 12]],
-  'free-off-online': [['Off-policy MC', 5], ['Q-learning', 6], ['Watkins Q(λ)', 7], ['DQN', 10], ['Double DQN', 10]],
-  'free-off-offline': [['BCQ', 14], ['CQL', 14], ['IQL', 14], ['TD3+BC', 14]],
-  'based-on-online': [['MPC with a learned model', 13], ['PETS', 13], ['Dreamer (actor in imagination)', 13]],
-  'based-off-online': [['Dyna-Q', 8], ['Prioritized sweeping', 8], ['MBPO', 13], ['MuZero', 13]],
-  'based-off-offline': [['Model-based offline RL', 14]]
-};
-
 function initTaxonomy() {
-  const st = { model: 'free', policy: 'on', data: 'online' };
+  const S = { model: false, offpolicy: false, offline: false };
   const svg = $('#taxSvg');
+  const X0 = 150, X1 = 750, YS = [60, 120, 180];
+  const CATS = ['MODEL', 'POLICY', 'DATA'];
+  const L = [['Model-free', 'Model-based'], ['On-policy', 'Off-policy'], ['Online', 'Offline']];
+
+  svg.innerHTML = '';
+  const dots = [];
+  YS.forEach((y, i) => {
+    const cl = el('text', { x: X0, y: y - 16, 'font-size': 11, 'letter-spacing': '.08em', fill: '#9ca3af', 'font-weight': 600 }, svg);
+    cl.textContent = CATS[i];
+    el('line', { x1: X0, y1: y, x2: X1, y2: y, stroke: '#e5e5e5', 'stroke-width': 3, 'stroke-linecap': 'round' }, svg);
+    el('circle', { cx: (X0 + X1) / 2, cy: y, r: 3, fill: '#e5e5e5' }, svg);
+    const l1 = el('text', { x: X0 - 16, y: y + 5, 'text-anchor': 'end', 'font-size': 14, fill: '#6b7280' }, svg);
+    l1.textContent = L[i][0];
+    const l2 = el('text', { x: X1 + 16, y: y + 5, 'text-anchor': 'start', 'font-size': 14, fill: '#6b7280' }, svg);
+    l2.textContent = L[i][1];
+    dots.push(el('circle', { cx: X0, cy: y, r: 8, fill: '#111', style: 'transition:cx .25s' }, svg));
+  });
+
+  const btn = { model: $$('#taxModel button'), policy: $$('#taxPolicy button'), data: $$('#taxData button') };
+  const descEl = $('#taxDesc');
+  const eqEl = $('#taxEq');
 
   function render() {
-    svg.innerHTML = '';
-    const defs = el('defs', {}, svg);
-    const MK = { on: arrowMarker(defs, 'tx-d', '#111'), off: arrowMarker(defs, 'tx-g', '#c2c9d4'), blue: arrowMarker(defs, 'tx-b', '#2563eb') };
-    const offline = st.data === 'offline', based = st.model === 'based', onp = st.policy === 'on';
-    const box = (x, y, title, sub, dim, fill) => {
-      el('rect', { x, y, width: 150, height: 54, rx: 11, fill: fill || '#fff', stroke: dim ? '#c2c9d4' : '#111', 'stroke-width': 1.5, 'stroke-dasharray': dim ? '4 3' : 'none' }, svg);
-      el('text', { x: x + 75, y: y + 23, 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 650, fill: dim ? '#9ca3af' : '#111' }, svg).textContent = title;
-      el('text', { x: x + 75, y: y + 41, 'text-anchor': 'middle', 'font-size': 11.5, fill: dim ? '#c2c9d4' : '#6b7280' }, svg).textContent = sub;
-    };
-    const arrow = (d, kind, label, lx, ly, anchor = 'middle') => {
-      const col = kind === 'off' ? '#c2c9d4' : kind === 'blue' ? '#2563eb' : '#111';
-      el('path', { d, fill: 'none', stroke: col, 'stroke-width': kind === 'off' ? 1.4 : 2, 'stroke-dasharray': kind === 'off' ? '4 3' : 'none', 'marker-end': MK[kind] }, svg);
-      if (label) el('text', { x: lx, y: ly, 'text-anchor': anchor, 'font-size': 11.5, 'font-weight': 600, fill: kind === 'off' ? '#c2c9d4' : col, class: 'mono', style: 'paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round' }, svg).textContent = label;
-    };
+    dots[0].setAttribute('cx', S.model ? X1 : X0);
+    dots[1].setAttribute('cx', S.offpolicy ? X1 : X0);
+    dots[2].setAttribute('cx', S.offline ? X1 : X0);
+    btn.model.forEach(b => b.classList.toggle('active', (b.dataset.v === '1') === S.model));
+    btn.policy.forEach(b => b.classList.toggle('active', (b.dataset.v === '1') === S.offpolicy));
+    btn.data.forEach(b => b.classList.toggle('active', (b.dataset.v === '1') === S.offline));
 
-    box(20, 98, 'Environment', offline ? 'not available' : 'P(s′ | s, a), R', offline);
-    box(245, 14, onp ? 'Acting: π' : 'Acting: b', offline ? 'logged long ago' : onp ? 'the policy being learned' : 'b ≠ π, e.g. ε-greedy', offline);
-    box(245, 182, offline ? 'Fixed dataset 𝒟' : onp ? 'Fresh batch' : 'Replay buffer', offline ? 'no new samples' : onp ? 'used once, discarded' : 'old samples reused', false, '#fafafa');
-    box(470, 98, 'Learner → π', based ? 'plans with P̂, R̂' : 'updates Q or π', false);
-    if (based) box(470, 182, 'Model P̂, R̂', 'learned stand-in for P, R', false, '#eef2ff');
+    const mdl = S.model
+      ? 'learns a model of the dynamics and plans with it'
+      : 'learns values straight from experience, with no model';
+    const pol = S.offpolicy
+      ? 'improves a target policy that differs from the one generating its data'
+      : 'improves the very policy it uses to act';
+    const dat = S.offline
+      ? 'comes from a fixed logged dataset, with no new interaction'
+      : 'streams in from live interaction';
+    let ex;
+    if (S.offline) ex = 'CQL, IQL';
+    else if (S.model) ex = 'Dyna-Q, MCTS, Dreamer';
+    else if (S.offpolicy) ex = 'Q-learning, DDPG';
+    else ex = 'Sarsa, REINFORCE, PPO';
+    descEl.textContent = `The agent ${mdl}, ${pol}; its data ${dat}. In this corner of the cube: ${ex}.`;
 
-    const k = offline ? 'off' : 'on';
-    arrow('M245,41 H95 V96', k, 'Aₜ', 170, 34);
-    arrow('M95,152 V209 H243', k, 'Sₜ, Aₜ, Rₜ₊₁, Sₜ₊₁', 170, 228);
-    if (based) {
-      arrow('M395,209 H468', 'blue', 'fit', 432, 202);
-      arrow('M545,182 V154', 'blue', 'imagine', 552, 172, 'start');
-    } else {
-      arrow('M395,200 L470,140', 'on', 'update', 440, 182, 'start');
-    }
-    if (!offline) arrow('M545,98 V41 H397', onp ? 'on' : 'blue', onp ? 'same policy' : 'b = explore(π)', 470, 34);
-    else el('text', { x: 545, y: 62, 'text-anchor': 'middle', 'font-size': 11.5, 'font-weight': 600, fill: '#9ca3af', class: 'mono' }, svg).textContent = 'deploy π at the end';
-
-    const caps = {
-      'free-on-online': 'Every update needs fresh samples from the current π, then throws them away. Stable, but sample-hungry.',
-      'free-off-online': 'An exploratory b gathers data into a buffer; the learner improves a greedier π from it, reusing each sample many times.',
-      'free-off-offline': 'No interaction at all. The danger is valuing actions $\\mathcal{D}$ never tried, the problem of Chapter 14.',
-      'based-on-online': 'Real data fits $\\hat P,\\hat R$; the current π is then improved on rollouts it imagines in the model.',
-      'based-off-online': 'Every real transition trains the model, and the model generates many more for the learner.',
-      'based-off-offline': 'Fit $\\hat P,\\hat R$ to the logs, then plan, while distrusting regions $\\mathcal{D}$ never covered.'
-    };
-    const key = `${st.model}-${st.policy}-${st.data}`;
-    const cap = $('#taxCap');
-    cap.innerHTML = caps[key] + (offline ? ' <span class="muted">Offline forces off-policy: the data\'s author is gone.</span>' : '') +
-      (based ? ' <span class="muted">Given the true $P,R$ instead, no data is needed at all: dynamic programming, Chapter 4.</span>' : '');
-    if (window.renderMathInElement) renderMathInElement(cap, { delimiters: [{ left: '$', right: '$', display: false }], throwOnError: false });
-    $('#taxAlgos').innerHTML = TAX_ALGOS[key].map(([n, c]) => `<span class="algo">${n}<span>Ch. ${c}</span></span>`).join('');
-    $$('#taxPolicy button').forEach(b => { b.disabled = offline && b.dataset.v === 'on'; });
+    T(eqEl,
+      `\\begin{aligned}
+        \\text{model} &:\\ ${S.model ? "\\hat P(s'\\mid s,a),\\ \\hat R(s,a)\\ \\text{(learned)}" : "\\varnothing\\ \\text{(model-free)}"}\\\\[2pt]
+        \\text{policy} &:\\ ${S.offpolicy ? "\\pi\\neq b\\ \\text{(off-policy)}" : "\\pi=b\\ \\text{(on-policy)}"}\\\\[2pt]
+        \\text{data} &:\\ ${S.offline ? "\\mathcal{D}\\ \\text{fixed (offline)}" : "\\text{online stream}"}
+      \\end{aligned}`, true);
   }
-  [['taxModel', 'model'], ['taxPolicy', 'policy'], ['taxData', 'data']].forEach(([id, key]) => {
-    $$(`#${id} button`).forEach(b => b.addEventListener('click', () => {
-      st[key] = b.dataset.v;
-      if (st.data === 'offline') st.policy = 'off';
-      pickSeg('taxModel', st.model); pickSeg('taxPolicy', st.policy); pickSeg('taxData', st.data);
-      render();
-    }));
-  });
+
+  function wire(list, key) {
+    list.forEach(b => b.addEventListener('click', () => { S[key] = b.dataset.v === '1'; render(); }));
+  }
+  wire(btn.model, 'model');
+  wire(btn.policy, 'offpolicy');
+  wire(btn.data, 'offline');
   render();
 }
 
@@ -1599,30 +918,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   initLoop();
-  initReturn();
-  initExplorer();
-  initShaping();
-  initFeedback();
+  initReward();
   initExplore();
-  initRegret();
   initTaxonomy();
   initScroll();
 });
-</script>
-<!-- reader-script -->
-<script>
-(function () {
-  var file = location.pathname.split('/').pop();
-  try { localStorage.setItem('rl-last', file); } catch (e) {}
-  document.addEventListener('keydown', function (e) {
-    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    var t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
-    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
-          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
-    if (a) location.href = a.getAttribute('href');
-  });
-})();
 </script>
 </body>
 </html>

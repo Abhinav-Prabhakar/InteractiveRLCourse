@@ -13,7 +13,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chapter 7 · n-Step Bootstrapping &amp; Eligibility Traces</title>
+<title>n-Step Bootstrapping &amp; Eligibility Traces</title>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -185,7 +185,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">Ch. 07 · n-Step &amp; Traces</a>
+    <a class="brand" href="../index.html">n-Step &amp; Traces</a>
     <nav class="nav">
       <a href="#nstep">n-step returns</a>
       <a href="#sarsa">n-step Sarsa</a>
@@ -200,7 +200,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Part II · Chapter 7</p>
+    <p class="eyebrow">Reinforcement Learning · Bootstrapping</p>
     <h1>n-Step Bootstrapping<br>&amp; Eligibility Traces</h1>
     <p class="lede">One reward and a guess, or every reward and no guess — and every mixture in between, computed online from a single error signal.</p>
   </div>
@@ -216,13 +216,13 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         $$G_{t:t+n}=R_{t+1}+\gamma R_{t+2}+\cdots+\gamma^{n-1}R_{t+n}+\gamma^{n}V(S_{t+n})
           =\sum_{k=0}^{n-1}\gamma^{k}R_{t+k+1}+\gamma^{n}V(S_{t+n})$$
       </div>
-      <p>The sum is <em>observed</em>; the last term is <em>imagined</em> from $V$. The moment you stop trusting observations and start trusting an estimate, you have bootstrapped. The prediction update is the one you already know, pointed at a longer target:</p>
+      <p>The sum is *observed*; the last term is *imagined* from $V$. The moment you stop trusting observations and start trusting an estimate, you have bootstrapped. The prediction update is the one you already know, pointed at a longer target:</p>
       <div class="eqbox">
         $$V(S_t)\leftarrow V(S_t)+\alpha\big[G_{t:t+n}-V(S_t)\big]$$
       </div>
-      <p>$n=1$ is exactly TD(0). $n\ge T-t$ — the window reaches the end of the episode, where $V(S_T)=0$ — is exactly Monte Carlo. Every integer in between is a legitimate target.</p>
+      <p>$n=1$ is exactly TD(0). $n\to\infty$ is exactly Monte Carlo. Every integer in between is a legitimate target.</p>
       <div class="note">
-        <b>$n$ is a bias–variance dial.</b> Small $n$ keeps variance low but leans hard on a possibly-wrong $V$; large $n$ shrinks the bias but pays for it in the variance of long reward chains. TD($\lambda$), below, averages over every $n$ at once.
+        <b>$n$ is a bias–variance dial.</b> Small $n$ keeps variance low but leans hard on a possibly-wrong $V$; large $n$ removes the bias but pays for it in the variance of long reward chains. TD($\lambda$), below, averages over every $n$ at once.
       </div>
     </div>
 
@@ -260,15 +260,15 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         \qquad
         Q(S_t,A_t)\leftarrow Q(S_t,A_t)+\alpha\big[G_{t:t+n}-Q(S_t,A_t)\big]$$
     </div>
-    <p>$n=1$ recovers Sarsa. For an <b>off-policy</b> target the whole $n$-step return must be reweighted by the importance ratio of the actions in the window, target policy $\pi$ over behavior policy $b$:</p>
+    <p>$n=1$ recovers Sarsa. For an <b>off-policy</b> target every reward in the window must be reweighted by the importance ratio between the target policy $\pi$ and the behavior policy $b$:</p>
     <div class="eqbox">
       $$\rho_{t:t+n-1}=\prod_{k=t}^{\min(t+n-1,\,T-1)}\frac{\pi(A_k\mid S_k)}{b(A_k\mid S_k)},
         \qquad
         V(S_t)\leftarrow V(S_t)+\alpha\,\rho_{t:t+n-1}\big[G_{t:t+n}-V(S_t)\big]$$
     </div>
-    <p>For action values the first action $A_t$ is already given, so the ratio starts one step later: $Q(S_t,A_t)\leftarrow Q(S_t,A_t)+\alpha\,\rho_{t+1:t+n}\big[G_{t:t+n}-Q(S_t,A_t)\big]$. For on-policy $n$-step Sarsa the ratios are exactly $1$ — numerator and denominator are the same policy — so no correction is needed.</p>
+    <p>For on-policy $n$-step Sarsa the ratios are exactly $1$ — numerator and denominator are the same policy — so no correction is needed.</p>
     <div class="note">
-      <b>Off-policy $n$-step learning is where the variance explodes.</b> The weight $\rho_{t:t+n-1}$ is a product of $n$ ratios, and its variance can grow exponentially with $n$. Cutting traces, as Watkins' Q($\lambda$) does below, is one practical escape from that blow-up.
+      <b>Off-policy $n$-step learning is where the variance explodes.</b> The weight $\rho_{t:t+n-1}$ multiplies a product of sampled rewards, and its variance grows with $n$. The trace machinery below is the practical escape from that blow-up.
     </div>
   </div>
 </section>
@@ -282,7 +282,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="eqbox">
         $$G_t^{\lambda}=(1-\lambda)\sum_{n=1}^{\infty}\lambda^{n-1}\,G_{t:t+n}$$
       </div>
-      <p>The weights $(1-\lambda)\lambda^{n-1}$ are a distribution over horizons: they sum to $1$, put all their mass on $n=1$ when $\lambda=0$, and on the full Monte Carlo return when $\lambda=1$. The <b>$\lambda$-return algorithm</b> is the prediction update built on this target; <b>TD($\lambda$)</b>, below, is how it is run online.</p>
+      <p>The weights $(1-\lambda)\lambda^{n-1}$ are a distribution over horizons: they sum to $1$, put all their mass on $n=1$ when $\lambda=0$, and on the full Monte Carlo return when $\lambda=1$. <b>TD($\lambda$)</b> is the prediction update built on this target.</p>
       <div class="eqbox">
         $$V(S_t)\leftarrow V(S_t)+\alpha\big[G_t^{\lambda}-V(S_t)\big]$$
       </div>
@@ -321,13 +321,9 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
           \qquad
           V(s)\leftarrow V(s)+\alpha\,\delta_t\,E_t(s)\quad\text{for all }s\in\mathcal{S}$$
       </div>
-      <p>This is the <b>backward view</b>: one scalar error, broadcast backward over the trajectory in proportion to eligibility. The load-bearing step is the equivalence. Hold $V$ fixed during the episode and the forward-view error telescopes into discounted TD errors:</p>
-      <div class="eqbox">
-        $$G_t^{\lambda}-V(S_t)=\sum_{k=t}^{T-1}(\gamma\lambda)^{k-t}\,\delta_k$$
-      </div>
-      <p>Sum the backward-view increments $\alpha\,\delta_k E_k(s)$ over the episode, expand $E_k(s)=\sum_{t\le k}(\gamma\lambda)^{k-t}\mathbf{1}(S_t=s)$, and swap the order of summation: you get $\alpha\sum_t \mathbf{1}(S_t=s)\,[G_t^{\lambda}-V(S_t)]$ — exactly the forward-view updates. So for tabular accumulating traces the two views agree <em>exactly</em> when updates are applied at episode end (offline). Applied online, step by step, they agree only approximately — closer the smaller $\alpha$ is; <em>true online</em> TD($\lambda$) restores exact equivalence.</p>
+      <p>This is the <b>backward view</b>: one scalar error, broadcast backward over the trajectory in proportion to eligibility. The load-bearing step is the equivalence — for tabular accumulating traces the backward view applies exactly the credit the forward view promises, one step at a time, before the outcome is known.</p>
       <div class="note">
-        <b>The whole story is one line: $\delta_t$ is spread back over the trajectory by $E_t$.</b> The forward view is <em>what</em> it computes; the backward view is <em>how</em> it computes it without ever waiting for the future.
+        <b>The whole story is one line: $\delta_t$ is spread back over the trajectory by $E_t$.</b> The forward view is *what* it computes; the backward view is *how* it computes it without ever waiting for the future.
       </div>
     </div>
 
@@ -391,12 +387,12 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <p><b>Watkins' Q($\lambda$)</b> changes the target to the greedy, Q-learning one — $\delta_t=R_{t+1}+\gamma\max_a Q(S_{t+1},a)-Q(S_t,A_t)$ — so the trace rule has to change with it. The $\max$ evaluates an action the behavior policy may never take, and any trace running through such an action would credit a path the target never follows. It must be erased.</p>
     <div class="eqbox">
       $$E_t(s,a)=\begin{cases}
-        \gamma\lambda\,E_{t-1}(s,a)+\mathbf{1}(s=S_t,\,a=A_t), & A_t=\arg\max_{a}Q(S_t,a)\\[2pt]
-        \mathbf{1}(s=S_t,\,a=A_t), & \text{otherwise}
+        \gamma\lambda\,E_{t-1}(s,a)+\mathbf{1}(s=S_t,\,a=A_t), & A_{t+1}=\arg\max_{a}Q(S_{t+1},a)\\[2pt]
+        0, & \text{otherwise}
       \end{cases}$$
     </div>
     <div class="note">
-      <b>The trace is cut whenever behavior takes a non-greedy action.</b> Every older trace drops to $0$; only the pair just taken keeps its bump. That single guard is what keeps Watkins' Q($\lambda$) off-policy: credit flows back only along action sequences the Q-learning target would actually have taken.
+      <b>The trace is cut whenever the greedy target diverges from behavior.</b> That single guard is what keeps Watkins' Q($\lambda$) off-policy: credit flows back only along action sequences the Q-learning target would actually have taken.
     </div>
   </div>
 </section>
@@ -414,7 +410,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <tr><td>Role of $\lambda$</td><td>Mixture weight over horizons</td><td>Forgetting factor inside $\gamma\lambda$</td></tr>
       <tr><td>Role of $\gamma$</td><td>Discounts each reward in the window</td><td>Discounts the past inside the trace</td></tr>
       <tr><td>Cost per step</td><td>Infeasible online</td><td>$O(|\mathcal{S}|)$ (or $O(|\mathcal{S}||\mathcal{A}|)$)</td></tr>
-      <tr><td>Algorithms</td><td>$\lambda$-return algorithm, GAE</td><td>TD($\lambda$), Sarsa($\lambda$), Watkins' Q($\lambda$)</td></tr>
+      <tr><td>Algorithms</td><td>TD($\lambda$), $\lambda$-return, GAE</td><td>Sarsa($\lambda$), Watkins' Q($\lambda$)</td></tr>
     </table>
 
     <h3>Cheat sheet</h3>
@@ -802,13 +798,12 @@ function initTrace() {
     render();
   }
 
-  function stop() { if (running) { clearInterval(running); running = null; $('#trRun').textContent = 'Run ▶'; } }
+  function stop() { if (running) { clearInterval(running); running = null; } }
 
   $('#trStep').addEventListener('click', () => { stop(); step(); });
   $('#trRun').addEventListener('click', () => {
     if (running) { stop(); return; }
     running = setInterval(step, 110);
-    $('#trRun').textContent = 'Pause';
   });
   $('#trReset').addEventListener('click', () => {
     stop();
@@ -872,21 +867,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initTrace();
   initScroll();
 });
-</script>
-<!-- reader-script -->
-<script>
-(function () {
-  var file = location.pathname.split('/').pop();
-  try { localStorage.setItem('rl-last', file); } catch (e) {}
-  document.addEventListener('keydown', function (e) {
-    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    var t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
-    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
-          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
-    if (a) location.href = a.getAttribute('href');
-  });
-})();
 </script>
 </body>
 </html>

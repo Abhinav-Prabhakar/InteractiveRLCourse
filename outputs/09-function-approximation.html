@@ -15,7 +15,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chapter 9 · Function Approximation</title>
+<title>Function Approximation</title>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -191,7 +191,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">Ch. 09 · Function Approximation</a>
+    <a class="brand" href="../index.html">Function Approximation</a>
     <nav class="nav">
       <a href="#wall">Why tables fail</a>
       <a href="#param">Parametric values</a>
@@ -206,7 +206,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Part III · Chapter 9</p>
+    <p class="eyebrow">Reinforcement Learning · Function Approximation</p>
     <h1>Function Approximation</h1>
     <p class="lede">When there are more states than you can ever visit, the value function stops being a table and becomes a function — and every guarantee you got for free has to be earned back.</p>
   </div>
@@ -943,21 +943,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initBaird();
   initScroll();
 });
-</script>
-<!-- reader-script -->
-<script>
-(function () {
-  var file = location.pathname.split('/').pop();
-  try { localStorage.setItem('rl-last', file); } catch (e) {}
-  document.addEventListener('keydown', function (e) {
-    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    var t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
-    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
-          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
-    if (a) location.href = a.getAttribute('href');
-  });
-})();
 </script>
 </body>
 </html>

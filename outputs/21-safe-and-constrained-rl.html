@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chapter 21 · Safe &amp; Constrained RL</title>
+<title>Chapter 21 · Safe and Constrained RL</title>
 <!--
   Assumption: per the task instructions, no prev/next footer links are included
   (the design reference RL.html has none). Every visualiser below runs a real
@@ -138,7 +138,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">Ch. 21 · Safe RL</a>
+    <a class="brand" href="../index.html">Ch. 21 · Safe &amp; Constrained RL</a>
     <nav class="nav">
       <a href="#cmdp">CMDPs</a>
       <a href="#lagrangian">Lagrangian</a>
@@ -175,7 +175,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="note">
         <b>Optimality is not safety.</b> The greedy policy of the underlying MDP can be its worst violator, and patching it afterwards is the failure the constraint was meant to prevent.
       </div>
-      <p>Assume $\Pi_d\ne\emptyset$ and $c$ bounded. A CMDP is secretly a linear program over occupancy measures, so under Slater's condition the duality gap is zero — which makes the single multiplier below exact rather than a heuristic. The LP view has a second consequence: the optimal policy may have to <em>randomise</em>, and the best deterministic policy can be strictly worse — unlike an unconstrained MDP.</p>
+      <p>Assume $\Pi_d\ne\emptyset$ and $c$ bounded. A CMDP is secretly a linear program over occupancy measures, so under Slater's condition the duality gap is zero — which makes the single multiplier below exact rather than a heuristic.</p>
     </div>
 
     <div class="panel" style="margin-top:24px">
@@ -263,18 +263,18 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <h2><span class="num">03</span>Primal–dual updates and CPO</h2>
       <p>Two variables, one loop. Alternate an exact primal maximisation with a gradient step on the price:</p>
       <div class="eqbox">
-        $$\pi_{k}=\arg\max_{\pi}\mathcal L(\pi,\lambda_k),\qquad
+        $$\pi_{k+1}=\arg\max_{\pi}\mathcal L(\pi,\lambda_k),\qquad
         \lambda_{k+1}=\big[\lambda_k+\eta\,\big(J_c(\pi_k)-d\big)\big]_+.$$
       </div>
-      <p>The second line is <b>dual ascent</b> — gradient descent on the convex $g$, whose slope is $g'(\lambda_k)=d-J_c(\pi_k)$. Overspend and the price rises; come in under budget it falls: <b>a market clearing demand against a fixed supply.</b> The projection $[\cdot]_+$ keeps the price non-negative.</p>
+      <p>The second line is <b>dual ascent</b> — gradient descent on the convex $g$. Overspend and the price rises; come in under budget it falls: <b>a market clearing demand against a fixed supply.</b> The projection $[\cdot]_+$ keeps the price non-negative.</p>
       <p>Choose $\eta$ small enough and the pair reaches a saddle point; too large and the price rings across the boundary. Nearly every practical constrained method is this loop.</p>
       <h3>CPO: a trust region with a second constraint</h3>
-      <p><b>CPO</b> (constrained policy optimization) makes the primal step a trust region, so each update moves little and the budget holds — approximately — after every update, not just at the fixed point:</p>
+      <p><b>CPO</b> (constrained policy optimization) makes the primal step a trust region, so each update moves little and the budget holds along the trajectory, not just at the fixed point:</p>
       <div class="eqbox">
         $$\max_\theta\;\mathbb E\!\Big[\tfrac{\pi_\theta(a\mid s)}{\pi_{\theta_k}(a\mid s)}A^{\pi_{\theta_k}}(s,a)\Big]
         \quad\text{s.t.}\quad
         \bar D_{\mathrm{KL}}(\pi_{\theta_k}\Vert\pi_\theta)\le\delta,\;
-        J_c(\pi_{\theta_k})+\tfrac{1}{1-\gamma}\mathbb E\!\Big[\tfrac{\pi_\theta}{\pi_{\theta_k}}A_c^{\pi_{\theta_k}}\Big]\le d .$$
+        J_c(\pi_{\theta_k})+\mathbb E\!\Big[\tfrac{\pi_\theta}{\pi_{\theta_k}}A_c^{\pi_{\theta_k}}\Big]\le d .$$
       </div>
       <p>TRPO with a second, linear constraint on cost; the dual now carries two multipliers — trust and safety — and CPO solves the resulting quadratic in closed form. <b>PPO-Lagrangian</b> is the cheap cousin: clip the ratio, subtract $\lambda c_t$ from the reward, animate $\lambda$ by the rule above.</p>
     </div>
@@ -303,7 +303,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
             <input type="range" id="pdD" min="0.1" max="0.9" step="0.01" value="0.3" aria-label="cost budget">
             <span class="val" id="pdDVal">0.30</span>
           </div>
-          <p class="small muted">The pale trail is the iterate history; the dot is the current policy, sliding along the frontier to where cost equals $d$. Push $\eta$ past $2$ and the price overshoots and rings.</p>
+          <p class="small muted">Each blue point is one iterate; the dot slides along the frontier to where cost equals $d$. Push $\eta$ past $2$ and the price overshoots and rings.</p>
           <p class="stat" id="pdInfo" style="margin:0 0 10px"></p>
           <div class="eqbox" id="pdEq" style="margin-bottom:0"></div>
         </div>
@@ -321,7 +321,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="eqbox">
         $$\pi^{\text{shield}}(a\mid s)=\frac{\pi(a\mid s)\,\mathbf 1\{a\in\mathcal A_{\text{safe}}(s)\}}{\displaystyle\sum_{a'}\pi(a'\mid s)\,\mathbf 1\{a'\in\mathcal A_{\text{safe}}(s)\}} .$$
       </div>
-      <p>With a known model the mask $\mathcal A_{\text{safe}}(s)=\{a:T(s,a)\cap\mathcal S_{\text{bad}}=\emptyset\}$ forbids any action with a successor in the bad set; a probabilistic variant keeps only actions whose reach probability stays below a tolerance $\delta$. One step of lookahead is not enough in general: $\mathcal S_{\text{bad}}$ must include every state from which the bad set can no longer be avoided, which a shield computes offline as a safety game.</p>
+      <p>With a known model the mask $\mathcal A_{\text{safe}}(s)=\{a:T(s,a)\cap\mathcal S_{\text{bad}}=\emptyset\}$ forbids any action with a successor in the bad set; a probabilistic variant keeps only actions whose reach probability stays below a tolerance $\delta$.</p>
       <div class="note">
         <b>The guarantee is about the model, not the learner.</b> If the mask is correct, no policy — however badly trained — can select a masked action, so the cost bound holds from step one. The price is conservatism: a too-tight mask can make the goal unreachable.
       </div>
@@ -336,7 +336,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         </div>
       </div>
       <svg id="shieldSvg" class="plot" viewBox="0 0 340 110" role="img" aria-label="Corridor with unsafe cells, a shield masking actions that would enter them"></svg>
-      <p class="small muted center-note">A goal-directed policy: mostly one step right, sometimes a stride of two, sometimes a stumble left. Without the shield it walks into the unsafe cells; with it those actions get zero mass and the rest are renormalised — using the known dynamics, not learning.</p>
+      <p class="small muted center-note">A goal-directed policy that stumbles left at random; without the shield it enters the unsafe cells, with it those actions are masked — using the known dynamics, not learning.</p>
       <p class="stat center-note" id="shieldInfo" style="margin-top:6px"></p>
     </div>
   </div>
@@ -355,7 +355,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
           \mathcal D_k, & \text{otherwise.}
         \end{cases}$$
       </div>
-      <p>A curriculum turns an infeasible exploration problem into a sequence of feasible ones. The mechanism is generic: shrink the hazard set, anneal the start outward from the goal, or cap the horizon. In Turchetta et al.'s version a teacher also intervenes, resetting the learner before it violates, so training itself is safe. Below, two identical learners differ only in the order of exposure. The curriculum arm banks far fewer violations while it is still incompetent — 4 against 43 by episode 100 — and once both are competent they violate at the same rate ($\varepsilon$-exploration never stops), so the early gap stays.</p>
+      <p>A curriculum turns an infeasible exploration problem into a sequence of feasible ones. The mechanism is generic: shrink the hazard set, anneal the start outward from the goal, or cap the horizon. Two identical learners differ only in the order of exposure; the curriculum arm banks far fewer violations while it is still incompetent, and the two meet once both are competent.</p>
     </div>
 
     <div class="panel" style="margin-top:24px">
@@ -367,7 +367,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         </div>
       </div>
       <svg id="curSvg" class="plot" viewBox="0 0 760 260" style="max-width:100%" role="img" aria-label="Cumulative constraint violations during training, direct versus curriculum"></svg>
-      <p class="small muted center-note">Left: the grid, hazards in red. Right: cumulative hazard entries for two tabular Q-learning agents — one on the full task, one on a start-state curriculum that moves the start back along a safe route every 45 episodes (a fixed schedule, not the cost test above). Seeded, so the curves are fixed.</p>
+      <p class="small muted center-note">Left: the grid, hazards in red. Right: cumulative hazard entries for two tabular Q-learning agents — one on the full task, one on a start-state curriculum. Seeded, so the curves are fixed.</p>
       <p class="stat center-note" id="curInfo" style="margin-top:6px"></p>
     </div>
   </div>
@@ -385,7 +385,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         \;\;\Longrightarrow\;\;
         v^\star=\sqrt{\tfrac{d}{\kappa T}},\qquad \lambda^\star=\frac{1}{2\kappa v^\star}.$$
       </div>
-      <p>Expected collisions over the trip are $\kappa T v^2$, equal to $d$ at the optimum. Tighten the budget and the price rises, speed falls, and dual ascent — here a multiplicative step on $\log\lambda$, which copes with $\lambda^\star$ spanning roughly $10$ to $63$ — makes the policy conservative.</p>
+      <p>Expected collisions over the trip are $\kappa T v^2$, equal to $d$ at the optimum. Tighten the budget and the price rises, speed falls, and the same dual ascent makes the policy conservative.</p>
     </div>
 
     <div class="panel" style="margin-top:22px">
@@ -439,13 +439,13 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       \max_\pi\;&J(\pi)\quad\text{s.t.}\quad J_c(\pi)\le d\\[2pt]
       \mathcal L(\pi,\lambda)&=J(\pi)-\lambda\big(J_c(\pi)-d\big),\qquad \lambda\ge0\\[2pt]
       \lambda_{k+1}&=\big[\lambda_k+\eta\,(J_c(\pi_k)-d)\big]_+,\qquad
-      \pi_{k}=\arg\max_\pi\mathcal L(\pi,\lambda_k)\\[2pt]
+      \pi_{k+1}=\arg\max_\pi\mathcal L(\pi,\lambda_k)\\[2pt]
       \nabla J(\pi^\star)&=\lambda^\star\nabla J_c(\pi^\star),\qquad
       \lambda^\star\big(J_c(\pi^\star)-d\big)=0\\[2pt]
       \pi^{\text{shield}}(a\mid s)&\propto\pi(a\mid s)\,\mathbf 1\{a\in\mathcal A_{\text{safe}}(s)\}
       \end{aligned}$$
     </div>
-    <p class="small muted">The multiplier travels further than safety: in the next chapter the same primal–dual machinery returns as RLHF, where the cost is the KL divergence from a reference policy and $\lambda$ becomes the coefficient $\beta$ that keeps the aligned model from drifting — adaptive-KL PPO even tunes it by a rule of this shape.</p>
+    <p class="small muted">The multiplier travels further than safety: in the next chapter the same primal–dual machinery returns as RLHF, where the cost is the KL divergence from a reference policy and $\lambda$ is the coefficient that keeps the aligned model from drifting.</p>
   </div>
 </section>
 
@@ -610,8 +610,9 @@ function initPD() {
     dLab.setAttribute('x', X(d) + 6); dLab.setAttribute('y', pt + 13);
     dLab.textContent = 'd = ' + d.toFixed(2);
     pathEl.setAttribute('points', trail.map(p => X(p.c) + ',' + Y(p.r)).join(' '));
+    const a0 = trail.length ? trail[trail.length - 1] : { c: 0, r: 0 };
+    dot.setAttribute('cx', X(a0.c)); dot.setAttribute('cy', Y(a0.r));
     const a = aStar(lam);
-    dot.setAttribute('cx', X(CA(a))); dot.setAttribute('cy', Y(RA(a)));
     info.textContent = `k=${k}   \u03bb=${lam.toFixed(3)}   a=${a.toFixed(3)}   J_c=${CA(a).toFixed(3)}   J=${RA(a).toFixed(3)}   \u03bb*=2(1\u2212d)=${(2 * (1 - d)).toFixed(2)}`;
     T(eqEl, `\\begin{aligned}
       \\lambda_{k+1}&=[\\lambda_k+\\eta(J_c-d)]_+=[${lam.toFixed(3)}+${eta.toFixed(2)}(${CA(a).toFixed(3)}-${d.toFixed(2)})]_+\\\\
@@ -625,13 +626,12 @@ function initPD() {
     k++;
     render();
   }
-  function stop() { if (running) { clearInterval(running); running = null; $('#pdRun').textContent = 'Run \u25b6'; } }
+  function stop() { if (running) { clearInterval(running); running = null; } }
   function reset() { stop(); lam = 0.5; k = 0; trail = []; render(); }
 
   $('#pdStep').addEventListener('click', () => { stop(); step(); });
   $('#pdRun').addEventListener('click', () => {
     if (running) { stop(); return; }
-    $('#pdRun').textContent = 'Pause';
     running = setInterval(step, 110);
   });
   $('#pdReset').addEventListener('click', reset);
@@ -679,23 +679,15 @@ function initShield() {
     token.setAttribute('cy', cellY + ch / 2);
     info.textContent = `steps=${steps}   unsafe entries=${viol}   masked by shield=${blocked}`;
   }
-  const MOVES = [-1, 1, 2], PI = [0.15, 0.7, 0.15];
-  const succ = mv => clamp(idx + mv, 0, N - 1);
-  function sample(ws) {
-    const z = ws.reduce((s, w) => s + w, 0);
-    let u = Math.random() * z;
-    for (let i = 0; i < ws.length; i++) { u -= ws[i]; if (u < 0) return i; }
-    return ws.length - 1;
-  }
   function step() {
     steps++;
-    let i = sample(PI);
-    if (on && holes.has(succ(MOVES[i]))) {
-      blocked++;   /* zero the unsafe mass, renormalise, resample */
-      const safe = PI.map((w, j) => holes.has(succ(MOVES[j])) ? 0 : w);
-      i = safe.some(w => w > 0) ? sample(safe) : -1;
+    let mv = Math.random() < 0.75 ? 1 : (Math.random() < 0.5 ? -1 : 1);
+    let next = clamp(idx + mv, 0, N - 1);
+    if (on && holes.has(next)) {
+      const alt = clamp(idx + (mv > 0 ? -1 : 1), 0, N - 1);
+      next = holes.has(alt) ? idx : alt;
+      blocked++;
     }
-    const next = i < 0 ? idx : succ(MOVES[i]);
     if (holes.has(next)) viol++;
     idx = next;
     if (idx === GOAL) { idx = 0; }
@@ -719,7 +711,7 @@ function initCurriculum() {
   const runBtn = $('#curRun'), resetBtn = $('#curReset');
   const N = 6, GOAL = [0, 5], STEP = -1, GOALR = 20, HAZ = -20;
   const HAZARDS = [[4, 1], [2, 2], [3, 3], [1, 4], [4, 3], [2, 4]];
-  const CHAIN = [[1, 5], [2, 5], [3, 5], [4, 5], [5, 5], [5, 4], [5, 2], [5, 0]]; // safe route, goal outward
+  const CHAIN = [[1, 4], [2, 4], [3, 3], [3, 4], [4, 2], [4, 1], [5, 1], [5, 0]];
   const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
   const EP = 360, CHUNK = 12;
   const isHaz = (r, c) => HAZARDS.some(h => h[0] === r && h[1] === c);
@@ -959,21 +951,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initBudget();
   initScroll();
 });
-</script>
-<!-- reader-script -->
-<script>
-(function () {
-  var file = location.pathname.split('/').pop();
-  try { localStorage.setItem('rl-last', file); } catch (e) {}
-  document.addEventListener('keydown', function (e) {
-    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    var t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
-    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
-          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
-    if (a) location.href = a.getAttribute('href');
-  });
-})();
 </script>
 </body>
 </html>
