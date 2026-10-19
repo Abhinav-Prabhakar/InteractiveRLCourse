@@ -29,6 +29,7 @@ jobs:
           mkdir -p _site
           cp index.html _site/
           cp .nojekyll _site/ 2>/dev/null || true
+          cp -r assets _site/
           cp -r outputs _site/
           cp -r projects _site/ 2>/dev/null || true
           cp RL.html _site/ 2>/dev/null || true

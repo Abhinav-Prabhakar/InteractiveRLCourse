@@ -55,6 +55,10 @@ section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
 .ch-desc{display:block;color:#6b7280;font-size:14.5px;line-height:1.5;margin-top:3px}
 .toc li.proj a .ch-num{color:#1e3a8a}
 .proj-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#1e3a8a;background:#eef2ff;border-radius:5px;padding:1px 6px;vertical-align:middle;margin-left:8px}
+.toc li.locked{opacity:.4;filter:grayscale(1)}
+.toc li.locked a{cursor:not-allowed}
+.toc li.locked a:hover{background:none}
+.soon-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af;background:#f3f4f6;border-radius:5px;padding:1px 6px;vertical-align:middle;margin-left:8px}
 
 footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
 
@@ -65,6 +69,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   .nav{display:none}
 }
 </style>
+<script src="assets/site-status.js"></script>
 </head>
 <body>
 
@@ -173,21 +178,27 @@ const hrefPj = j => `projects/${PJ[j][0]}.html`;
 
 /* ---------------- chapter + project lists ---------------- */
 function initToc() {
+  const live = (kind, n) => !window.RLSite || RLSite.isLive(kind, n);
   $$('.toc').forEach(ol => {
     const part = PARTS[+ol.dataset.part];
     for (let i = part.ch[0]; i < part.ch[1]; i++) {
       const li = document.createElement('li');
-      li.innerHTML = `<a href="${hrefCh(i)}">
+      const on = live('chapters', i + 1);
+      if (!on) li.className = 'locked';
+      const attr = on ? `href="${hrefCh(i)}"` : 'aria-disabled="true" tabindex="-1" title="Not available yet"';
+      li.innerHTML = `<a ${attr}>
         <span class="ch-num">${String(i + 1).padStart(2, '0')}</span>
-        <span class="ch-body"><span class="ch-title">${CH[i][1]}</span><span class="ch-desc">${CH[i][2]}</span></span></a>`;
+        <span class="ch-body"><span class="ch-title">${CH[i][1]}${on ? '' : '<span class="soon-tag">Soon</span>'}</span><span class="ch-desc">${CH[i][2]}</span></span></a>`;
       ol.appendChild(li);
     }
     part.pj.forEach(j => {
       const li = document.createElement('li');
-      li.className = 'proj';
-      li.innerHTML = `<a href="${hrefPj(j)}">
+      const on = live('projects', j + 1);
+      li.className = on ? 'proj' : 'proj locked';
+      const attr = on ? `href="${hrefPj(j)}"` : 'aria-disabled="true" tabindex="-1" title="Not available yet"';
+      li.innerHTML = `<a ${attr}>
         <span class="ch-num">P${j + 1}</span>
-        <span class="ch-body"><span class="ch-title">${PJ[j][1]}<span class="proj-tag">Project</span></span><span class="ch-desc">${PJ[j][2]}</span></span></a>`;
+        <span class="ch-body"><span class="ch-title">${PJ[j][1]}<span class="proj-tag">Project</span>${on ? '' : '<span class="soon-tag">Soon</span>'}</span><span class="ch-desc">${PJ[j][2]}</span></span></a>`;
       ol.appendChild(li);
     });
   });
