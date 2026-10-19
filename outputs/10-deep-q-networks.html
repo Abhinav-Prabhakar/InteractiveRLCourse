@@ -18,7 +18,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Deep Q-Networks &amp; Value-Based Deep RL</title>
+<title>Chapter 10 · Deep Q-Networks &amp; Value-Based Deep RL</title>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -187,7 +187,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">Deep Q-Networks</a>
+    <a class="brand" href="../index.html">Ch. 10 · Deep Q-Networks</a>
     <nav class="nav">
       <a href="#scaling">Scaling</a>
       <a href="#loss">The loss</a>
@@ -204,7 +204,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Deep Value-Based Methods</p>
+    <p class="eyebrow">Reinforcement Learning · Part III · Chapter 10</p>
     <h1>Deep Q-Networks<br>&amp; Value-Based Deep RL</h1>
     <p class="lede">One network, one replay buffer, and one frozen copy of itself — enough to learn control without ever writing down the transition table.</p>
   </div>
@@ -1132,6 +1132,21 @@ document.addEventListener('DOMContentLoaded', () => {
   initDist();
   initScroll();
 });
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  var file = location.pathname.split('/').pop();
+  try { localStorage.setItem('rl-last', file); } catch (e) {}
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
 </script>
 </body>
 </html>

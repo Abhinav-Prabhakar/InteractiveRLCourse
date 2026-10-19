@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Multi-Agent Reinforcement Learning</title>
+<title>Chapter 17 · Multi-Agent Reinforcement Learning</title>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -174,7 +174,7 @@ table.matrix.payoff td.ne .pv{color:#fff}
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">Multi-Agent RL</a>
+    <a class="brand" href="../index.html">Ch. 17 · Multi-Agent RL</a>
     <nav class="nav">
       <a href="#games">Markov games</a>
       <a href="#ctde">CTDE</a>
@@ -190,7 +190,7 @@ table.matrix.payoff td.ne .pv{color:#fff}
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Many Learners</p>
+    <p class="eyebrow">Reinforcement Learning · Part IV · Chapter 17</p>
     <h1>Multi-Agent<br>Reinforcement Learning</h1>
     <p class="lede">One agent is a decision problem. Several agents learning at once is a moving target — every policy is part of everybody else's environment.</p>
   </div>
@@ -1002,6 +1002,21 @@ document.addEventListener('DOMContentLoaded', () => {
   initNS();
   initScroll();
 });
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  var file = location.pathname.split('/').pop();
+  try { localStorage.setItem('rl-last', file); } catch (e) {}
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
 </script>
 </body>
 </html>

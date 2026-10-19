@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trust-Region and Proximal Policy Optimization</title>
+<title>Chapter 12 · Trust-Region &amp; Proximal Policy Optimization</title>
 
 <!-- Assumptions: the brief requests a quiz, which prompt.md forbids, so it is skipped and the prose is deepened instead.
      The brief names one visualizer (the PPO Clip Visualizer); two more are added (the surrogate objective, the KL trust
@@ -177,7 +177,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <div class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="../index.html">TRPO &amp; PPO</a>
+    <a class="brand" href="../index.html">Ch. 12 · TRPO &amp; PPO</a>
     <nav class="nav">
       <a href="#step">Step size</a>
       <a href="#surrogate">Surrogate</a>
@@ -192,7 +192,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero">
   <div class="wrap">
-    <p class="eyebrow">Reinforcement Learning · Policy Optimization</p>
+    <p class="eyebrow">Reinforcement Learning · Part III · Chapter 12</p>
     <h1>Trust-Region and<br>Proximal Policy Optimization</h1>
     <p class="lede">A gradient tells you which way to step, never how far — TRPO and PPO are two ways of drawing that line.</p>
   </div>
@@ -229,7 +229,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       </div>
       <p>Read it back: the surrogate credits an action in proportion to how much the update raises its probability, weighted by whether that action beat the average.</p>
       <div class="note">
-        <b>The surrogate is exact only at home.</b> At $\theta=\theta_{\text{old}}$ we have $r_t=1$, and the surrogate matches $J$ in both value and gradient — so a small step is safe. Away from home the ratio stops tracking the objective; it is a first-order stand-in, trustworthy only while $r_t$ stays near $1$.
+        <b>The surrogate is exact only at home.</b> At $\theta=\theta_{\text{old}}$ we have $r_t=1$, and the surrogate matches the improvement $J(\theta)-J(\theta_{\text{old}})$ in both value (zero) and gradient — so a small step is safe. Away from home it stops tracking the objective: it still averages over the <em>old</em> policy's states. It is a first-order stand-in, trustworthy only while $r_t$ stays near $1$.
       </div>
     </div>
 
@@ -274,12 +274,12 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
         $$\max_\theta\;\mathbb{E}_{t}\!\left[\frac{\pi_\theta(A_t\mid S_t)}{\pi_{\theta_{\text{old}}}(A_t\mid S_t)}\,\hat{A}_t\right]\quad\text{s.t.}\quad \mathbb{E}_{t}\!\left[D_{\mathrm{KL}}\!\left(\pi_{\theta_{\text{old}}}(\cdot\mid S_t)\,\big\|\,\pi_\theta(\cdot\mid S_t)\right)\right]\le\delta .$$
       </div>
       <p>The KL divergence measures how far the whole action distribution slid, averaged over the states in the batch. It is not a distance on parameters — two very different $\theta$ can induce the same policy, and a tiny parameter change can flip a near-deterministic action — which is exactly why the constraint lives on the induced distributions instead.</p>
-      <p>The constraint is exactly where the trust-region machinery is spent: bounding the KL turns the surrogate into a lower bound on the true improvement, so every accepted step is a guaranteed non-decrease in $J$. The optimizer first picks the steepest ascent direction under the Fisher information metric — the <b>natural gradient</b> $F^{-1}g$ — then scales it until it just touches the boundary of the trust region:</p>
+      <p>The theory behind the constraint: the surrogate minus a penalty $C\max_s D_{\mathrm{KL}}$ is a lower bound on the true improvement, so maximizing that bound can never decrease $J$. TRPO swaps the penalty for the average-KL constraint above — the spirit of the guarantee, not its letter. The optimizer first picks the steepest ascent direction under the Fisher information metric — the <b>natural gradient</b> $F^{-1}g$ — then scales it until it just touches the boundary of the trust region:</p>
       <div class="eqbox">
         $$F=\mathbb{E}_{t}\!\left[\nabla_\theta\log\pi_\theta(A_t\mid S_t)\,\nabla_\theta\log\pi_\theta(A_t\mid S_t)^{\!\top}\right],\qquad
           \theta\leftarrow\theta+\sqrt{\frac{2\delta}{g^{\top}F^{-1}g}}\,F^{-1}g .$$
       </div>
-      <p>In practice $F^{-1}g$ is never formed: it is applied by conjugate gradient using Fisher-vector products, then a backtracking line search accepts the first candidate whose measured KL sits under $\delta$.</p>
+      <p>In practice $F^{-1}g$ is never formed: it is applied by conjugate gradient using Fisher-vector products, then a backtracking line search accepts the first candidate whose measured KL sits under $\delta$ and whose surrogate actually improves.</p>
       <div class="note">
         <b>The constraint is the whole idea.</b> Bound the KL and the surrogate becomes a promise rather than a guess — but the price is a second-order solver, dozens of matrix-vector products per update, and a line search that must be tuned. That cost is precisely what PPO removes.
       </div>
@@ -332,7 +332,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       </div>
       <p>Differentiate it. Since $\nabla_\theta r_t=r_t\,\nabla_\theta\log\pi_\theta(A_t\mid S_t)$, the chain rule hands back Chapter 11's gradient with an indicator that switches it off exactly where the ratio has left the region:</p>
       <div class="eqbox">
-        $$\nabla_\theta L^{\text{CLIP}}(\theta)=\mathbb{E}_{t}\!\Big[\,\mathbf{1}\big\{(A_t>0\wedge r_t<1+\epsilon)\;\vee\;(A_t<0\wedge r_t>1-\epsilon)\big\}\;r_t\,\nabla_\theta\log\pi_\theta(A_t\mid S_t)\,\hat{A}_t\Big].$$
+        $$\nabla_\theta L^{\text{CLIP}}(\theta)=\mathbb{E}_{t}\!\Big[\,\mathbf{1}\big\{(\hat A_t>0\wedge r_t<1+\epsilon)\;\vee\;(\hat A_t<0\wedge r_t>1-\epsilon)\big\}\;r_t\,\nabla_\theta\log\pi_\theta(A_t\mid S_t)\,\hat{A}_t\Big].$$
       </div>
       <p>The indicator is exactly where the trust region is spent: when it is zero — the ratio has traveled past the boundary in the direction that would help — the gradient for that sample vanishes, and the update simply walks away from it.</p>
 
@@ -341,7 +341,8 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       <div class="eqbox">
         $$D_{\mathrm{KL}}\!\left(\pi_{\theta_{\text{old}}}\,\big\|\,\pi_\theta\right)=\tfrac{1}{2}\,\mathbb{E}_{\pi_{\theta_{\text{old}}}}\!\left[(r_t-1)^2\right]+\mathcal{O}\!\left((r_t-1)^3\right).$$
       </div>
-      <p>So bounding $|r_t-1|\le\epsilon$ per sample bounds that second-order KL by roughly $\tfrac12\epsilon^2$: clipping replaces the exact KL ball with a box in ratio space, a first-order surrogate for the trust region TRPO enforces exactly. Nothing is solved for; $\epsilon$ is the only trust-region knob, and the whole update is plain SGD on a loss.</p>
+      <p>So keeping $|r_t-1|\le\epsilon$ per sample bounds that second-order KL by roughly $\tfrac12\epsilon^2$: clipping replaces the KL ball with a box in ratio space, a first-order surrogate for the trust region TRPO enforces. It is a soft box — the clip removes the <em>incentive</em> to leave it, not the ability, so ratios can still drift out through shared parameters. Nothing is solved for; $\epsilon$ is the only trust-region knob, and the whole update is plain SGD on a loss.</p>
+      <p>The loop: run the policy for a batch of $N\times T$ steps, compute GAE advantages once, then take $K$ epochs of minibatch SGD on $L^{\text{CLIP}}$ against that frozen $\pi_{\theta_{\text{old}}}$ — and repeat.</p>
     </div>
 
     <div class="panel" style="margin-top:22px">
@@ -388,19 +389,19 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
     <div class="eqbox">
       $$\hat{A}_t\;\leftarrow\;\frac{\hat{A}_t-\mu_A}{\sigma_A+\varepsilon_{\text{num}}}.$$
     </div>
-    <p>This is not cosmetic. $\epsilon$ is a ratio, so the effective trust region scales inversely with the size of the advantages; a task whose rewards are $100\times$ larger would silently shrink it. Standardizing the batch fixes that scale once and for all.</p>
+    <p>This is not cosmetic. $\epsilon$ bounds the ratio, not the step: the gradient scales with $|\hat A_t|$, so at a fixed learning rate a task whose rewards are $100\times$ larger takes $100\times$ larger steps and blows through the clip band in one minibatch. Standardizing the batch fixes that scale once and for all.</p>
 
     <h3>Entropy bonus</h3>
     <p>Add a bounty for staying stochastic, and pair the actor with a value head for the critic:</p>
     <div class="eqbox">
-      $$L(\theta)=L^{\text{CLIP}}(\theta)+c_1\,L^{\text{VF}}(\theta)-c_2\,\mathbb{E}_{t}\!\left[H\!\left(\pi_\theta(\cdot\mid S_t)\right)\right].$$
+      $$L(\theta)=L^{\text{CLIP}}(\theta)-c_1\,L^{\text{VF}}(\theta)+c_2\,\mathbb{E}_{t}\!\left[H\!\left(\pi_\theta(\cdot\mid S_t)\right)\right],\qquad L^{\text{VF}}=\mathbb{E}_t\!\left[\big(V_\theta(S_t)-V_t^{\text{targ}}\big)^2\right].$$
     </div>
-    <p>The entropy term $H$ keeps the policy from collapsing to a near-deterministic action before it has explored, and $L^{\text{VF}}$ fits the value function that GAE leans on.</p>
+    <p>The whole thing is maximized: the value error is subtracted, the entropy added. The entropy term $H$ keeps the policy from collapsing to a near-deterministic action before it has explored, and $L^{\text{VF}}$ fits the value function that GAE leans on.</p>
 
     <h3>Learning-rate annealing</h3>
     <p>Linearly decay the step size toward zero over training. Early updates want to move; late updates want to settle, and annealing buys both without touching the clip range.</p>
     <div class="note">
-      <b>Scale is not a detail.</b> Because $\epsilon$ is defined on the ratio, the surrogate's magnitude is load-bearing: normalize the advantage, anneal the rate, and cap the number of epochs per batch. Run too many epochs and $r_t$ drifts past $1+\epsilon$ on every sample, at which point the clip has quietly disengaged and the trust region is gone.
+      <b>Scale is not a detail.</b> Because $\epsilon$ is defined on the ratio, the surrogate's magnitude is load-bearing: normalize the advantage, anneal the rate, and cap the number of epochs per batch. Run too many epochs and the ratios keep drifting even on clipped samples, pulled along by the samples that still have gradient; the clip zeroes their gradient but cannot hold them in the box, and the trust region is gone.
     </div>
   </div>
 </section>
@@ -429,7 +430,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
       L^{\text{CLIP}}(\theta) &= \mathbb{E}_{t}\!\left[\min\!\left(r_t\,\hat{A}_t,\;\operatorname{clip}(r_t,1-\epsilon,1+\epsilon)\,\hat{A}_t\right)\right]
       \end{aligned}$$
     </div>
-    <p class="small muted">Everything downstream — GAE, RLHF, DPO, GRPO — is a variation on this one move: take the policy-gradient step, then decide how far the policy is allowed to travel.</p>
+    <p class="small muted">Everything downstream — PPO-based RLHF, GRPO, the KL-regularized objective behind DPO — is a variation on this one move: take the policy-gradient step, then decide how far the policy is allowed to travel.</p>
   </div>
 </section>
 
@@ -673,9 +674,11 @@ function initPPO() {
       \\end{aligned}`,
       true);
 
-    gEl.textContent = gradActive
-      ? 'gradient active — the update can still move r_t'
-      : 'gradient zero — the ratio is clipped, this sample is ignored';
+    gEl.textContent = A === 0
+      ? 'gradient zero — the advantage is zero, nothing to learn'
+      : gradActive
+        ? 'gradient active — the update can still move r_t'
+        : 'gradient zero — the ratio is clipped, this sample is ignored';
     gEl.style.color = gradActive ? '#2563eb' : '#dc2626';
   }
 
@@ -719,6 +722,21 @@ document.addEventListener('DOMContentLoaded', () => {
   initPPO();
   initScroll();
 });
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  var file = location.pathname.split('/').pop();
+  try { localStorage.setItem('rl-last', file); } catch (e) {}
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
 </script>
 </body>
 </html>
