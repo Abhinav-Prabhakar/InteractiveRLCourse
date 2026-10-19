@@ -40,25 +40,7 @@ section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
 .eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
 .hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
 .lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
-.cta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:30px}
-.btn{display:inline-block;font-size:13.5px;font-weight:550;padding:9px 16px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;text-decoration:none;transition:all .15s;line-height:1.4}
-.btn:hover{border-color:#111}
-.btn:active{transform:translateY(1px)}
-.btn.primary{background:#111;color:#fff;border-color:#111}
-.btn.primary:hover{background:#000}
-.prereq{font-size:13.5px;color:#9ca3af;margin-left:6px}
-
-/* ---------------- map panel ---------------- */
-.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff;margin-top:46px}
-.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap}
-.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
-svg{display:block;max-width:100%;height:auto}
-#map{width:100%}
-#map .dot{cursor:pointer}
-#map .dot circle{transition:fill .15s,stroke .15s,r .15s}
-#map text{user-select:none;pointer-events:none}
-.maptip{min-height:26px;font-size:14.5px;text-align:center;margin-top:6px;color:#374151}
-.maptip b{color:#111}
+.prereq{font-size:14.5px;color:#9ca3af;margin-top:18px}
 
 /* ---------------- table of contents ---------------- */
 .part-lede{color:#6b7280;margin:6px 0 0}
@@ -79,8 +61,6 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
   h2{font-size:25px}
   .hero{padding:52px 0 0}
   .nav{display:none}
-  .panel{padding:16px;border-radius:13px}
-  .prereq{margin-left:0;width:100%}
 }
 </style>
 </head>
@@ -100,25 +80,11 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 </div>
 
 <header class="hero" id="top">
-  <div class="wide">
-    <div class="wrap" style="padding:0;margin:0">
-      <p class="eyebrow">An interactive course · 22 chapters</p>
-      <h1>Reinforcement Learning,<br>from MDPs to RLHF</h1>
-      <p class="lede">Every equation derived. Every idea something you can drag, step, or break.</p>
-      <div class="cta">
-        <a class="btn primary" id="startBtn" href="outputs/01-what-reinforcement-learning-really-is.html">Start with Chapter 1 →</a>
-        <a class="btn" href="#part1">Browse chapters</a>
-        <span class="prereq">Assumes linear algebra, probability, calculus. No RL.</span>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head">
-        <span class="panel-title">The course at a glance</span>
-      </div>
-      <svg id="map" viewBox="0 0 952 100" role="img" aria-label="Map of the 22 chapters grouped into four parts"></svg>
-      <div class="maptip" id="mapTip">Hover a chapter to see what it covers. Click to open it.</div>
-    </div>
+  <div class="wrap">
+    <p class="eyebrow">An interactive course · 22 chapters</p>
+    <h1>Reinforcement Learning,<br>from MDPs to RLHF</h1>
+    <p class="lede">Every equation derived. Every idea something you can drag, step, or break.</p>
+    <p class="prereq">Assumes linear algebra, probability, and calculus. No RL.</p>
   </div>
 </header>
 
@@ -184,28 +150,12 @@ const CH = [
   ['22-rlhf-and-llm-alignment', 'RLHF & LLM Alignment', 'Reward models from preferences, PPO with a KL leash, DPO, and GRPO.']
 ];
 const PARTS = [[0, 3], [3, 8], [8, 12], [12, 22]];
-const PART_NAMES = ['Foundations', 'Tabular', 'Deep RL', 'Advanced'];
-const NS = 'http://www.w3.org/2000/svg';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-function el(tag, attrs = {}, parent) {
-  const e = document.createElementNS(NS, tag);
-  for (const k in attrs) e.setAttribute(k, attrs[k]);
-  if (parent) parent.appendChild(e);
-  return e;
-}
 const href = i => `outputs/${CH[i][0]}.html`;
 
-function readState() {
-  try {
-    return {
-      last: localStorage.getItem('rl-last')
-    };
-  } catch (e) { return { last: null }; }
-}
-
 /* ---------------- chapter lists ---------------- */
-function initToc(state) {
+function initToc() {
   $$('.toc').forEach(ol => {
     const [a, b] = PARTS[+ol.dataset.part];
     for (let i = a; i < b; i++) {
@@ -216,82 +166,6 @@ function initToc(state) {
       ol.appendChild(li);
     }
   });
-}
-
-/* ---------------- course map ---------------- */
-function initMap(state) {
-  const svg = $('#map'), tip = $('#mapTip');
-  const DEFAULT_TIP = tip.innerHTML;
-
-  // wide: one rail with four segments; narrow: one row per part
-  function layout(narrow) {
-    const pos = [], rails = [];
-    if (!narrow) {
-      const W = 952, gap = 34, x0 = 31, y = 70;
-      const pitch = (W - 2 * x0 - gap * 3) / (CH.length - 1);
-      let x = x0;
-      PARTS.forEach(([a, b]) => {
-        for (let i = a; i < b; i++) { pos[i] = { x, y }; x += pitch; }
-        x += gap;
-        rails.push({ x1: pos[a].x, x2: pos[b - 1].x, y, lx: (pos[a].x + pos[b - 1].x) / 2, ly: 26, anchor: 'middle' });
-      });
-      return { W, H: 100, pos, rails };
-    }
-    const W = 340, pitch = 31, x0 = 17, rowH = 62;
-    PARTS.forEach(([a, b], p) => {
-      const y = 44 + p * rowH;
-      for (let i = a; i < b; i++) pos[i] = { x: x0 + (i - a) * pitch, y };
-      rails.push({ x1: pos[a].x, x2: pos[b - 1].x, y, lx: 6, ly: y - 20, anchor: 'start' });
-    });
-    return { W, H: 44 + 3 * rowH + 20, pos, rails };
-  }
-
-  function draw() {
-    const L = layout(svg.parentElement.clientWidth < 560);
-    const r = 11;
-    svg.innerHTML = '';
-    svg.setAttribute('viewBox', `0 0 ${L.W} ${L.H}`);
-    L.rails.forEach((rl, p) => {
-      el('line', { x1: rl.x1, y1: rl.y, x2: rl.x2, y2: rl.y, stroke: '#e5e5e5', 'stroke-width': 2, 'stroke-linecap': 'round' }, svg);
-      el('text', { x: rl.lx, y: rl.ly, 'text-anchor': rl.anchor, 'font-size': 11, 'font-weight': 650, 'letter-spacing': '.1em', fill: '#9ca3af' }, svg)
-        .textContent = ['I', 'II', 'III', 'IV'][p] + ' · ' + PART_NAMES[p].toUpperCase();
-    });
-    CH.forEach((c, i) => {
-      const isLast = state.last === c[0] + '.html';
-      const { x, y } = L.pos[i];
-      const a = el('a', { href: href(i), class: 'dot', 'aria-label': `Chapter ${i + 1}: ${c[1]}` }, svg);
-      const circ = el('circle', {
-        cx: x, cy: y, r, fill: isLast ? '#111' : '#fff',
-        stroke: '#111', 'stroke-width': 1.5
-      }, a);
-      el('text', {
-        x, y: y + 3.5, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 650,
-        'font-family': 'ui-monospace, monospace', fill: isLast ? '#fff' : '#111'
-      }, a).textContent = i + 1;
-      const show = () => {
-        circ.setAttribute('r', r + 3);
-        tip.innerHTML = `<b>${String(i + 1).padStart(2, '0')} · ${c[1]}</b> <span class="muted">— ${c[2]}</span>`;
-      };
-      const hide = () => { circ.setAttribute('r', r); tip.innerHTML = DEFAULT_TIP; };
-      a.addEventListener('mouseenter', show);
-      a.addEventListener('focus', show);
-      a.addEventListener('mouseleave', hide);
-      a.addEventListener('blur', hide);
-    });
-  }
-
-  draw();
-  let t;
-  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(draw, 120); });
-}
-
-/* ---------------- continue button ---------------- */
-function initStart(state) {
-  const i = CH.findIndex(c => c[0] + '.html' === state.last);
-  if (i < 0) return;
-  const b = $('#startBtn');
-  b.href = href(i);
-  b.textContent = `Continue: Chapter ${i + 1} →`;
 }
 
 function initScroll() {
@@ -306,10 +180,7 @@ function initScroll() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const state = readState();
-  initToc(state);
-  initMap(state);
-  initStart(state);
+  initToc();
   initScroll();
 });
 </script>
