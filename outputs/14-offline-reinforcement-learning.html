@@ -1087,8 +1087,6 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 <!-- reader-script -->
 <script>
 (function () {
-  var file = location.pathname.split('/').pop();
-  try { localStorage.setItem('rl-last', file); } catch (e) {}
   document.addEventListener('keydown', function (e) {
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     var t = e.target;
