@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<!--
+  Project 1 — Tabular RL from Scratch
+  Assumptions (per prompt-projects.md):
+   · The project reuses the Chapter 1 <style> base, topbar/hero/footer chrome, the
+     KaTeX 0.16.9 config, the el()/T() helpers and the boot script verbatim.
+   · The only new components are the standard .cb*/.t-* code blocks, .lab
+     scaffolding, .steps, .deliverable, .metrics/.metric and .tabs/.tab, all built
+     from the existing palette.
+   · Interactives: (1) a gridworld editor that rebuilds the MDP, (2) an algorithm
+     race over the same MDP, and (3) an eligibility-trace viewer with a TD(λ)
+     toggle and a Dyna planning-steps slider. Every plotted number is computed in
+     the page.
+   · Python shown in the .cb blocks is the same algorithm the JS runs.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project 1 · Tabular RL from Scratch</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+svg{display:block;max-width:100%;height:auto}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+
+/* ---------------- grid ---------------- */
+.gridwrap{display:flex;gap:26px;flex-wrap:wrap}
+.gw-left{flex:1 1 330px;min-width:0}
+.gw-right{flex:1 1 300px;min-width:0}
+#edSvg,#vwSvg{border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #ededed;width:100%;max-width:340px;margin:0 auto;touch-action:none}
+#edSvg{cursor:crosshair}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.legend .sw{width:24px;height:8px;border-radius:3px;display:inline-block}
+
+/* ---------------- readouts ---------------- */
+.sliders{display:flex;gap:6px 26px;flex-wrap:wrap}
+.sliders .slider-row{flex:1 1 200px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.readout{font-family:ui-monospace,monospace;font-size:12.5px;color:#6b7280;margin:10px 0 0;line-height:1.7}
+.readout b{color:#111;font-weight:650}
+.plot-cap{font-size:12.5px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  table.cmp{font-size:13.5px}
+  table.cmp th,table.cmp td{padding:9px 6px}
+}
+
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+/* ---------------- code ---------------- */
+.cb{border:1px solid #e8e8e8;border-radius:12px;overflow:hidden;margin:18px 0;background:#fafafa}
+.cb-head{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #f0f0f0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;letter-spacing:.06em;color:#9ca3af}
+.cb-file{font-weight:650;color:#6b7280}
+.cb-lang{color:#9ca3af}
+.cb-copy{margin-left:auto;font:inherit;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:7px;border:1px solid #dcdcdc;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.cb-copy:hover{border-color:#111;color:#111}
+.cb pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.8px;line-height:1.65;color:#111;background:#fafafa}
+.cb code{background:none;padding:0;font-size:inherit;color:inherit}
+.t-c{color:#9ca3af;font-style:italic}
+.t-k{color:#1e3a8a;font-weight:600}
+.t-b{color:#6b7280}
+.t-n{color:#dc2626}
+.t-s{color:#2563eb}
+.t-f{color:#1e3a8a}
+.t-d{color:#6b7280;font-weight:600}
+.t-o{color:#374151}
+
+/* ---------------- lab scaffolding ---------------- */
+.lab{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff;margin:22px 0}
+.lab-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.lab-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.steps{list-style:none;counter-reset:s;margin:18px 0;padding:0}
+.steps li{counter-increment:s;position:relative;padding:2px 0 16px 42px;border-left:1px solid #f0f0f0;margin-left:13px}
+.steps li:last-child{border-left-color:transparent;padding-bottom:0}
+.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:-13px;top:0;width:26px;height:26px;border-radius:8px;background:#eef2ff;color:#1e3a8a;font:600 12px/26px ui-monospace,monospace;text-align:center}
+.steps b{color:#111}
+.deliverable{border-left:2px solid #1e3a8a;background:#eef2ff;padding:12px 16px;border-radius:0 10px 10px 0;margin:22px 0;color:#1e3a8a;font-size:15px}
+.deliverable b{color:#1e3a8a}
+.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}
+.metric{flex:1 1 150px;border:1px solid #e8e8e8;border-radius:12px;padding:12px 14px;background:#fafafa}
+.metric-k{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.metric-v{font-family:ui-monospace,monospace;font-size:22px;font-weight:650;color:#111;margin-top:4px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.tab{font-size:13px;padding:5px 11px;border-radius:8px;border:1px solid #e5e5e5;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.tab:hover{border-color:#111;color:#111}
+.tab.active{background:#111;color:#fff;border-color:#111}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">P01 · Tabular RL</a>
+    <nav class="nav">
+      <a href="#editor">MDP</a>
+      <a href="#exact">Exact</a>
+      <a href="#control">Control</a>
+      <a href="#race">Race</a>
+      <a href="#traces">Traces</a>
+      <a href="#viewer">Viewer</a>
+      <a href="#measure">Measure</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Projects · Project 1</p>
+    <h1>Tabular RL<br>from Scratch</h1>
+    <p class="lede">Build value iteration, policy iteration, Monte Carlo control, Sarsa and Q-learning on one gridworld — then race them, add eligibility traces, and watch planning turn cold computation into scarce experience.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="editor">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>Build the MDP</h2>
+      <p>Everything below runs on one gridworld you define here. Paint <b>walls</b>, drop <b>terminals</b> with rewards, set the per-step cost and the <b>slip</b> probability. The page rebuilds the Markov decision process and re-solves it on every edit.</p>
+      <p>The world is the usual tuple $(\mathcal{S},\mathcal{A},P,R,\gamma)$. There are four actions — up, right, down, left — and with probability $\text{slip}$ the move is diverted to a neighbouring action:</p>
+      <div class="eqbox">
+        $$P(s'\mid s,a)=\sum_{b}\pi_{\text{slip}}(b\mid a)\,\mathbf{1}\{\text{move}(s,b)=s'\},\qquad R(s,s')=\text{step}+r(s')$$
+      </div>
+      <p>The reward is paid on entry, so a terminal pays once, and a move into a wall keeps you in place and pays only the step cost. A <b>policy</b> is an action per live cell; the optimal one is what every algorithm on this page is hunting.</p>
+
+      <div class="deliverable">
+        <b>Deliverable:</b> convergence plots for every solver on your grid, a steps-and-episodes-to-converge table, and an interactive trace viewer that replays the learned policy with traces and Dyna toggled.
+      </div>
+
+      <h3>Build order</h3>
+      <ol class="steps">
+        <li><b>Environment.</b> Store <code>rew</code>, <code>term</code>, <code>wall</code> per cell and the transition rule. This is the only ground truth; the model never moves.</li>
+        <li><b>Exact solvers.</b> Value iteration and policy iteration read $P$ and $R$ directly and produce $V_*,Q_*,\pi_*$.</li>
+        <li><b>Sample-based control.</b> Monte Carlo, Sarsa and Q-learning see only trajectories. Compare their sample efficiency against the exact curve.</li>
+        <li><b>Traces and planning.</b> Add Sarsa($\lambda$) and Dyna-Q, then replay the trajectory and watch credit spread backward.</li>
+      </ol>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab 1 · Gridworld editor</span>
+        <div class="btnrow" id="edPresets">
+          <button data-preset="classic" class="active">Classic</button>
+          <button data-preset="cliff">Cliff</button>
+          <button data-preset="maze">Maze</button>
+          <button data-preset="double">Two-path</button>
+        </div>
+      </div>
+      <div class="gridwrap">
+        <div class="gw-left">
+          <svg id="edSvg" viewBox="0 0 288 288" role="img" aria-label="Editable gridworld: paint walls, terminals, rewards and the start cell"><text x="144" y="150" text-anchor="middle" font-size="13" fill="#9ca3af">Enable JavaScript to edit the grid.</text></svg>
+          <div class="legend"><span>$-1$</span><span class="grad"></span><span>$+1$</span></div>
+          <p class="small muted" style="text-align:center;margin:8px 0 0">Arrows are the optimal policy; the dashed ring marks the selected cell.</p>
+        </div>
+        <div class="gw-right">
+          <div class="tabs" id="edTools">
+            <button class="tab active" data-tool="reward">Reward</button>
+            <button class="tab" data-tool="wall">Wall</button>
+            <button class="tab" data-tool="goal">Goal</button>
+            <button class="tab" data-tool="pit">Pit</button>
+            <button class="tab" data-tool="start">Start</button>
+            <button class="tab" data-tool="erase">Erase</button>
+          </div>
+          <div class="slider-row">
+            <span class="small muted" style="min-width:54px">step</span>
+            <input type="range" id="edStep" min="-1" max="0.2" step="0.01" value="-0.04" aria-label="reward per step">
+            <span class="val" id="edStepVal"></span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted" style="min-width:54px">$\gamma$</span>
+            <input type="range" id="edGamma" min="0.5" max="0.99" step="0.01" value="0.95" aria-label="discount factor gamma">
+            <span class="val" id="edGammaVal"></span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted" style="min-width:54px">slip</span>
+            <input type="range" id="edSlip" min="0" max="0.4" step="0.02" value="0.1" aria-label="slip probability">
+            <span class="val" id="edSlipVal"></span>
+          </div>
+          <div class="tabs" id="edShow" style="margin-top:12px">
+            <button class="tab active" data-show="r">$r$</button>
+            <button class="tab" data-show="v">$V_*$</button>
+            <button class="tab" data-show="p">$\pi_*$</button>
+          </div>
+          <div class="metrics" id="edMetrics"></div>
+          <h4 style="margin-bottom:4px">Bellman optimality check</h4>
+          <div class="eqbox" id="edEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>The environment is the whole substrate. Write it once, exactly, and every solver afterwards is a few lines.</p>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">env.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">import numpy as np
+
+class GridWorld:
+    """A small tabular MDP: walls, terminal cells, a per-step cost, and slip."""
+    def __init__(self, rows, cols, start, rew, term, wall,
+                 step=-0.04, gamma=0.95, slip=0.1):
+        self.R, self.C = rows, cols
+        self.start = np.ravel_multi_index(start, (rows, cols))
+        self.rew  = np.asarray(rew,  dtype=float).ravel()
+        self.term = np.asarray(term, dtype=bool).ravel()
+        self.wall = np.asarray(wall, dtype=bool).ravel()
+        self.step, self.gamma, self.slip = step, gamma, slip
+        self.n, self.A = rows * cols, 4                # up, right, down, left
+        self.dirs = [(-1, 0), (0, 1), (1, 0), (0, -1)]
+
+    def move(self, s, a):
+        r, c = divmod(s, self.C)
+        dr, dc = self.dirs[a]
+        r2, c2 = r + dr, c + dc
+        if not (0 &lt;= r2 &lt; self.R and 0 &lt;= c2 &lt; self.C):
+            return s                                   # bounce off the border
+        s2 = r2 * self.C + c2
+        return s if self.wall[s2] else s2
+
+    def transitions(self, s, a):
+        """P(. | s, a): intended move, plus two slips at half weight each."""
+        out = {}
+        for b, p in ((a, 1 - self.slip),
+                     ((a + 1) % 4, self.slip / 2),
+                     ((a + 3) % 4, self.slip / 2)):
+            if p &gt; 0:
+                s2 = self.move(s, b)
+                out[s2] = out.get(s2, 0.0) + p
+        return out
+
+    def reward(self, s, s2):
+        return self.step + (self.rew[s2] if s2 != s else 0.0)
+
+    def sample(self, s, a, rng):
+        u, acc = rng.random(), 0.0
+        for s2, p in self.transitions(s, a).items():
+            acc += p
+            if u &lt;= acc + 1e-12:
+                return s2, self.reward(s, s2)
+        return s, self.reward(s, s)</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="exact">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>Exact solution from the model</h2>
+      <p>With $P$ and $R$ in hand you can skip sampling entirely. <b>Policy evaluation</b> repeatedly applies the Bellman expectation backup until the value function stops moving; <b>policy improvement</b> then acts greedily on it. Alternating the two is <b>policy iteration</b>.</p>
+      <div class="eqbox">
+        $$v_{k+1}(s)=\sum_a \pi(a\mid s)\sum_{s'}p(s'\mid s,a)\big[r+\gamma v_k(s')\big],\qquad \pi'(s)=\arg\max_a q_\pi(s,a)$$
+      </div>
+      <p><b>Value iteration</b> folds the two into one sweep of the optimality operator — evaluate and improve in the same pass. It converges because that operator is a $\gamma$-contraction in the sup norm: the residual $\lVert v_{k+1}-v_k\rVert_\infty$ shrinks by at least a factor $\gamma$ every sweep.</p>
+      <div class="eqbox">
+        $$v_{k+1}(s)=\max_a\sum_{s'}p(s'\mid s,a)\big[r+\gamma v_k(s')\big]$$
+      </div>
+      <p>The residual is not only a stopping rule. It is the quantity this project plots and compares.</p>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">value_iteration.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">def value_iteration(env, tol=1e-3):
+    """Bellman optimality backups until the sup-norm residual stops changing."""
+    V = np.zeros(env.n)
+    deltas, sweeps = [], 0
+    while True:
+        V_old = V.copy()
+        for s in range(env.n):
+            if env.term[s] or env.wall[s]:
+                continue
+            V[s] = max(
+                sum(p * (env.reward(s, s2) + env.gamma * V_old[s2])
+                    for s2, p in env.transitions(s, a).items())
+                for a in range(env.A))
+        delta = np.max(np.abs(V - V_old))              # ||v_{k+1} - v_k||_inf
+        deltas.append(delta)
+        sweeps += 1
+        if delta &lt; tol:
+            break
+    Q = [[sum(p * (env.reward(s, s2) + env.gamma * V[s2])
+              for s2, p in env.transitions(s, a).items())
+          for a in range(env.A)] for s in range(env.n)]
+    return V, np.array(Q), deltas, sweeps</code></pre>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">policy_iteration.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">def policy_evaluation(env, pi, tol=1e-3):
+    V = np.zeros(env.n)
+    while True:
+        V_old = V.copy()
+        for s in range(env.n):
+            if env.term[s] or env.wall[s]:
+                continue
+            V[s] = sum(p * (env.reward(s, s2) + env.gamma * V_old[s2])
+                       for s2, p in env.transitions(s, pi[s]).items())
+        if np.max(np.abs(V - V_old)) &lt; tol:
+            return V
+
+def policy_iteration(env, tol=1e-3):
+    """Evaluate the current policy, then act greedily; stop when it is stable."""
+    pi = np.zeros(env.n, dtype=int)
+    V_prev, dv, iters = np.zeros(env.n), [], 0
+    while True:
+        V = policy_evaluation(env, pi, tol)
+        dv.append(np.max(np.abs(V - V_prev)))       # movement between policies
+        V_prev = V
+        stable = True
+        for s in range(env.n):
+            if env.term[s] or env.wall[s]:
+                continue
+            q = [sum(p * (env.reward(s, s2) + env.gamma * V[s2])
+                     for s2, p in env.transitions(s, a).items())
+                 for a in range(env.A)]
+            best = int(np.argmax(q))
+            if q[best] &gt; q[pi[s]] + 1e-12:
+                pi[s] = best
+                stable = False
+        iters += 1
+        if stable:
+            break
+    return pi, V, dv, iters</code></pre>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>Both solvers sweep the same tables and cost roughly $O(|\mathcal{S}|^2|\mathcal{A}|)$ per pass with a dense model. On a grid that is nothing; the race below is decided by the <em>number</em> of passes, not the cost of one.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="control">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Control from samples</h2>
+      <p>Now take the model away. The agent sees one transition at a time and must estimate action values from returns. <b>Monte Carlo control</b> waits for the episode to end, computes the return of every visited pair, and averages. <b>Sarsa</b> and <b>Q-learning</b> replace the whole return with a one-step bootstrap.</p>
+      <div class="eqbox">
+        $$Q(S_t,A_t)\leftarrow Q(S_t,A_t)+\alpha\big[R_{t+1}+\gamma\,\square-Q(S_t,A_t)\big]$$
+      </div>
+      <p>The blank is the entire difference between the two TD methods: Sarsa fills in $Q(S_{t+1},A_{t+1})$ for the action the behaviour policy actually takes, so it evaluates the $\varepsilon$-greedy policy it runs. Q-learning fills in $\max_a Q(S_{t+1},a)$, so it evaluates the greedy policy no matter how the data was generated.</p>
+      <p>Monte Carlo has no blank. Its target is the sampled return $G_t$, which is unbiased but high variance and unavailable until the episode ends:</p>
+      <div class="eqbox">
+        $$Q(S_t,A_t)\leftarrow Q(S_t,A_t)+\alpha\big[G_t-Q(S_t,A_t)\big]$$
+      </div>
+      <div class="note">
+        <b>Every one of these is the same running-average update.</b> Change the target and you change the estimator; change the behaviour policy and you change what data the estimator sees. That is the whole family.
+      </div>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">mc_control.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">def eps_greedy(q, eps, rng):
+    if rng.random() &lt; eps:
+        return int(rng.integers(len(q)))
+    return int(np.argmax(q))
+
+def mc_control(env, episodes=2000, eps=0.1, gamma=0.95, rng=None):
+    """First-visit Monte Carlo control with an epsilon-greedy policy."""
+    Q = np.zeros((env.n, env.A))
+    N = np.zeros((env.n, env.A))
+    for _ in range(episodes):
+        traj, s = [], env.start
+        for _ in range(200):
+            a = eps_greedy(Q[s], eps, rng)
+            s2, r = env.sample(s, a, rng)
+            traj.append((s, a, r))
+            s = s2
+            if env.term[s]:
+                break
+        G, seen = 0.0, set()
+        for s, a, r in reversed(traj):
+            G = r + gamma * G
+            if (s, a) in seen:
+                continue
+            seen.add((s, a))
+            N[s, a] += 1
+            Q[s, a] += (G - Q[s, a]) / N[s, a]       # running mean of returns
+    return Q</code></pre>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">td_control.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">def sarsa(env, episodes=2000, alpha=0.1, eps=0.1, rng=None):
+    """On-policy TD control: the target is the action the policy really takes."""
+    Q = np.zeros((env.n, env.A))
+    for _ in range(episodes):
+        s = env.start
+        a = eps_greedy(Q[s], eps, rng)
+        for _ in range(200):
+            s2, r = env.sample(s, a, rng)
+            if env.term[s2]:
+                target = r
+            else:
+                a2 = eps_greedy(Q[s2], eps, rng)
+                target = r + env.gamma * Q[s2, a2]
+            Q[s, a] += alpha * (target - Q[s, a])
+            if env.term[s2]:
+                break
+            s, a = s2, a2
+    return Q
+
+def q_learning(env, episodes=2000, alpha=0.1, eps=0.1, rng=None):
+    """Off-policy TD control: the target is the greedy action, whatever we did."""
+    Q = np.zeros((env.n, env.A))
+    for _ in range(episodes):
+        s = env.start
+        for _ in range(200):
+            a = eps_greedy(Q[s], eps, rng)
+            s2, r = env.sample(s, a, rng)
+            target = r + env.gamma * np.max(Q[s2])
+            Q[s, a] += alpha * (target - Q[s, a])
+            s = s2
+            if env.term[s]:
+                break
+    return Q</code></pre>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>All three share the $\varepsilon$-greedy behaviour policy, so the comparison is clean: same state space, same start, same exploration floor. Only the target differs.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="race">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>The algorithm race</h2>
+      <p>Run all five on the grid you just built. The exact solvers are charged in sweeps of the Bellman operator; the sample-based learners are charged in episodes of real interaction. Both axes are logarithmic, so a straight line means geometric progress.</p>
+      <p>Each run measures its own wall-clock time. On a small grid the exact methods finish in microseconds; the learners need hundreds of episodes for the same accuracy. That gap is the price of not having a model — and the reason planning, later in this project, is worth the effort.</p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab 2 · Algorithm race</span>
+        <div class="btnrow">
+          <button id="rcRun" class="primary">Run ▶</button>
+          <button id="rcStep">Step</button>
+          <button id="rcReset">Reset</button>
+        </div>
+      </div>
+      <div class="sliders">
+        <div class="slider-row">
+          <span class="small muted">tol</span>
+          <input type="range" id="rcTol" min="1" max="50" step="1" value="10" aria-label="convergence tolerance">
+          <span class="val" id="rcTolVal">0.010</span>
+        </div>
+        <div class="slider-row">
+          <span class="small muted">$\alpha$</span>
+          <input type="range" id="rcAlpha" min="0.02" max="0.4" step="0.02" value="0.15" aria-label="learning rate alpha">
+          <span class="val" id="rcAlphaVal">0.15</span>
+        </div>
+        <div class="slider-row">
+          <span class="small muted">$\varepsilon$</span>
+          <input type="range" id="rcEps" min="0.01" max="0.3" step="0.01" value="0.1" aria-label="exploration epsilon">
+          <span class="val" id="rcEpsVal">0.10</span>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:16px">
+        <div class="col" style="flex:1 1 360px">
+          <p class="plot-cap">Exact DP · residual vs sweep</p>
+          <svg id="rcDp" viewBox="0 0 430 230" role="img" aria-label="Log residual against sweeps for value iteration and policy iteration"><text x="215" y="118" text-anchor="middle" font-size="12" fill="#9ca3af">Press Run to compute the race.</text></svg>
+          <div class="legend">
+            <span class="sw" style="background:#2563eb"></span><span>value iteration</span>
+            <span class="sw" style="background:#dc2626;margin-left:12px"></span><span>policy iteration</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 360px">
+          <p class="plot-cap">Sample-based · mean value gap vs episode</p>
+          <svg id="rcTd" viewBox="0 0 430 230" role="img" aria-label="Mean value gap between the greedy policy and the optimal policy, against episodes, for Q-learning, Sarsa and Monte Carlo control"><text x="215" y="118" text-anchor="middle" font-size="12" fill="#9ca3af">Press Run to compute the race.</text></svg>
+          <div class="legend">
+            <span class="sw" style="background:#2563eb"></span><span>Q-learning</span>
+            <span class="sw" style="background:#dc2626;margin-left:12px"></span><span>Sarsa</span>
+            <span class="sw" style="background:#c2c9d4;margin-left:12px"></span><span>MC control</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="metrics" id="rcMetrics"></div>
+      <p class="readout" id="rcTimes"></p>
+      <div class="eqbox" id="rcEq"></div>
+      <p class="small muted" style="margin:0">DP stops when the Bellman residual drops below the tolerance (dashed line). The sampled curves show the mean value gap between the greedy policy and $\pi_*$, evaluated exactly on the model every 20 episodes; a run has converged when that gap holds below $0.06$. Every episode starts from a random state and action, so all three learners see the whole grid.</p>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>The samples axis hides a multiplier: one episode contains many steps, and each step is one real transition. If you multiply episodes by mean episode length you get transitions, the currency that matters when interaction is expensive.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="traces">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Eligibility traces and Dyna</h2>
+      <p>One-step TD gives credit to the pair just used. That is slow when a reward arrives many steps after the decision that earned it. An <b>eligibility trace</b> fixes the lag by remembering how recently each pair was visited, then spreading a single TD error backward over that memory.</p>
+      <div class="eqbox">
+        $$\begin{aligned}
+          \delta_t &= R_{t+1}+\gamma Q(S_{t+1},A_{t+1})-Q(S_t,A_t)\\[2pt]
+          E_t(s,a) &= \gamma\lambda\,E_{t-1}(s,a)+\mathbf{1}(s=S_t,\,a=A_t)\\[2pt]
+          Q(s,a) &\leftarrow Q(s,a)+\alpha\,\delta_t\,E_t(s,a)\quad\text{for all }(s,a)
+        \end{aligned}$$
+      </div>
+      <p>The trace fades by $\gamma\lambda$ every step and takes a unit bump at the pair just visited. With $\lambda=0$ the algorithm is exactly Sarsa; with $\lambda\to1$ credit reaches arbitrarily far back. One scalar error now updates every pair, weighted by eligibility.</p>
+
+      <h3>Planning with a learned model</h3>
+      <p><b>Dyna-Q</b> turns the same Q-learning update into a planning step. Every real transition is stored in a sample model $\hat M$, and after each real update the agent draws $n$ stored pairs and backs them up as if they had just happened.</p>
+      <div class="eqbox">
+        $$\underbrace{\text{act}}_{\text{real}}\;\longrightarrow\;\underbrace{\text{learn}}_{\text{real}}\;\longrightarrow\;\underbrace{\text{plan}\times n}_{\text{model}}$$
+      </div>
+      <p>The update does not care where the transition came from. That is the entire trick: computation is cheap, interaction is not, so convert one into the other.</p>
+      <div class="note">
+        <b>Traces and planning attack the same problem from opposite ends.</b> Traces squeeze more learning out of one trajectory; planning squeezes more trajectories out of one transition. Both reduce the number of real steps needed to reach a good policy.
+      </div>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">sarsa_lambda.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">def sarsa_lambda(env, episodes=500, alpha=0.1, lam=0.9, eps=0.1, rng=None):
+    """Sarsa(lambda): one TD error is spread back over the whole trace."""
+    Q = np.zeros((env.n, env.A))
+    for _ in range(episodes):
+        E = np.zeros((env.n, env.A))
+        s = env.start
+        a = eps_greedy(Q[s], eps, rng)
+        for _ in range(200):
+            s2, r = env.sample(s, a, rng)
+            a2 = eps_greedy(Q[s2], eps, rng)
+            target = r if env.term[s2] else r + env.gamma * Q[s2, a2]
+            delta = target - Q[s, a]                 # the one scalar error
+            E *= env.gamma * lam                     # every trace fades
+            E[s, a] += 1.0                           # bump the pair just used
+            Q += alpha * delta * E                   # broadcast it backward
+            if env.term[s2]:
+                break
+            s, a = s2, a2
+    return Q</code></pre>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">dyna_q.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">def dyna_q(env, episodes=200, n=10, alpha=0.1, eps=0.1, rng=None):
+    """Dyna-Q: every real step stores a transition, then n imagined updates."""
+    Q = np.zeros((env.n, env.A))
+    model = {}                                       # (s, a) -> (s', r)
+    for _ in range(episodes):
+        s = env.start
+        for _ in range(200):
+            a = eps_greedy(Q[s], eps, rng)
+            s2, r = env.sample(s, a, rng)
+            Q[s, a] += alpha * (r + env.gamma * np.max(Q[s2]) - Q[s, a])
+            model[(s, a)] = (s2, r)                  # remember what happened
+            for _ in range(n):                       # plan in the model
+                (ps, pa), (ps2, pr) = rng.choice(list(model.items()))
+                Q[ps, pa] += alpha * (pr + env.gamma * np.max(Q[ps2]) - Q[ps, pa])
+            s = s2
+            if env.term[s]:
+                break
+    return Q</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="viewer">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>The trace viewer</h2>
+      <p>Now watch it happen on the grid. The agent starts at <code>S</code> and acts $\varepsilon$-greedily on its own table. With traces off it runs Q-learning; with traces on it runs Sarsa($\lambda$) and every visited pair glows with its eligibility. The planning slider runs Dyna updates after each real step.</p>
+      <p>Step through a few episodes, then switch traces on. The glow follows the trajectory backward from the reward, and the greedy policy sharpens faster than it does without traces. Push $n$ up and the policy improves again on the same real experience — nothing about the environment changed.</p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab 3 · Trace viewer and replay</span>
+        <div class="btnrow">
+          <button id="vwRun" class="primary">Play ▶</button>
+          <button id="vwStep">Step</button>
+          <button id="vwReset">Reset</button>
+          <button id="vwTraces">Traces: off</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <svg id="vwSvg" viewBox="0 0 288 288" role="img" aria-label="Gridworld replay with eligibility-trace glow over visited cells"><text x="144" y="150" text-anchor="middle" font-size="12" fill="#9ca3af">Enable JavaScript to replay a policy.</text></svg>
+          <div class="legend">
+            <span>trace 0</span>
+            <span class="grad" style="background:linear-gradient(90deg,#fff,rgba(30,58,138,.05),rgba(30,58,138,.85))"></span>
+            <span>trace max</span>
+          </div>
+          <p class="small muted" style="text-align:center;margin:10px 0 0">The light path is the greedy route from <code>S</code>; the dark token is the agent.</p>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="sliders">
+            <div class="slider-row">
+              <span class="small muted">$\lambda$</span>
+              <input type="range" id="vwLam" min="0" max="0.99" step="0.01" value="0.8" aria-label="trace decay lambda">
+              <span class="val" id="vwLamVal">0.80</span>
+            </div>
+            <div class="slider-row">
+              <span class="small muted">$\alpha$</span>
+              <input type="range" id="vwAlpha" min="0.02" max="0.5" step="0.01" value="0.15" aria-label="learning rate alpha">
+              <span class="val" id="vwAlphaVal">0.15</span>
+            </div>
+            <div class="slider-row">
+              <span class="small muted">$\varepsilon$</span>
+              <input type="range" id="vwEps" min="0.01" max="0.4" step="0.01" value="0.1" aria-label="exploration epsilon">
+              <span class="val" id="vwEpsVal">0.10</span>
+            </div>
+            <div class="slider-row">
+              <span class="small muted">Dyna $n$</span>
+              <input type="range" id="vwDyna" min="0" max="20" step="1" value="0" aria-label="Dyna planning steps per real step">
+              <span class="val" id="vwDynaVal">0</span>
+            </div>
+          </div>
+          <p class="readout" id="vwInfo"></p>
+          <h4 style="margin-bottom:4px">Backward-view update</h4>
+          <div class="eqbox" id="vwEq" style="margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="measure">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">07</span>What to compare</h2>
+      <p>The deliverables are plots, not opinions. On your own grid, measure four things and report them together:</p>
+      <table class="cmp">
+        <tr><th>Question</th><th>What to plot</th></tr>
+        <tr><td>Exact convergence</td><td>$\lVert v_{k+1}-v_k\rVert_\infty$ against sweeps for value iteration and policy iteration.</td></tr>
+        <tr><td>Sample efficiency</td><td>$\lVert Q_k-Q_*\rVert_\infty$ against episodes for MC control, Sarsa and Q-learning at fixed $\alpha,\varepsilon$.</td></tr>
+        <tr><td>Wall-clock cost</td><td>Milliseconds per solver for the same tolerance, on the same machine and grid.</td></tr>
+        <tr><td>Traces and planning</td><td>Episodes to a target $\lVert Q-Q_*\rVert_\infty$ for $\lambda\in\{0,0.5,0.9\}$ and Dyna $n\in\{0,5,20\}$.</td></tr>
+      </table>
+      <p>Then perturb the MDP: raise the slip, remove the step cost, open a second corridor. The ranking of the sample-based learners is not stable across those edits, and the exact solvers barely notice.</p>
+      <div class="note">
+        <b>The model is the dividing line.</b> Dynamic programming buys accuracy with computation and needs $P,R$ up front; TD control buys it with experience and needs neither. Dyna is the bridge — it learns the model it was denied and then spends computation on it.
+      </div>
+      <p>That bridge is where the rest of the course goes: replace the table with a function approximator and the same Bellman backups become DQN, policy gradients, and eventually the alignment loop in Part IV.</p>
+    </div>
+  </div>
+</section>
+
+<!-- project-pager -->
+<nav class="pager" aria-label="Project navigation"><a class="pg-prev" aria-disabled="true"><span class="pg-k">Previous</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="02-deep-rl-continuous-control.html"><span class="pg-k">Next</span><span class="pg-t">Deep RL on a Continuous-Control Task</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained tabular lab. Every number here was computed in the page.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function T(node, tex, display = false) {
+  if (!window.katex || !node) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+function colorFor(v) {
+  const t = Math.max(-1, Math.min(1, Math.tanh(v)));
+  const a = Math.min(0.88, Math.abs(t) * 0.92);
+  return t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
+}
+function textColorFor(v) {
+  return Math.abs(Math.tanh(v)) > 0.5 ? '#fff' : '#111';
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const fmt = (v, d = 2) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+const fmtS = (v, d = 2) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+function pickSeg(group, val) {
+  $$(`#${group} button`).forEach(b => b.classList.toggle('active', Object.values(b.dataset)[0] === val));
+}
+
+/* =====================================================================
+   Grid MDP core
+   W = { R, C, rew[], term[], wall[], start, step, gamma, slip }
+   Reward for s -> s' is step + rew[s'] (paid only on entering a new cell)
+   ===================================================================== */
+const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
+const ARW = ['↑', '→', '↓', '←'];
+const ARW_TEX = ['\\uparrow', '\\rightarrow', '\\downarrow', '\\leftarrow'];
+
+function gridMove(W, s, a) {
+  const r = Math.floor(s / W.C) + DIRS[a][0], c = (s % W.C) + DIRS[a][1];
+  if (r < 0 || r >= W.R || c < 0 || c >= W.C) return s;
+  const s2 = r * W.C + c;
+  return W.wall[s2] ? s : s2;
+}
+function gridTrans(W, s, a) {
+  const out = new Map();
+  [[a, 1 - W.slip], [(a + 1) % 4, W.slip / 2], [(a + 3) % 4, W.slip / 2]].forEach(([b, p]) => {
+    if (p <= 0) return;
+    const s2 = gridMove(W, s, b);
+    out.set(s2, (out.get(s2) || 0) + p);
+  });
+  return out;
+}
+const gridReward = (W, s, s2) => W.step + (s2 !== s ? W.rew[s2] : 0);
+
+function gridSolve(W) {
+  const n = W.R * W.C;
+  const live = s => !W.term[s] && !W.wall[s];
+  const trans = [];
+  for (let s = 0; s < n; s++) trans.push(live(s) ? [0, 1, 2, 3].map(a => [...gridTrans(W, s, a)]) : null);
+  let V = new Float64Array(n);
+  const Q = Array.from({ length: n }, () => [0, 0, 0, 0]);
+  for (let it = 0; it < 6000; it++) {
+    let delta = 0;
+    const nv = new Float64Array(n);
+    for (let s = 0; s < n; s++) {
+      if (!trans[s]) continue;
+      let best = -Infinity;
+      for (let a = 0; a < 4; a++) {
+        let q = 0;
+        for (const [s2, p] of trans[s][a]) q += p * (gridReward(W, s, s2) + W.gamma * V[s2]);
+        Q[s][a] = q;
+        if (q > best) best = q;
+      }
+      nv[s] = best;
+      delta = Math.max(delta, Math.abs(best - V[s]));
+    }
+    V = nv;
+    if (delta < 1e-11) break;
+  }
+  const first = Q.map((q, s) => (trans[s] ? q.indexOf(Math.max(...q)) : -1));
+  return { V, Q, first };
+}
+function gridSample(W, s, a, rng) {
+  let u = rng(), acc = 0;
+  for (const [s2, p] of gridTrans(W, s, a)) {
+    acc += p;
+    if (u <= acc + 1e-12) return { s2, r: gridReward(W, s, s2) };
+  }
+  return { s2: s, r: gridReward(W, s, s) };
+}
+function cloneWorld(W) {
+  return { R: W.R, C: W.C, rew: W.rew.slice(), term: W.term.slice(), wall: W.wall.slice(), start: W.start, step: W.step, gamma: W.gamma, slip: W.slip };
+}
+function epsGreedy(Q, s, eps, rng) {
+  if (rng() < eps) return Math.floor(rng() * 4);
+  let best = -Infinity, na = 0, ba = 0;
+  for (let a = 0; a < 4; a++) {
+    if (Q[s][a] > best + 1e-12) { best = Q[s][a]; na = 1; ba = a; }
+    else if (Q[s][a] > best - 1e-12) { na++; if (rng() < 1 / na) ba = a; }
+  }
+  return ba;
+}
+function maxDiffQ(Q, star, n) {
+  let d = 0;
+  for (let s = 0; s < n; s++) {
+    if (star.first[s] < 0) continue;
+    for (let a = 0; a < 4; a++) d = Math.max(d, Math.abs(Q[s][a] - star.Q[s][a]));
+  }
+  return d;
+}
+function argmaxQv(Q, s) {
+  let best = 0, bq = -Infinity;
+  for (let a = 0; a < 4; a++) if (Q[s][a] > bq) { bq = Q[s][a]; best = a; }
+  return best;
+}
+function greedyMatch(Q, star, n) {
+  for (let s = 0; s < n; s++) {
+    if (star.first[s] < 0) continue;
+    if (argmaxQv(Q, s) !== star.first[s]) return false;
+  }
+  return true;
+}
+function stableEpisode(match) {
+  if (!match.length || !match[match.length - 1]) return -1;
+  for (let i = match.length - 1; i >= 0; i--) if (!match[i]) return i + 2;
+  return 1;
+}
+function countMismatch(Q, star, n) {
+  let c = 0;
+  for (let s = 0; s < n; s++) {
+    if (star.first[s] < 0) continue;
+    if (argmaxQv(Q, s) !== star.first[s]) c++;
+  }
+  return c;
+}
+
+const TD_TOL = 0.06, TD_CE = 20, TD_TAU = 800;
+function liveStates(W) {
+  const out = [];
+  for (let s = 0; s < W.R * W.C; s++) if (!W.term[s] && !W.wall[s]) out.push(s);
+  return out;
+}
+function evalPolicyGap(W, star, Q) {
+  const n = W.R * W.C;
+  const live = s => !W.term[s] && !W.wall[s];
+  let V = new Float64Array(n);
+  for (let it = 0; it < 400; it++) {
+    const nV = new Float64Array(n);
+    let d = 0;
+    for (let s = 0; s < n; s++) {
+      if (!live(s)) continue;
+      const a = argmaxQv(Q, s);
+      let q = 0;
+      for (const [s2, p] of gridTrans(W, s, a)) q += p * (gridReward(W, s, s2) + W.gamma * V[s2]);
+      nV[s] = q;
+      d = Math.max(d, Math.abs(q - V[s]));
+    }
+    V = nV;
+    if (d < 1e-11) break;
+  }
+  let sum = 0, cnt = 0;
+  for (let s = 0; s < n; s++) if (live(s)) { sum += star.V[s] - V[s]; cnt++; }
+  return cnt ? sum / cnt : 0;
+}
+function firstPass(flags, ce) {
+  for (let i = 0; i < flags.length - 1; i++) if (flags[i] && flags[i + 1]) return (i + 1) * ce;
+  return -1;
+}
+
+/* =====================================================================
+   World state, presets, change notifications
+   ===================================================================== */
+const ED_R = 6, ED_C = 6, ED_N = 36, ED_CELL = 48;
+let WORLD = makeWorld('classic');
+let SOL = gridSolve(WORLD);
+let WORLD_VER = 0;
+const worldListeners = [];
+function notifyWorld() {
+  WORLD_VER++;
+  SOL = gridSolve(WORLD);
+  worldListeners.forEach(f => { try { f(); } catch (e) {} });
+}
+function makeWorld(name) {
+  const n = ED_R * ED_C;
+  const W = { R: ED_R, C: ED_C, rew: new Array(n).fill(0), term: new Array(n).fill(false), wall: new Array(n).fill(false), start: 30, step: -0.04, gamma: 0.95, slip: 0.1 };
+  const at = (r, c) => r * ED_C + c;
+  const goal = (r, c) => { W.rew[at(r, c)] = 1; W.term[at(r, c)] = true; };
+  const pit = (r, c) => { W.rew[at(r, c)] = -1; W.term[at(r, c)] = true; };
+  if (name === 'cliff') {
+    W.start = at(5, 0); W.step = -1; W.gamma = 0.99; W.slip = 0.05;
+    goal(5, 5);
+    for (let c = 1; c <= 4; c++) pit(5, c);
+  } else if (name === 'maze') {
+    W.start = at(5, 0);
+    goal(0, 5); pit(0, 0);
+    for (let r = 0; r <= 5; r++) if (r !== 1) W.wall[at(r, 3)] = true;
+    W.wall[at(3, 1)] = true;
+  } else if (name === 'double') {
+    W.start = at(5, 0);
+    goal(0, 5);
+    for (let r = 1; r <= 4; r++) for (let c = 1; c <= 4; c++) W.wall[at(r, c)] = true;
+    pit(2, 5);
+  } else {
+    W.start = at(5, 0);
+    goal(0, 5);
+    pit(2, 2); pit(2, 3);
+    W.wall[at(1, 3)] = true;
+  }
+  return W;
+}
+
+/* =====================================================================
+   01 — gridworld editor
+   ===================================================================== */
+function initEditor() {
+  const svg = $('#edSvg');
+  svg.innerHTML = '';
+  let tool = 'reward', show = 'r', sel = WORLD.start, drag = null;
+  const cellLayer = el('g', {}, svg);
+  const textLayer = el('g', { style: 'pointer-events:none' }, svg);
+  const cells = [];
+  for (let i = 0; i < ED_N; i++) {
+    const r = Math.floor(i / ED_C), c = i % ED_C;
+    const rect = el('rect', { x: c * ED_CELL + 1.5, y: r * ED_CELL + 1.5, width: ED_CELL - 3, height: ED_CELL - 3, rx: 6 }, cellLayer);
+    const border = el('rect', { x: c * ED_CELL + 3, y: r * ED_CELL + 3, width: ED_CELL - 6, height: ED_CELL - 6, rx: 5, fill: 'none' }, textLayer);
+    const arrow = el('text', { x: c * ED_CELL + ED_CELL / 2, y: r * ED_CELL + 27, 'text-anchor': 'middle', 'font-size': 18, 'font-weight': 600 }, textLayer);
+    const val = el('text', { x: c * ED_CELL + ED_CELL / 2, y: r * ED_CELL + 44, 'text-anchor': 'middle', 'font-size': 10.5, 'font-weight': 600, class: 'mono' }, textLayer);
+    cells.push({ rect, border, arrow, val, r, c });
+  }
+  const startMark = el('text', { 'font-size': 10, 'font-weight': 700, fill: '#6b7280' }, textLayer);
+  startMark.textContent = 'S';
+  const selRing = el('rect', { width: ED_CELL - 1, height: ED_CELL - 1, rx: 7, fill: 'none', stroke: '#111', 'stroke-width': 2.2, 'stroke-dasharray': '3 2' }, textLayer);
+
+  function syncSliders() {
+    $('#edStep').value = WORLD.step; $('#edStepVal').textContent = fmt(WORLD.step);
+    $('#edGamma').value = WORLD.gamma; $('#edGammaVal').textContent = WORLD.gamma.toFixed(2);
+    $('#edSlip').value = WORLD.slip; $('#edSlipVal').textContent = WORLD.slip.toFixed(2);
+  }
+
+  function render() {
+    SOL = gridSolve(WORLD);
+    const maxV = Math.max(1e-6, ...Array.from(SOL.V).map(Math.abs));
+    cells.forEach((ce, i) => {
+      const { rect, border, arrow, val } = ce;
+      if (WORLD.wall[i]) {
+        rect.setAttribute('fill', '#d4d4d8');
+        border.setAttribute('stroke', 'none');
+        arrow.textContent = ''; val.textContent = '';
+        return;
+      }
+      const term = WORLD.term[i];
+      let shade = 0, fill = '#fafafa';
+      if (show === 'p') { fill = '#fafafa'; shade = 0; }
+      else if (show === 'v' && !term) { shade = SOL.V[i] / maxV; fill = colorFor(shade); }
+      else { shade = WORLD.rew[i]; fill = WORLD.rew[i] === 0 ? '#fafafa' : colorFor(shade); }
+      rect.setAttribute('fill', fill);
+      const ink = show === 'p' ? '#111' : textColorFor(shade);
+      border.setAttribute('stroke', term ? '#111' : 'none');
+      border.setAttribute('stroke-width', term ? 2.4 : 0);
+      if (term) {
+        arrow.textContent = '';
+        val.setAttribute('y', ce.r * ED_CELL + 32); val.setAttribute('font-size', 13);
+        val.textContent = fmtS(WORLD.rew[i]);
+      } else {
+        arrow.textContent = SOL.first[i] >= 0 ? ARW[SOL.first[i]] : '·';
+        val.setAttribute('y', ce.r * ED_CELL + 44); val.setAttribute('font-size', 10.5);
+        val.textContent = show === 'v' ? fmt(SOL.V[i]) : (WORLD.rew[i] === 0 ? '' : fmtS(WORLD.rew[i]));
+      }
+      arrow.setAttribute('fill', ink); val.setAttribute('fill', ink);
+    });
+    startMark.setAttribute('x', (WORLD.start % ED_C) * ED_CELL + 6);
+    startMark.setAttribute('y', Math.floor(WORLD.start / ED_C) * ED_CELL + 14);
+    selRing.setAttribute('x', (sel % ED_C) * ED_CELL + 0.5);
+    selRing.setAttribute('y', Math.floor(sel / ED_C) * ED_CELL + 0.5);
+    renderEq(); renderMetrics();
+  }
+
+  function renderMetrics() {
+    let live = 0, terms = 0, walls = 0;
+    for (let i = 0; i < ED_N; i++) {
+      if (WORLD.wall[i]) walls++;
+      else if (WORLD.term[i]) terms++;
+      else live++;
+    }
+    $('#edMetrics').innerHTML =
+      `<div class="metric"><div class="metric-k">live states</div><div class="metric-v">${live}</div></div>` +
+      `<div class="metric"><div class="metric-k">terminals</div><div class="metric-v">${terms}</div></div>` +
+      `<div class="metric"><div class="metric-k">walls</div><div class="metric-v">${walls}</div></div>` +
+      `<div class="metric"><div class="metric-k">V* at S</div><div class="metric-v">${fmt(SOL.V[WORLD.start], 2)}</div></div>`;
+  }
+
+  function renderEq() {
+    const eq = $('#edEq');
+    const r = Math.floor(sel / ED_C), c = sel % ED_C;
+    if (WORLD.wall[sel]) { T(eq, `(${r},${c})\\ \\text{is a wall: no action, no value}`, true); return; }
+    if (WORLD.term[sel]) { T(eq, `(${r},${c})\\ \\text{is terminal: } r=${fmtS(WORLD.rew[sel])},\\quad V_*=0`, true); return; }
+    if (sel === WORLD.start) {
+      const q = SOL.Q[sel], best = SOL.first[sel];
+      const parts = q.map((v, a) => `${ARW_TEX[a]}\\;${a === best ? '\\mathbf{' + fmt(v, 2) + '}' : fmt(v, 2)}`);
+      T(eq, `\\begin{aligned}Q_*\\big((${r},${c}),a\\big)&=\\textstyle\\sum_{s'}p(s'\\mid s,a)\\big[r+\\gamma V_*(s')\\big]\\\\[2pt]&${parts.slice(0, 2).join('\\quad ')},\\quad ${parts.slice(2).join('\\quad ')}\\end{aligned}`, true);
+      return;
+    }
+    const q = SOL.Q[sel], best = SOL.first[sel];
+    const parts = q.map((v, a) => `${ARW_TEX[a]}\\;${a === best ? '\\mathbf{' + fmt(v, 2) + '}' : fmt(v, 2)}`);
+    T(eq, `\\begin{aligned}Q_*\\big((${r},${c}),a\\big)&=\\textstyle\\sum_{s'}p(s'\\mid s,a)\\big[r+\\gamma V_*(s')\\big]\\\\[2pt]&${parts.slice(0, 2).join('\\quad ')},\\quad ${parts.slice(2).join('\\quad ')}\\end{aligned}`, true);
+  }
+
+  function cellAt(e) {
+    const b = svg.getBoundingClientRect();
+    const x = (e.clientX - b.left) / b.width * 288, y = (e.clientY - b.top) / b.height * 288;
+    const c = Math.floor(x / ED_CELL), r = Math.floor(y / ED_CELL);
+    if (r < 0 || r >= ED_R || c < 0 || c >= ED_C) return -1;
+    return r * ED_C + c;
+  }
+  function applyTool(i) {
+    if (tool === 'wall') {
+      if (i !== WORLD.start && !WORLD.term[i]) WORLD.wall[i] = !WORLD.wall[i];
+    } else if (tool === 'goal') {
+      if (i !== WORLD.start) { WORLD.term[i] = true; WORLD.rew[i] = 1; WORLD.wall[i] = false; }
+    } else if (tool === 'pit') {
+      if (i !== WORLD.start) { WORLD.term[i] = true; WORLD.rew[i] = -1; WORLD.wall[i] = false; }
+    } else if (tool === 'start') {
+      if (!WORLD.wall[i] && !WORLD.term[i]) WORLD.start = i;
+    } else if (tool === 'erase') {
+      WORLD.wall[i] = false; WORLD.term[i] = false; WORLD.rew[i] = 0;
+    }
+    sel = i;
+    render();
+    notifyWorld();
+  }
+
+  svg.addEventListener('pointerdown', e => {
+    const i = cellAt(e);
+    if (i < 0) return;
+    try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+    drag = { i, y0: e.clientY, v0: WORLD.rew[i], moved: false, scale: 288 / svg.getBoundingClientRect().height };
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!drag || tool !== 'reward' || WORLD.wall[drag.i] || WORLD.term[drag.i]) return;
+    const dy = (drag.y0 - e.clientY) * drag.scale;
+    if (Math.abs(dy) > 3) drag.moved = true;
+    if (!drag.moved) return;
+    let v = Math.round((drag.v0 + dy / ED_CELL * 0.5) / 0.05) * 0.05;
+    v = Math.max(-2, Math.min(2, v));
+    if (Math.abs(v) < 1e-9) v = 0;
+    if (v !== WORLD.rew[drag.i]) { WORLD.rew[drag.i] = v; sel = drag.i; render(); }
+  });
+  const endDrag = () => {
+    if (!drag) return;
+    const i = drag.i, moved = drag.moved;
+    drag = null;
+    if (!moved) { applyTool(i); }
+    else { sel = i; render(); notifyWorld(); }
+  };
+  svg.addEventListener('pointerup', endDrag);
+  svg.addEventListener('pointercancel', () => { drag = null; });
+
+  $$('#edTools .tab').forEach(b => b.addEventListener('click', () => {
+    tool = b.dataset.tool;
+    $$('#edTools .tab').forEach(x => x.classList.toggle('active', x === b));
+  }));
+  $$('#edShow .tab').forEach(b => b.addEventListener('click', () => {
+    show = b.dataset.show;
+    $$('#edShow .tab').forEach(x => x.classList.toggle('active', x === b));
+    render();
+  }));
+  $$('#edPresets button').forEach(b => b.addEventListener('click', () => {
+    WORLD = makeWorld(b.dataset.preset);
+    sel = WORLD.start;
+    pickSeg('edPresets', b.dataset.preset);
+    syncSliders(); render(); notifyWorld();
+  }));
+  $('#edStep').addEventListener('input', e => {
+    WORLD.step = parseFloat(e.target.value);
+    $('#edStepVal').textContent = fmt(WORLD.step);
+    render(); notifyWorld();
+  });
+  $('#edGamma').addEventListener('input', e => {
+    WORLD.gamma = parseFloat(e.target.value);
+    $('#edGammaVal').textContent = WORLD.gamma.toFixed(2);
+    render(); notifyWorld();
+  });
+  $('#edSlip').addEventListener('input', e => {
+    WORLD.slip = parseFloat(e.target.value);
+    $('#edSlipVal').textContent = WORLD.slip.toFixed(2);
+    render(); notifyWorld();
+  });
+
+  syncSliders(); render();
+}
+
+/* =====================================================================
+   04 — algorithm race
+   ===================================================================== */
+const RACE = { data: null, reveal: 0, timer: null, steps: 90 };
+
+function viRun(W, tol) {
+  const n = W.R * W.C;
+  const live = s => !W.term[s] && !W.wall[s];
+  const trans = [];
+  for (let s = 0; s < n; s++) trans.push(live(s) ? [0, 1, 2, 3].map(a => [...gridTrans(W, s, a)]) : null);
+  let V = new Float64Array(n);
+  const deltas = [];
+  for (let it = 0; it < 400; it++) {
+    let delta = 0;
+    const nv = new Float64Array(n);
+    for (let s = 0; s < n; s++) {
+      if (!trans[s]) continue;
+      let best = -Infinity;
+      for (let a = 0; a < 4; a++) {
+        let q = 0;
+        for (const [s2, p] of trans[s][a]) q += p * (gridReward(W, s, s2) + W.gamma * V[s2]);
+        if (q > best) best = q;
+      }
+      nv[s] = best;
+      delta = Math.max(delta, Math.abs(best - V[s]));
+    }
+    V = nv;
+    deltas.push(delta);
+    if (delta < tol) break;
+  }
+  return { deltas, iters: deltas.length };
+}
+
+function piRun(W, tol) {
+  const n = W.R * W.C;
+  const live = s => !W.term[s] && !W.wall[s];
+  const pi = new Int8Array(n);
+  let Vprev = new Float64Array(n);
+  const dv = [];
+  for (let it = 0; it < 200; it++) {
+    let V = new Float64Array(n);
+    for (let e = 0; e < 400; e++) {
+      let delta = 0;
+      const nv = new Float64Array(n);
+      for (let s = 0; s < n; s++) {
+        if (!live(s)) continue;
+        let q = 0;
+        for (const [s2, p] of gridTrans(W, s, pi[s])) q += p * (gridReward(W, s, s2) + W.gamma * V[s2]);
+        nv[s] = q;
+        delta = Math.max(delta, Math.abs(q - V[s]));
+      }
+      V = nv;
+      if (delta < tol) break;
+    }
+    let dmax = 0;
+    for (let s = 0; s < n; s++) dmax = Math.max(dmax, Math.abs(V[s] - Vprev[s]));
+    dv.push(dmax);
+    Vprev = V;
+    let stable = true;
+    for (let s = 0; s < n; s++) {
+      if (!live(s)) continue;
+      let best = pi[s], bq = -Infinity;
+      for (let a = 0; a < 4; a++) {
+        let q = 0;
+        for (const [s2, p] of gridTrans(W, s, a)) q += p * (gridReward(W, s, s2) + W.gamma * V[s2]);
+        if (q > bq) { bq = q; best = a; }
+      }
+      if (best !== pi[s]) { pi[s] = best; stable = false; }
+    }
+    if (stable) break;
+  }
+  return { dv, iters: dv.length };
+}
+
+function tdRun(W, star, o) {
+  const n = W.R * W.C;
+  const rng = mulberry32(o.seed);
+  const starts = liveStates(W);
+  const Q = Array.from({ length: n }, () => [0, 0, 0, 0]);
+  const hist = [];
+  const flags = [];
+  for (let ep = 0; ep < o.maxEp; ep++) {
+    const al = o.alpha / (1 + ep / TD_TAU);
+    let s = starts[Math.floor(rng() * starts.length)];
+    let a = Math.floor(rng() * 4);
+    for (let steps = 0; steps < 120; steps++) {
+      const { s2, r } = gridSample(W, s, a, rng);
+      if (o.kind === 'q') {
+        let m = -Infinity;
+        for (let k = 0; k < 4; k++) if (Q[s2][k] > m) m = Q[s2][k];
+        Q[s][a] += al * (r + W.gamma * m - Q[s][a]);
+        s = s2;
+        if (W.term[s]) break;
+        a = epsGreedy(Q, s, o.eps, rng);
+      } else {
+        const a2 = epsGreedy(Q, s2, o.eps, rng);
+        Q[s][a] += al * (r + W.gamma * Q[s2][a2] - Q[s][a]);
+        s = s2; a = a2;
+        if (W.term[s]) break;
+      }
+    }
+    if ((ep + 1) % TD_CE === 0) {
+      const g = evalPolicyGap(W, star, Q);
+      hist.push(g);
+      flags.push(g < TD_TOL);
+    }
+  }
+  return { hist, matchEp: firstPass(flags, TD_CE) };
+}
+function mcRun(W, star, o) {
+  const n = W.R * W.C;
+  const rng = mulberry32(o.seed);
+  const starts = liveStates(W);
+  const Q = Array.from({ length: n }, () => [0, 0, 0, 0]);
+  const N = Array.from({ length: n }, () => [0, 0, 0, 0]);
+  const hist = [];
+  const flags = [];
+  for (let ep = 0; ep < o.maxEp; ep++) {
+    const traj = [];
+    let s = starts[Math.floor(rng() * starts.length)];
+    const first = Math.floor(rng() * 4);
+    for (let k = 0; k < 120; k++) {
+      const a = k === 0 ? first : epsGreedy(Q, s, o.eps, rng);
+      const { s2, r } = gridSample(W, s, a, rng);
+      traj.push([s, a, r]);
+      s = s2;
+      if (W.term[s2]) break;
+    }
+    let G = 0;
+    const seen = new Set();
+    for (let i = traj.length - 1; i >= 0; i--) {
+      const [s0, a0, r0] = traj[i];
+      G = r0 + W.gamma * G;
+      const key = s0 * 4 + a0;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      N[s0][a0]++;
+      Q[s0][a0] += (G - Q[s0][a0]) / N[s0][a0];
+    }
+    if ((ep + 1) % TD_CE === 0) {
+      const g = evalPolicyGap(W, star, Q);
+      hist.push(g);
+      flags.push(g < TD_TOL);
+    }
+  }
+  return { hist, matchEp: firstPass(flags, TD_CE) };
+}
+function initRace() {
+  const dp = $('#rcDp'), td = $('#rcTd');
+
+  function paintEmpty() {
+    dp.innerHTML = '<text x="215" y="118" text-anchor="middle" font-size="12" fill="#9ca3af">Press Run to compute the race.</text>';
+    td.innerHTML = '<text x="215" y="118" text-anchor="middle" font-size="12" fill="#9ca3af">Press Run to compute the race.</text>';
+    $('#rcMetrics').innerHTML = '';
+    $('#rcTimes').textContent = '';
+    T($('#rcEq'), '\\text{Press Run: every curve, episode count and millisecond is computed here.}', true);
+  }
+
+  function compute() {
+    const W = cloneWorld(WORLD);
+    const tol = parseFloat($('#rcTol').value) / 1000;
+    const alpha = parseFloat($('#rcAlpha').value);
+    const eps = parseFloat($('#rcEps').value);
+    const star = gridSolve(W);
+    const t0 = performance.now();
+    const vi = viRun(W, tol);
+    const t1 = performance.now();
+    const pi = piRun(W, tol);
+    const t2 = performance.now();
+    const ql = tdRun(W, star, { kind: 'q', alpha, eps, maxEp: 4000, seed: 11 });
+    const t3 = performance.now();
+    const sa = tdRun(W, star, { kind: 'sarsa', alpha, eps, maxEp: 4000, seed: 23 });
+    const t4 = performance.now();
+    const mc = mcRun(W, star, { alpha, eps, maxEp: 4000, seed: 37 });
+    const t5 = performance.now();
+    RACE.data = { tol, vi, pi, ql, sa, mc, ms: { vi: t1 - t0, pi: t2 - t1, ql: t3 - t2, sa: t4 - t3, mc: t5 - t4 } };
+    RACE.reveal = 0;
+    raceMetrics();
+  }
+
+  function logChart(svg, series, frac, xLabel, tolVal) {
+    svg.innerHTML = '';
+    const maxLen = Math.max(...series.map(s => s.arr.length), 2);
+    const all = [];
+    series.forEach(s => s.arr.forEach(v => { if (v > 1e-12) all.push(v); }));
+    if (!all.length) return;
+    const ymax = Math.max(...all), ymin = Math.max(1e-9, Math.min(...all) * 0.5);
+    const L = 46, Rr = 16, TOP = 14, B = 30, VW = 430, VH = 230;
+    const lx = i => L + (i / (maxLen - 1)) * (VW - L - Rr);
+    const ly = v => {
+      const lo = Math.log10(ymin), hi = Math.log10(ymax);
+      const t = (Math.log10(Math.max(v, ymin)) - lo) / ((hi - lo) || 1);
+      return TOP + (1 - t) * (VH - TOP - B);
+    };
+    el('line', { x1: L, x2: VW - Rr, y1: VH - B, y2: VH - B, stroke: '#e5e5e5' }, svg);
+    el('line', { x1: L, x2: L, y1: TOP, y2: VH - B, stroke: '#e5e5e5' }, svg);
+    const d0 = Math.floor(Math.log10(ymin)), d1 = Math.ceil(Math.log10(ymax));
+    for (let dd = d0; dd <= d1; dd++) {
+      const v = Math.pow(10, dd);
+      if (v < ymin * 0.8 || v > ymax * 1.25) continue;
+      const y = ly(v);
+      if (y < TOP - 1 || y > VH - B + 1) continue;
+      el('line', { x1: L, x2: VW - Rr, y1: y, y2: y, stroke: '#f0f0f0' }, svg);
+      el('text', { x: L - 6, y: y + 4, 'text-anchor': 'end', 'font-size': 10, fill: '#9ca3af', class: 'mono' }, svg).textContent = '1e' + dd;
+    }
+    if (tolVal && tolVal >= ymin && tolVal <= ymax) {
+      const y = ly(tolVal);
+      el('line', { x1: L, x2: VW - Rr, y1: y, y2: y, stroke: '#c2c9d4', 'stroke-width': 1.2, 'stroke-dasharray': '4 3' }, svg);
+      el('text', { x: VW - Rr, y: y - 5, 'text-anchor': 'end', 'font-size': 10, fill: '#9ca3af', class: 'mono' }, svg).textContent = 'tol';
+    }
+    series.forEach(s => {
+      const arr = s.arr;
+      const m = Math.max(2, Math.round(frac * arr.length));
+      if (m < 2) return;
+      const pts = [];
+      for (let i = 0; i < m; i++) pts.push(`${lx(i).toFixed(1)},${ly(arr[i]).toFixed(1)}`);
+      el('polyline', { points: pts.join(' '), fill: 'none', stroke: s.color, 'stroke-width': 2.2, 'stroke-linejoin': 'round', 'stroke-dasharray': s.dash || 'none' }, svg);
+    });
+    el('text', { x: L, y: VH - B + 17, 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = '1';
+    el('text', { x: VW - Rr, y: VH - B + 17, 'text-anchor': 'end', 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = maxLen + ' ' + xLabel;
+    el('text', { x: L + 6, y: TOP + 2, 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = 'residual (log)';
+  }
+
+  function gapChart(svg, series, frac, totalEp, ce) {
+    svg.innerHTML = '';
+    const maxLen = Math.max(...series.map(s => s.arr.length), 2);
+    const all = [];
+    series.forEach(s => s.arr.forEach(v => all.push(Math.max(v, 1e-4))));
+    const ymax = Math.max(...all), ymin = 1e-4;
+    const L = 46, Rr = 16, TOP = 14, B = 30, VW = 430, VH = 230;
+    const lx = i => L + (i / (maxLen - 1)) * (VW - L - Rr);
+    const ly = v => {
+      const lo = Math.log10(ymin), hi = Math.log10(ymax);
+      const t = (Math.log10(Math.max(v, ymin)) - lo) / ((hi - lo) || 1);
+      return TOP + (1 - t) * (VH - TOP - B);
+    };
+    el('line', { x1: L, x2: VW - Rr, y1: VH - B, y2: VH - B, stroke: '#e5e5e5' }, svg);
+    el('line', { x1: L, x2: L, y1: TOP, y2: VH - B, stroke: '#e5e5e5' }, svg);
+    const d0 = Math.floor(Math.log10(ymin)), d1 = Math.ceil(Math.log10(ymax));
+    for (let dd = d0; dd <= d1; dd++) {
+      const v = Math.pow(10, dd);
+      if (v < ymin || v > ymax * 1.4) continue;
+      const y = ly(v);
+      if (y < TOP - 1 || y > VH - B + 1) continue;
+      el('line', { x1: L, x2: VW - Rr, y1: y, y2: y, stroke: '#f0f0f0' }, svg);
+      el('text', { x: L - 6, y: y + 4, 'text-anchor': 'end', 'font-size': 10, fill: '#9ca3af', class: 'mono' }, svg).textContent = v >= 1 ? String(v) : v.toFixed(2);
+    }
+    if (TD_TOL >= ymin && TD_TOL <= ymax) {
+      const y = ly(TD_TOL);
+      el('line', { x1: L, x2: VW - Rr, y1: y, y2: y, stroke: '#c2c9d4', 'stroke-width': 1.2, 'stroke-dasharray': '4 3' }, svg);
+      el('text', { x: VW - Rr, y: y - 5, 'text-anchor': 'end', 'font-size': 10, fill: '#9ca3af', class: 'mono' }, svg).textContent = 'tol ' + TD_TOL;
+    }
+    series.forEach(s => {
+      const arr = s.arr;
+      const m = Math.max(2, Math.round(frac * arr.length));
+      if (m < 2) return;
+      const pts = [];
+      for (let i = 0; i < m; i++) pts.push(`${lx(i).toFixed(1)},${ly(arr[i]).toFixed(1)}`);
+      el('polyline', { points: pts.join(' '), fill: 'none', stroke: s.color, 'stroke-width': 2.2, 'stroke-linejoin': 'round', 'stroke-dasharray': s.dash || 'none' }, svg);
+    });
+    el('text', { x: L, y: VH - B + 17, 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = ce + ' ep';
+    el('text', { x: VW - Rr, y: VH - B + 17, 'text-anchor': 'end', 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = totalEp + ' episodes';
+    el('text', { x: L + 6, y: TOP + 2, 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = 'mean value gap (log)';
+  }
+
+  function draw(frac) {
+    if (!RACE.data) return;
+    const d = RACE.data;
+    logChart(dp, [
+      { arr: d.vi.deltas, color: '#2563eb' },
+      { arr: d.pi.dv, color: '#dc2626' }
+    ], frac, 'sweeps', d.tol);
+    gapChart(td, [
+      { arr: d.mc.hist, color: '#c2c9d4', dash: '5 4' },
+      { arr: d.ql.hist, color: '#2563eb' },
+      { arr: d.sa.hist, color: '#dc2626' }
+    ], frac, 4000, TD_CE);
+  }
+
+  function raceMetrics() {
+    const d = RACE.data;
+    if (!d) return;
+    const ep = v => (v < 0 ? '—' : v);
+    const rows = [
+      ['VI sweeps', d.vi.iters],
+      ['PI iterations', d.pi.iters],
+      ['QL converged', ep(d.ql.matchEp)],
+      ['Sarsa converged', ep(d.sa.matchEp)],
+      ['MC converged', ep(d.mc.matchEp)]
+    ];
+    $('#rcMetrics').innerHTML = rows.map(([k, v]) => `<div class="metric"><div class="metric-k">${k}</div><div class="metric-v">${v}</div></div>`).join('');
+    $('#rcTimes').innerHTML = `wall-clock · VI <b>${d.ms.vi.toFixed(2)} ms</b> · PI <b>${d.ms.pi.toFixed(2)} ms</b> · Q-learning <b>${d.ms.ql.toFixed(1)} ms</b> · Sarsa <b>${d.ms.sa.toFixed(1)} ms</b> · MC <b>${d.ms.mc.toFixed(1)} ms</b>`;
+    const mt = v => (v < 0 ? '\\text{not reached}' : v + '\\text{ episodes}');
+    const gap = '\\tfrac{1}{|\\mathcal{S}|}\\sum_s\\bigl(v_*(s)-v_{\\pi_k}(s)\\bigr)';
+    T($('#rcEq'), `\\begin{aligned}
+      \\lVert v_{k+1}-v_k\\rVert_\\infty &< ${d.tol} &&\\Rightarrow\\quad \\text{VI: }${d.vi.iters}\\text{ sweeps},\\;\\text{PI: }${d.pi.iters}\\text{ iterations}\\\\
+      ${gap} &< ${TD_TOL} &&\\Rightarrow\\quad \\text{Q-learning: }${mt(d.ql.matchEp)},\\;\\text{Sarsa: }${mt(d.sa.matchEp)},\\;\\text{MC: }${mt(d.mc.matchEp)}
+    \\end{aligned}`, true);
+  }
+
+  function stop() {
+    if (RACE.timer) { clearInterval(RACE.timer); RACE.timer = null; }
+    $('#rcRun').textContent = 'Run ▶';
+  }
+  function animate() {
+    if (!RACE.data) return;
+    RACE.reveal = 0;
+    RACE.timer = setInterval(() => {
+      RACE.reveal++;
+      draw(Math.min(1, RACE.reveal / RACE.steps));
+      if (RACE.reveal >= RACE.steps) stop();
+    }, 110);
+    $('#rcRun').textContent = 'Pause';
+  }
+
+  $('#rcRun').addEventListener('click', () => {
+    if (RACE.timer) { stop(); return; }
+    if (!RACE.data) compute();
+    animate();
+  });
+  $('#rcStep').addEventListener('click', () => {
+    stop();
+    if (!RACE.data) compute();
+    RACE.reveal = Math.min(RACE.steps, RACE.reveal + 6);
+    draw(RACE.reveal / RACE.steps);
+  });
+  $('#rcReset').addEventListener('click', () => {
+    stop(); RACE.data = null; RACE.reveal = 0; paintEmpty();
+  });
+  $('#rcTol').addEventListener('input', e => {
+    const tol = parseFloat(e.target.value) / 1000;
+    $('#rcTolVal').textContent = tol.toFixed(3);
+    RACE.data = null; RACE.reveal = 0; stop(); paintEmpty();
+  });
+  $('#rcAlpha').addEventListener('input', e => {
+    $('#rcAlphaVal').textContent = parseFloat(e.target.value).toFixed(2);
+    RACE.data = null; RACE.reveal = 0; stop(); paintEmpty();
+  });
+  $('#rcEps').addEventListener('input', e => {
+    $('#rcEpsVal').textContent = parseFloat(e.target.value).toFixed(2);
+    RACE.data = null; RACE.reveal = 0; stop(); paintEmpty();
+  });
+
+  worldListeners.push(() => { stop(); RACE.data = null; RACE.reveal = 0; paintEmpty(); });
+  paintEmpty();
+}
+
+/* =====================================================================
+   06 — trace viewer
+   ===================================================================== */
+function initViewer() {
+  const svg = $('#vwSvg');
+  svg.innerHTML = '';
+  const CELL = ED_CELL, n = ED_N;
+  const baseLayer = el('g', {}, svg);
+  const traceLayer = el('g', {}, svg);
+  const pathLayer = el('g', {}, svg);
+  const textLayer = el('g', { style: 'pointer-events:none' }, svg);
+  const bases = [], traces = [], arrows = [];
+  for (let i = 0; i < n; i++) {
+    const r = Math.floor(i / ED_C), c = i % ED_C;
+    const b = el('rect', { x: c * CELL + 1.5, y: r * CELL + 1.5, width: CELL - 3, height: CELL - 3, rx: 6, fill: '#fafafa' }, baseLayer);
+    const tr = el('rect', { x: c * CELL + 1.5, y: r * CELL + 1.5, width: CELL - 3, height: CELL - 3, rx: 6, fill: 'none' }, traceLayer);
+    const ar = el('text', { x: c * CELL + CELL / 2, y: r * CELL + 29, 'text-anchor': 'middle', 'font-size': 17, 'font-weight': 600, fill: '#6b7280' }, textLayer);
+    bases.push(b); traces.push(tr); arrows.push(ar);
+  }
+  const startMark = el('text', { 'font-size': 10, 'font-weight': 700, fill: '#6b7280' }, textLayer);
+  startMark.textContent = 'S';
+  const pathLine = el('polyline', { fill: 'none', stroke: 'rgba(17,17,17,.12)', 'stroke-width': 8, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, pathLayer);
+  const token = el('g', {}, svg);
+  el('circle', { cx: 0, cy: 0, r: 10, fill: '#111' }, token);
+
+  let tracesOn = false;
+  let rng = mulberry32(97);
+  let star = gridSolve(WORLD);
+  let running = null;
+  const st = { Q: null, E: null, model: new Map(), s: WORLD.start, ep: 1, t: 0, G: 0, delta: 0, lastE: 0 };
+
+  function stop() {
+    if (running) { clearInterval(running); running = null; }
+    $('#vwRun').textContent = 'Play ▶';
+  }
+  function argmaxQ(Q, s) {
+    let best = 0, bq = -Infinity;
+    for (let k = 0; k < 4; k++) if (Q[s][k] > bq) { bq = Q[s][k]; best = k; }
+    return best;
+  }
+
+  function render() {
+    let maxE = 0;
+    for (let i = 0; i < n; i++) if (tracesOn) maxE = Math.max(maxE, Math.max(...st.E[i]));
+    for (let i = 0; i < n; i++) {
+      if (WORLD.wall[i]) {
+        bases[i].setAttribute('fill', '#d4d4d8');
+        traces[i].setAttribute('fill', 'none');
+        arrows[i].textContent = '';
+        continue;
+      }
+      if (WORLD.term[i]) {
+        bases[i].setAttribute('fill', WORLD.rew[i] > 0 ? '#1e3a8a' : '#dc2626');
+        traces[i].setAttribute('fill', 'none');
+        arrows[i].setAttribute('fill', '#fff');
+        arrows[i].textContent = fmtS(WORLD.rew[i]);
+        arrows[i].setAttribute('font-size', 13);
+        continue;
+      }
+      bases[i].setAttribute('fill', '#fafafa');
+      arrows[i].setAttribute('font-size', 17);
+      arrows[i].setAttribute('fill', '#6b7280');
+      const e = tracesOn ? Math.max(...st.E[i]) : 0;
+      const a = maxE > 0 ? Math.min(1, e / maxE) * 0.82 : 0;
+      traces[i].setAttribute('fill', e > 1e-9 ? `rgba(30,58,138,${a.toFixed(3)})` : 'none');
+      arrows[i].textContent = ARW[argmaxQ(st.Q, i)];
+      if (e > 1e-9) arrows[i].setAttribute('fill', a > 0.5 ? '#fff' : '#111');
+    }
+    startMark.setAttribute('x', (WORLD.start % ED_C) * CELL + 6);
+    startMark.setAttribute('y', Math.floor(WORLD.start / ED_C) * CELL + 14);
+
+    const path = [WORLD.start];
+    let s = WORLD.start;
+    for (let k = 0; k < 60; k++) {
+      if (WORLD.term[s] || WORLD.wall[s]) break;
+      const s2 = gridMove(WORLD, s, argmaxQ(st.Q, s));
+      if (s2 === s || path.includes(s2)) break;
+      path.push(s2); s = s2;
+    }
+    pathLine.setAttribute('points', path.map(i => `${(i % ED_C) * CELL + CELL / 2},${Math.floor(i / ED_C) * CELL + CELL / 2}`).join(' '));
+    token.style.transform = `translate(${(st.s % ED_C) * CELL + CELL / 2}px,${Math.floor(st.s / ED_C) * CELL + CELL / 2}px)`;
+
+    let agree = 0, live = 0;
+    for (let i = 0; i < n; i++) {
+      if (WORLD.wall[i] || WORLD.term[i]) continue;
+      live++;
+      if (argmaxQ(st.Q, i) === star.first[i]) agree++;
+    }
+    $('#vwInfo').innerHTML =
+      `episode <b>${st.ep}</b> · step <b>${st.t}</b> · return <b>${fmt(st.G)}</b><br>` +
+      `δ = <b>${fmt(st.delta, 3)}</b> · trace max = <b>${tracesOn ? fmt(maxE, 2) : '—'}</b><br>` +
+      `greedy agreement <b>${live ? Math.round(100 * agree / live) : 0}%</b>`;
+    renderEq();
+  }
+
+  function renderEq() {
+    const alpha = parseFloat($('#vwAlpha').value);
+    const lam = parseFloat($('#vwLam').value);
+    if (!tracesOn) {
+      T($('#vwEq'), `\\begin{aligned}
+        \\delta_t &= ${fmt(st.delta, 3)}\\\\
+        Q(S_t,A_t) &\\leftarrow Q(S_t,A_t)+\\alpha\\,\\delta_t \\qquad (\\alpha=${alpha.toFixed(2)})
+      \\end{aligned}`, true);
+    } else {
+      T($('#vwEq'), `\\begin{aligned}
+        \\delta_t &= ${fmt(st.delta, 3)}\\\\
+        E_t(s,a) &= \\gamma\\lambda\\,E_{t-1}(s,a)+\\mathbf{1}(s{=}S_t,a{=}A_t)=${fmt(st.lastE, 3)}\\\\
+        Q(S_t,A_t) &\\leftarrow Q(S_t,A_t)+${alpha.toFixed(2)}\\cdot(${fmt(st.delta, 3)})\\cdot E_t(s,a)
+      \\end{aligned}`, true);
+    }
+  }
+
+  function tick() {
+    const alpha = parseFloat($('#vwAlpha').value);
+    const eps = parseFloat($('#vwEps').value);
+    const lam = parseFloat($('#vwLam').value);
+    const dyna = parseInt($('#vwDyna').value, 10);
+    if (WORLD.term[st.s] || st.t >= 120) {
+      st.ep++; st.s = WORLD.start; st.t = 0; st.G = 0;
+      for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) st.E[i][k] = 0;
+      render();
+      return;
+    }
+    const a = epsGreedy(st.Q, st.s, eps, rng);
+    const { s2, r } = gridSample(WORLD, st.s, a, rng);
+    if (!tracesOn) {
+      let m = -Infinity;
+      for (let k = 0; k < 4; k++) if (st.Q[s2][k] > m) m = st.Q[s2][k];
+      st.delta = r + WORLD.gamma * m - st.Q[st.s][a];
+      st.Q[st.s][a] += alpha * st.delta;
+      st.lastE = 0;
+    } else {
+      const a2 = epsGreedy(st.Q, s2, eps, rng);
+      const target = WORLD.term[s2] ? r : r + WORLD.gamma * st.Q[s2][a2];
+      st.delta = target - st.Q[st.s][a];
+      for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) st.E[i][k] *= WORLD.gamma * lam;
+      st.E[st.s][a] += 1;
+      st.lastE = st.E[st.s][a];
+      for (let i = 0; i < n; i++) for (let k = 0; k < 4; k++) {
+        const e = st.E[i][k];
+        if (e > 1e-9) st.Q[i][k] += alpha * st.delta * e;
+      }
+    }
+    st.model.set(st.s * 4 + a, [s2, r]);
+    const keys = Array.from(st.model.keys());
+    for (let p = 0; p < dyna && keys.length; p++) {
+      const key = keys[Math.floor(rng() * keys.length)];
+      const ps = Math.floor(key / 4), pa = key % 4;
+      const [ps2, pr] = st.model.get(key);
+      let m = -Infinity;
+      for (let k = 0; k < 4; k++) if (st.Q[ps2][k] > m) m = st.Q[ps2][k];
+      st.Q[ps][pa] += alpha * (pr + WORLD.gamma * m - st.Q[ps][pa]);
+    }
+    st.s = s2; st.t++; st.G += r;
+    render();
+  }
+
+  function reset() {
+    stop();
+    st.Q = Array.from({ length: n }, () => [0, 0, 0, 0]);
+    st.E = Array.from({ length: n }, () => [0, 0, 0, 0]);
+    st.model = new Map();
+    st.s = WORLD.start; st.ep = 1; st.t = 0; st.G = 0; st.delta = 0; st.lastE = 0;
+    star = gridSolve(WORLD);
+    rng = mulberry32(97);
+    render();
+  }
+
+  $('#vwRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(tick, 110);
+    $('#vwRun').textContent = 'Pause';
+  });
+  $('#vwStep').addEventListener('click', () => { stop(); tick(); });
+  $('#vwReset').addEventListener('click', reset);
+  $('#vwTraces').addEventListener('click', () => {
+    tracesOn = !tracesOn;
+    $('#vwTraces').textContent = 'Traces: ' + (tracesOn ? 'on' : 'off');
+    $('#vwTraces').classList.toggle('active', tracesOn);
+    render();
+  });
+  $('#vwLam').addEventListener('input', e => {
+    $('#vwLamVal').textContent = parseFloat(e.target.value).toFixed(2);
+    render();
+  });
+  $('#vwAlpha').addEventListener('input', e => {
+    $('#vwAlphaVal').textContent = parseFloat(e.target.value).toFixed(2);
+    render();
+  });
+  $('#vwEps').addEventListener('input', e => {
+    $('#vwEpsVal').textContent = parseFloat(e.target.value).toFixed(2);
+    render();
+  });
+  $('#vwDyna').addEventListener('input', e => {
+    $('#vwDynaVal').textContent = e.target.value;
+    render();
+  });
+
+  worldListeners.push(reset);
+  reset();
+}
+
+/* =====================================================================
+   Code highlighting
+   ===================================================================== */
+function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+const PY_KEYWORDS = new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case self'.split(' '));
+const PY_BUILTINS = new Set('abs all any bool dict enumerate filter float int len list map max min print range reversed round set sorted str sum tuple zip isinstance super type'.split(' '));
+function highlightPython(src) {
+  const re = /(#[^\n]*)|((?:[rbfu]{0,2})(?:'''[\s\S]*?'''|"""[\s\S]*?"""|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"))|(@[A-Za-z_]\w*)|(\b\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?\b)|([A-Za-z_]\w*)|([^\w\s]+)|(\s+)/g;
+  let out = '', m;
+  while ((m = re.exec(src))) {
+    if (m[1]) out += '<span class="t-c">' + escapeHtml(m[1]) + '</span>';
+    else if (m[2]) out += '<span class="t-s">' + escapeHtml(m[2]) + '</span>';
+    else if (m[3]) out += '<span class="t-d">' + escapeHtml(m[3]) + '</span>';
+    else if (m[4]) out += '<span class="t-n">' + escapeHtml(m[4]) + '</span>';
+    else if (m[5]) {
+      const w = m[5];
+      if (PY_KEYWORDS.has(w)) out += '<span class="t-k">' + w + '</span>';
+      else if (PY_BUILTINS.has(w)) out += '<span class="t-b">' + w + '</span>';
+      else if (/^\s*\(/.test(src.slice(re.lastIndex))) out += '<span class="t-f">' + w + '</span>';
+      else out += w;
+    }
+    else if (m[6]) out += '<span class="t-o">' + escapeHtml(m[6]) + '</span>';
+    else if (m[7]) out += m[7];
+  }
+  return out;
+}
+function initCode() {
+  document.querySelectorAll('pre.code code[data-lang]').forEach(function (c) {
+    c.innerHTML = highlightPython(c.textContent);
+  });
+  document.querySelectorAll('.cb-copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var code = btn.closest('.cb').querySelector('code');
+      (navigator.clipboard ? navigator.clipboard.writeText(code.textContent) : Promise.reject())
+        .then(function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1400); })
+        .catch(function () {});
+    });
+  });
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initEditor();
+  initRace();
+  initViewer();
+  initCode();
+  initScroll();
+});
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
+</script>
+</body>
+</html>

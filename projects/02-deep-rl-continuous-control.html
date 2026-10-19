@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<!--
+  Project 2 — Deep RL on a Continuous-Control Task
+  Assumptions (per prompt-projects.md):
+   · Reuses the Chapter 1 / Project 1 <style> base, topbar/hero/footer chrome, the
+     KaTeX 0.16.9 config, the el()/T() helpers and the boot script.
+   · New components are only the standard .cb*/.t-* code blocks, .lab scaffolding,
+     .steps, .deliverable, .metrics/.metric and .tabs/.tab.
+   · The task is a damped, torque-limited pendulum swing-up simulated in-page with
+     a semi-implicit Euler integrator.
+   · Learners are DDPG / TD3 / SAC over a fixed nonlinear feature map with a linear
+     -in-features critic (affine in the action) — a deliberate stand-in for an MLP
+     actor/critic so every in-page number is exact. The simplification is stated in
+     the prose; Python in the .cb blocks mirrors the JS.
+   · Exactly two .eqbox elements: the deterministic policy gradient and the
+     entropy-regularised SAC objective, both updated live.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project 2 · Deep RL on a Continuous-Control Task</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em;text-decoration:none}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+svg{display:block;max-width:100%;height:auto}
+
+/* ---------------- readouts ---------------- */
+.sliders{display:flex;gap:6px 26px;flex-wrap:wrap}
+.sliders .slider-row{flex:1 1 200px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.readout{font-family:ui-monospace,monospace;font-size:12.5px;color:#6b7280;margin:10px 0 0;line-height:1.7}
+.readout b{color:#111;font-weight:650}
+.plot-cap{font-size:12.5px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:10px;justify-content:center;flex-wrap:wrap;font-family:ui-monospace,monospace}
+.legend .sw{width:20px;height:3px;border-radius:2px;display:inline-block}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:26%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  table.cmp{font-size:13.5px}
+  table.cmp th,table.cmp td{padding:9px 6px}
+}
+
+/* ---------------- inter-chapter navigation ---------------- */
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+/* ---------------- code ---------------- */
+.cb{border:1px solid #e8e8e8;border-radius:12px;overflow:hidden;margin:18px 0;background:#fafafa}
+.cb-head{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #f0f0f0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;letter-spacing:.06em;color:#9ca3af}
+.cb-file{font-weight:650;color:#6b7280}
+.cb-lang{color:#9ca3af}
+.cb-copy{margin-left:auto;font:inherit;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:7px;border:1px solid #dcdcdc;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.cb-copy:hover{border-color:#111;color:#111}
+.cb pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.8px;line-height:1.65;color:#111;background:#fafafa}
+.cb code{background:none;padding:0;font-size:inherit;color:inherit}
+.t-c{color:#9ca3af;font-style:italic}
+.t-k{color:#1e3a8a;font-weight:600}
+.t-b{color:#6b7280}
+.t-n{color:#dc2626}
+.t-s{color:#2563eb}
+.t-f{color:#1e3a8a}
+.t-d{color:#6b7280;font-weight:600}
+.t-o{color:#374151}
+
+/* ---------------- lab scaffolding ---------------- */
+.lab{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff;margin:22px 0}
+.lab-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.lab-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.steps{list-style:none;counter-reset:s;margin:18px 0;padding:0}
+.steps li{counter-increment:s;position:relative;padding:2px 0 16px 42px;border-left:1px solid #f0f0f0;margin-left:13px}
+.steps li:last-child{border-left-color:transparent;padding-bottom:0}
+.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:-13px;top:0;width:26px;height:26px;border-radius:8px;background:#eef2ff;color:#1e3a8a;font:600 12px/26px ui-monospace,monospace;text-align:center}
+.steps b{color:#111}
+.deliverable{border-left:2px solid #1e3a8a;background:#eef2ff;padding:12px 16px;border-radius:0 10px 10px 0;margin:22px 0;color:#1e3a8a;font-size:15px}
+.deliverable b{color:#1e3a8a}
+.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}
+.metric{flex:1 1 150px;border:1px solid #e8e8e8;border-radius:12px;padding:12px 14px;background:#fafafa}
+.metric-k{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.metric-v{font-family:ui-monospace,monospace;font-size:22px;font-weight:650;color:#111;margin-top:4px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.tab{font-size:13px;padding:5px 11px;border-radius:8px;border:1px solid #e5e5e5;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.tab:hover{border-color:#111;color:#111}
+.tab.active{background:#111;color:#fff;border-color:#111}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">P02 · Continuous Control</a>
+    <nav class="nav">
+      <a href="#task">Task</a>
+      <a href="#learners">Learners</a>
+      <a href="#train">Train</a>
+      <a href="#ablate">Ablate</a>
+      <a href="#policy">Policy</a>
+      <a href="#measure">Measure</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Projects · Project 2</p>
+    <h1>Deep RL on a<br>Continuous-Control Task</h1>
+    <p class="lede">Swing a torque-limited pendulum up and hold it there with DDPG, TD3 and SAC — then ablate the target-policy smoothing, the twin critics and the entropy temperature and watch the learning curves move.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="task">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>The task: a torque-limited pendulum</h2>
+      <p>A <b>pendulum</b> hangs from a fixed pivot. The angle $\theta$ is measured from the upward vertical, so $\theta=0$ is the unstable upright and $\theta=\pm\pi$ is the bottom. The agent applies a torque $u\in[-1,1]$ and pays for being away from upright, for spinning, and for using torque:</p>
+      <div style="overflow-x:auto;margin:18px 0">
+        $$\ddot\theta \;=\; G\sin\theta \;-\; D\,\dot\theta \;+\; T\,u,
+          \qquad r \;=\; \cos\theta \;-\; 0.05\,\dot\theta^{2} \;-\; 0.002\,u^{2}.$$
+      </div>
+      <p>The state is $s=(\theta,\dot\theta)$; the action is the scalar torque. Swing-up is the interesting case: gravity pulls the rod down, the correct move near the bottom is to pump energy by pushing <em>with</em> the motion, and near the top it flips to a stabilising law. A policy must do both without a mode switch.</p>
+      <div class="deliverable"><b>Deliverable.</b> A reproducible comparison of DDPG, TD3 and SAC on one continuous task — learning curves, a video-like rollout of the learned policy, and a report isolating the effect of target-policy smoothing, twin critics and the entropy temperature.</div>
+      <p>The in-page learners are honest but small: a fixed nonlinear feature map feeds a linear (affine-in-action) critic instead of an MLP. Every number you see is computed here; the algorithm is exactly the algorithm.</p>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <h3>Build plan</h3>
+      <ol class="steps">
+        <li><b>Write the environment.</b> A semi-implicit Euler integrator with sub-stepping, a bounded torque, and the reward above. Fixed horizon per episode.</li>
+        <li><b>Write the critic.</b> Features $\phi(s)$ and an augmented input $z=[\phi,\,a,\,a\phi]$ so $Q$ is nonlinear in the action and $\partial Q/\partial a$ is a feature-weighted scalar.</li>
+        <li><b>Write the actor.</b> DDPG/TD3 output $\mu_\theta(s)=\tanh(w^\top\phi(s))$; SAC outputs $a=\tanh(\mu_\theta(s)+\sigma\varepsilon)$ with a learned $\sigma$.</li>
+        <li><b>Add the machinery.</b> Replay buffer, target networks with Polyak averaging, exploration noise; then TD3's twin critics and target smoothing, then SAC's entropy term and temperature.</li>
+        <li><b>Train, then ablate.</b> Hold everything fixed and flip one switch at a time; the only thing that may change is the curve.</li>
+      </ol>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <div class="cb">
+        <div class="cb-head"><span class="cb-file">pendulum_mdp.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+        <pre class="code"><code data-lang="python">import numpy as np
+
+G, DAMP, TORQUE = 9.0, 0.7, 11.0        # gravity, joint damping, max torque
+DT, SUB, H = 0.05, 4, 120               # control dt, integrator substeps, horizon
+
+def step(theta, omega, u):
+    h = DT / SUB
+    for _ in range(SUB):                # semi-implicit Euler, stable at this dt
+        acc = G * np.sin(theta) - DAMP * omega + TORQUE * u
+        omega = np.clip(omega + acc * h, -18.0, 18.0)
+        theta = theta + omega * h
+    reward = np.cos(theta) - 0.05 * omega**2 - 0.002 * u**2
+    return theta, omega, reward
+
+def features(theta, omega):
+    c, s = np.cos(theta), np.sin(theta)
+    return np.array([c, s, omega, omega * c, omega * s, 1.0])
+</code></pre>
+      </div>
+      <p class="small muted">The features are fixed; only the weights move. The term $\omega\cos\theta$ is the energy-pumping direction near the bottom, and $\omega\sin\theta$ covers the sides — enough for a linear actor to swing up.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="learners">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>Three learners</h2>
+      <p>All three share the same skeleton — replay buffer, target networks, Gaussian exploration — and differ only in what they add. Start with the critic, which every one of them needs.</p>
+      <div class="cb">
+        <div class="cb-head"><span class="cb-file">critic.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+        <pre class="code"><code data-lang="python">import numpy as np
+
+class Critic:
+    def __init__(self, dim=13, seed=0):
+        rng = np.random.default_rng(seed)
+        self.w = 0.01 * rng.standard_normal(dim)
+    def z(self, phi, a):
+        return np.concatenate([phi, [a], a * phi])      # Q is affine in a, curved in s
+    def q(self, phi, a):
+        return float(self.w @ self.z(phi, a))
+    def dq_da(self, phi, a):
+        return self.w[6] + float(self.w[7:] @ phi)      # derivative used by the actor
+</code></pre>
+      </div>
+
+      <h3>DDPG — a deterministic actor</h3>
+      <p><b>Deep Deterministic Policy Gradient</b> learns a deterministic $\mu_\theta(s)$ and pushes it up the critic's action-gradient. No policy distribution, no expectation over actions — just the chain rule through $Q$:</p>
+      <div class="eqbox" id="dpgEq"></div>
+      <p>Only the second factor depends on the actor's parameters; the first is read off the critic. Because the gradient flows through $Q$, the actor must be updated on the <em>same</em> states the critic was just trained on — which is why the actor and the critic share each minibatch.</p>
+      <div class="cb">
+        <div class="cb-head"><span class="cb-file">ddpg.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+        <pre class="code"><code data-lang="python">def ddpg_update(agent, tr):
+    phi, a, r, phi2 = tr.phi, tr.a, tr.r, tr.phi2
+    a2 = np.tanh(agent.actor_target @ phi2)                 # bootstrap action
+    y  = r + agent.gamma * agent.critic_target.q(phi2, a2)  # TD target
+    err = agent.critic.q(phi, a) - y
+    agent.critic.w -= agent.lr_c * 2 * err * agent.critic.z(phi, a)
+
+    a_ = np.tanh(agent.actor @ phi)                         # deterministic policy gradient
+    dq = agent.critic.dq_da(phi, a_)
+    agent.actor -= agent.lr_a * (-dq * (1 - a_**2)) * phi
+    polyak(agent.actor_target, agent.actor, agent.tau)      # slow target networks
+    polyak(agent.critic_target, agent.critic, agent.tau)
+</code></pre>
+      </div>
+
+      <h3>TD3 — three fixes to DDPG</h3>
+      <p><b>Twin Delayed DDPG</b> treats DDPG's failure mode — a critic that confidently over-estimates — with three changes. <b>Twin critics</b> train two $Q$'s and take the smaller for the target, so optimism costs. <b>Target-policy smoothing</b> adds clipped noise to the target action, which keeps the critic from sharpening a spike at one action. <b>Delayed updates</b> let the critic catch up before the actor moves.</p>
+      <div class="cb">
+        <div class="cb-head"><span class="cb-file">td3.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+        <pre class="code"><code data-lang="python">def td3_update(agent, tr):
+    phi, a, r, phi2 = tr.phi, tr.a, tr.r, tr.phi2
+    a2 = np.tanh(agent.actor_target @ phi2)
+    eps = np.clip(agent.target_sigma * np.random.randn(),
+                  -agent.target_clip, agent.target_clip)
+    a2 = np.clip(a2 + eps, -1, 1)                           # target-policy smoothing
+    y = r + agent.gamma * min(agent.q1_target.q(phi2, a2),
+                              agent.q2_target.q(phi2, a2))  # pessimistic twin min
+    for q in (agent.q1, agent.q2):
+        err = q.q(phi, a) - y
+        q.w -= agent.lr_c * 2 * err * q.z(phi, a)
+    if agent.updates % agent.policy_delay == 0:             # delayed actor
+        a_ = np.tanh(agent.actor @ phi)
+        dq = agent.q1.dq_da(phi, a_)
+        agent.actor -= agent.lr_a * (-dq * (1 - a_**2)) * phi
+        polyak(agent.actor_target, agent.actor, agent.tau)
+        polyak(agent.q1_target, agent.q1, agent.tau)
+        polyak(agent.q2_target, agent.q2, agent.tau)
+</code></pre>
+      </div>
+
+      <h3>SAC — maximum entropy</h3>
+      <p><b>Soft Actor-Critic</b> stops optimising return alone. It optimises return plus the entropy of its own policy, so it stays stochastic until the data says otherwise — an exploration bonus that fades exactly where a deterministic policy would over-commit:</p>
+      <div class="eqbox" id="sacEq"></div>
+      <p>The actor is now a squashed Gaussian, $a=\tanh(\mu_\theta(s)+\sigma\varepsilon)$, and $\sigma$ is learned. In the target, the entropy term appears as $-\alpha\log\pi$ inside the bootstrap, which rewards visiting states whose actions are still uncertain. The temperature $\alpha$ trades reward against entropy; it can be fixed or tuned automatically to a target entropy.</p>
+      <div class="cb">
+        <div class="cb-head"><span class="cb-file">sac.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+        <pre class="code"><code data-lang="python">def sac_update(agent, tr):
+    phi, a, r, phi2 = tr.phi, tr.a, tr.r, tr.phi2
+    sigma = np.exp(np.clip(agent.log_std, -3, 1))
+    eps = np.random.randn()
+    mu = agent.mean @ phi
+    a_ = np.tanh(mu + sigma * eps)                          # reparameterised sample
+    logp = -0.5 * eps**2 - agent.log_std - 0.5 * np.log(2 * np.pi)
+
+    a2 = np.tanh(agent.mean @ phi2 + sigma * np.random.randn())
+    q2 = min(agent.q1_target.q(phi2, a2), agent.q2_target.q(phi2, a2))
+    y  = r + agent.gamma * (q2 - agent.alpha * logp)        # entropy in the target
+
+    for q in (agent.q1, agent.q2):
+        err = q.q(phi, a) - y
+        q.w -= agent.lr_c * 2 * err * q.z(phi, a)
+
+    dq = agent.q1.dq_da(phi, a_)
+    agent.mean    -= agent.lr_a * (agent.alpha * eps / sigma - dq * (1 - a_**2)) * phi
+    agent.log_std -= 0.5 * agent.lr_a * agent.alpha * (eps**2 - 1)
+    if agent.auto_alpha:                                    # target entropy = -1
+        agent.alpha += agent.lr_alpha * (logp + agent.target_entropy)
+        agent.alpha = float(np.clip(agent.alpha, 0.01, 2.0))
+    polyak(agent.q1_target, agent.q1, agent.tau)
+    polyak(agent.q2_target, agent.q2, agent.tau)
+</code></pre>
+      </div>
+      <div class="note"><b>One simplification, stated plainly.</b> The critic is linear in the augmented features, and the SAC entropy is measured on the pre-squash variable — the $\tanh$ log-determinant correction is dropped. These keep the page's arithmetic exact and cheap; they change nothing about which failure mode each algorithm fixes.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="train">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Training one learner</h2>
+      <p>Run one algorithm and watch it learn the swing-up. Every point on the curve is an episode return computed here: the pendulum starts at a random angle and hangs from gravity, and the agent gets the horizon to bring $\cos\theta$ up and hold it. The smoothed line is an exponential average; the raw line is the noise underneath it.</p>
+      <p class="small muted">The pendulum view shows the state the agent is in right now, with the upright drawn dashed. Speed sets how many environment steps happen per animation frame — Turbo is for the impatient.</p>
+    </div>
+
+    <div class="lab" id="l1">
+      <div class="lab-head">
+        <span class="lab-title">Lab · train one learner</span>
+        <div class="btnrow">
+          <span class="tabs" id="l1Algo" style="margin:0">
+            <button class="tab" data-a="ddpg">DDPG</button>
+            <button class="tab active" data-a="td3">TD3</button>
+            <button class="tab" data-a="sac">SAC</button>
+          </span>
+          <span class="btnrow" id="l1Speed">
+            <button data-s="10">Slow</button>
+            <button data-s="100" class="active">Fast</button>
+            <button data-s="400">Turbo</button>
+          </span>
+          <button id="l1Step">Step</button>
+          <button id="l1Reset">Reset</button>
+          <button id="l1Run" class="primary">Run ▶</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <p class="plot-cap">Episode return</p>
+          <svg id="l1Curve" viewBox="0 0 460 240" role="img" aria-label="Learning curve of episode return over episodes"></svg>
+          <div class="legend"><span><span class="sw" style="background:#c2c9d4"></span> raw</span> <span><span class="sw" style="background:#2563eb"></span> smoothed</span></div>
+        </div>
+        <div class="col" style="flex:1 1 240px">
+          <p class="plot-cap">Pendulum</p>
+          <svg id="l1Pend" viewBox="0 0 170 170" style="max-width:200px;margin:0 auto" role="img" aria-label="Pendulum under the current policy"></svg>
+        </div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-k">episode</div><div class="metric-v" id="l1Ep">0</div></div>
+        <div class="metric"><div class="metric-k">smoothed return</div><div class="metric-v" id="l1R">—</div></div>
+        <div class="metric"><div class="metric-k">|TD error|</div><div class="metric-v" id="l1Err">—</div></div>
+        <div class="metric"><div class="metric-k">steps</div><div class="metric-v" id="l1Steps">0</div></div>
+      </div>
+      <p class="readout" id="l1Info"></p>
+      <p class="small muted" style="margin:10px 0 0">The deterministic policy gradient in the box above is rendered from this run's live numbers: the critic's $\nabla_a Q$ at the sampled state, the actor's slope $1-\mu^2$, and the current action.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="ablate">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Ablating the three fixes</h2>
+      <p>Change exactly one thing and the curve tells you whether it mattered. The <b>config</b> agent obeys the toggles below; the <b>reference</b> agent is full TD3 — twin critics, target smoothing and delayed updates all on — trained in lockstep on the same seeds. Toggling a fix on should pull the config curve toward the reference.</p>
+      <p>If the entropy slider is live (SAC), you are moving the temperature $\alpha$: up and the config stays exploratory and slow to sharpen; down and it behaves like a deterministic actor with a vestigial noise term. Auto-α tunes it to a target entropy instead.</p>
+    </div>
+
+    <div class="lab" id="l2">
+      <div class="lab-head">
+        <span class="lab-title">Lab · ablation panel</span>
+        <div class="btnrow">
+          <span class="tabs" id="l2Algo" style="margin:0">
+            <button class="tab" data-a="ddpg">DDPG</button>
+            <button class="tab active" data-a="td3">TD3</button>
+            <button class="tab" data-a="sac">SAC</button>
+          </span>
+          <button id="l2Run" class="primary">Run ▶</button>
+          <button id="l2Reset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 400px">
+          <p class="plot-cap">Smoothed return vs episode</p>
+          <svg id="l2Curve" viewBox="0 0 460 250" role="img" aria-label="Ablation learning curves for the config and reference agents"></svg>
+          <div class="legend">
+            <span><span class="sw" style="background:#2563eb"></span> config</span>
+            <span><span class="sw" style="background:#111"></span> reference TD3</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 290px">
+          <div class="btnrow" style="margin-bottom:10px">
+            <button class="tab active" id="l2Twin">twin critics</button>
+            <button class="tab" id="l2Smooth">target smoothing</button>
+            <button class="tab active" id="l2Auto">auto α</button>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">α</span>
+            <input type="range" id="l2Alpha" min="0.01" max="1" step="0.01" value="0.2" aria-label="entropy temperature alpha">
+            <span class="val" id="l2AlphaVal">0.20</span>
+          </div>
+          <p class="readout" id="l2Info"></p>
+          <p class="small muted" style="margin:10px 0 0">The entropy temperature box above tracks this config agent's live $\alpha$, $\log\pi$ and $Q$.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="policy">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>The learned policy, drawn</h2>
+      <p>Read the policy directly. The surface below colours every state by the action the greedy policy takes — blue to push one way, red the other — and the black path is the trajectory the policy produces from the bottom. A swing-up policy shows a curled path: it pumps on the way up, then settles onto the ridge at $\theta=0$.</p>
+      <p class="small muted">Drag the probe to any state; the distribution panel shows what the policy would do there. SAC keeps a wide Gaussian until the state is well covered, then narrows it — that is the entropy term made visible.</p>
+    </div>
+
+    <div class="lab" id="l3">
+      <div class="lab-head">
+        <span class="lab-title">Lab · policy &amp; path visualiser</span>
+        <div class="btnrow">
+          <span class="tabs" id="l3Algo" style="margin:0">
+            <button class="tab" data-a="ddpg">DDPG</button>
+            <button class="tab active" data-a="td3">TD3</button>
+            <button class="tab" data-a="sac">SAC</button>
+          </span>
+          <button id="l3Train">Train 20k more</button>
+          <button id="l3Reset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 400px">
+          <p class="plot-cap">Action a(s) over (θ, ω)</p>
+          <svg id="l3Map" viewBox="0 0 460 250" role="img" aria-label="Learned action over the state space with a rollout trajectory overlaid"></svg>
+          <div class="legend"><span><span class="sw" style="background:#2563eb"></span> push +</span> <span><span class="sw" style="background:#dc2626"></span> push −</span> <span><span class="sw" style="background:#111"></span> rollout</span></div>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row">
+            <span class="small muted">θ</span>
+            <input type="range" id="l3Theta" min="-3.14" max="3.14" step="0.05" value="3.14" aria-label="probe angle theta">
+            <span class="val" id="l3ThetaVal">3.14</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">ω</span>
+            <input type="range" id="l3Omega" min="-10" max="10" step="0.25" value="0" aria-label="probe angular velocity omega">
+            <span class="val" id="l3OmegaVal">0.00</span>
+          </div>
+          <p class="plot-cap" style="margin-top:16px">Action distribution here</p>
+          <svg id="l3Dist" viewBox="0 0 320 150" role="img" aria-label="Action distribution at the probe state"></svg>
+          <p class="readout" id="l3Info"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="measure">
+  <div class="wrap">
+    <h2><span class="num">06</span>What to compare</h2>
+    <p>Report three things. <b>Sample efficiency</b>: episodes (or steps) to reach a return threshold. <b>Stability</b>: whether the smoothed curve stays up after it rises, or collapses. <b>Cost</b>: critic count and the extra forward passes each fix buys. The three fixes do not cost the same.</p>
+    <table class="cmp">
+      <tr><th></th><th>DDPG</th><th>TD3</th><th>SAC</th></tr>
+      <tr><td>Policy</td><td>Deterministic μ(s)</td><td>Deterministic μ(s)</td><td>Gaussian tanh, learned σ</td></tr>
+      <tr><td>Critics</td><td>One</td><td>Twin, pessimistic min</td><td>Twin, pessimistic min</td></tr>
+      <tr><td>Target action</td><td>μ′(s′)</td><td>μ′(s′)+clipped noise</td><td>Fresh policy sample</td></tr>
+      <tr><td>Exploration</td><td>Action noise</td><td>Action noise</td><td>Policy entropy</td></tr>
+      <tr><td>Extra knob</td><td>—</td><td>Noise σ, clip c</td><td>Temperature α</td></tr>
+      <tr><td>Typical failure</td><td>Over-estimated Q</td><td>Slower early</td><td>Temperature mis-set</td></tr>
+    </table>
+    <p>The ablation is the report. Hold the seeds, the replay buffer, the feature map and the optimisers fixed; flip <em>only</em> target smoothing, <em>only</em> the twin critics, <em>only</em> the temperature — and let the curves, not the prose, make the case. A fix that does not move the curve on this task is not a fix, it is a habit.</p>
+    <p class="small muted">Everything here extends straight to a real MuJoCo or PyBullet benchmark: swap the pendulum for the environment, the feature map for an MLP, and keep every algorithm identical.</p>
+  </div>
+</section>
+
+<!-- inter-chapter-nav -->
+<!-- project-pager -->
+<nav class="pager" aria-label="Project navigation"><a class="pg-prev" href="01-tabular-rl-from-scratch.html"><span class="pg-k">Previous</span><span class="pg-t">Tabular RL from Scratch</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="03-offline-rl-benchmark.html"><span class="pg-k">Next</span><span class="pg-t">Offline RL Benchmark</span></a></nav>
+<footer>
+  <div class="wrap">Three fixes, one pendulum, and a curve that will not lie to you.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities (chapter helpers)
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function T(node, tex, display = false) {
+  if (!window.katex || !node) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+function dot(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gauss(rng) {
+  const u = Math.max(rng(), 1e-12), v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+const fmt = (v, d = 2) => (v < 0 ? '\u2212' : '') + Math.abs(v).toFixed(d);
+function pickSeg(group, val) {
+  $$('#' + group + ' button').forEach(b => b.classList.toggle('active', Object.values(b.dataset)[0] === val));
+}
+function wrapAngle(a) { let x = (a + Math.PI) % (2 * Math.PI); if (x < 0) x += 2 * Math.PI; return x - Math.PI; }
+function colorFor(v) {
+  const t = Math.max(-1, Math.min(1, Math.tanh(v)));
+  const a = Math.min(0.9, Math.abs(t) * 0.92);
+  return t >= 0 ? 'rgba(37,99,235,' + a.toFixed(3) + ')' : 'rgba(220,38,38,' + a.toFixed(3) + ')';
+}
+
+/* =====================================================================
+   Continuous pendulum environment (mirrors pendulum_mdp.py)
+   ===================================================================== */
+const ENV = { G: 9.0, DAMP: 0.7, TORQUE: 11.0, DT: 0.05, SUB: 4, H: 120, VMAX: 18 };
+const FD = 6, CD = 2 * FD + 1;   // feature dim, augmented critic dim
+function feats(th, w) {
+  const c = Math.cos(th), s = Math.sin(th);
+  return [c, s, w, w * c, w * s, 1];
+}
+function pendulumStep(th, w, u) {
+  const h = ENV.DT / ENV.SUB;
+  let T_ = th, W = w;
+  for (let i = 0; i < ENV.SUB; i++) {
+    const acc = ENV.G * Math.sin(T_) - ENV.DAMP * W + ENV.TORQUE * u;
+    W = clamp(W + acc * h, -ENV.VMAX, ENV.VMAX);
+    T_ = T_ + W * h;
+  }
+  const reward = Math.cos(T_) - 0.05 * W * W - 0.002 * u * u;
+  return { th: T_, w: W, r: reward };
+}
+
+/* =====================================================================
+   Linear-in-features critic (mirrors critic.py)
+   ===================================================================== */
+function criticEval(w, phi, a) {
+  const z = new Array(CD);
+  for (let i = 0; i < FD; i++) z[i] = phi[i];
+  z[FD] = a;
+  for (let i = 0; i < FD; i++) z[FD + 1 + i] = a * phi[i];
+  let q = 0; for (let k = 0; k < CD; k++) q += w[k] * z[k];
+  return { q, z };
+}
+function dQda(w, phi) {
+  let g = w[FD];
+  for (let i = 0; i < FD; i++) g += w[FD + 1 + i] * phi[i];
+  return g;
+}
+function polyak(t, s, tau) { for (let k = 0; k < t.length; k++) t[k] = tau * s[k] + (1 - tau) * t[k]; }
+
+/* =====================================================================
+   Agent: DDPG / TD3 / SAC
+   ===================================================================== */
+const BUFCAP = 5000, WARMUP = 500;
+function cfgFor(algo) {
+  const base = {
+    algo, seed: 7, gamma: 0.97, tau: 0.012, lr: 0.006, lrA: 0.004, lrAlpha: 0.006,
+    batch: 32, explNoise: 0.18, tSig: 0.2, tClip: 0.5, pdelay: 1,
+    twin: false, smoothing: false, alpha: 0.2, autoAlpha: false, targetEntropy: -1
+  };
+  if (algo === 'td3') Object.assign(base, { twin: true, smoothing: true, pdelay: 2 });
+  if (algo === 'sac') Object.assign(base, { twin: true, smoothing: false, explNoise: 0 });
+  return base;
+}
+function makeAgent(cfg) {
+  const o = Object.assign(cfgFor(cfg && cfg.algo || 'td3'), cfg || {});
+  const rng = mulberry32(((o.seed || 7) * 2654435761) >>> 0);
+  const nC = o.twin ? 2 : 1;
+  const rv = (n, s) => { const a = new Array(n); for (let i = 0; i < n; i++) a[i] = gauss(rng) * s; return a; };
+  const A = {
+    o, rng,
+    wc: Array.from({ length: nC }, () => rv(CD, 0.01)),
+    wcT: Array.from({ length: nC }, () => rv(CD, 0.01)),
+    wa: rv(FD, 0.1), waT: null,
+    wmu: rv(FD, 0.1), rho: -0.5,
+    alpha: o.alpha, buffer: [], steps: 0, updates: 0,
+    ep: 0, epR: 0, t: 0, th: 0, w: 0, hist: [], smooth: NaN,
+    lastDq: 0, lastA: 0, lastErr: 0, lastLogp: 0, lastQ: 0
+  };
+  A.waT = A.wa.slice();
+  A.resetEpisode = function () {
+    A.th = (rng() * 2 - 1) * Math.PI;
+    A.w = (rng() * 2 - 1) * 1.5;
+    A.t = 0; A.epR = 0;
+  };
+  A.sample = function (phi) {
+    if (o.algo === 'sac') {
+      const mu = dot(A.wmu, phi), sig = Math.exp(clamp(A.rho, -3, 1));
+      const eps = gauss(rng), z = mu + sig * eps, a = Math.tanh(z);
+      const logp = -0.5 * eps * eps - A.rho - 0.5 * Math.log(2 * Math.PI);
+      return { a, eps, sigma: sig, logp, det: Math.tanh(mu) };
+    }
+    const d = Math.tanh(dot(A.wa, phi));
+    const a = clamp(d + gauss(rng) * o.explNoise, -1, 1);
+    return { a, det: d, eps: 0, sigma: 0, logp: 0 };
+  };
+  A.meanAction = function (phi) {
+    return o.algo === 'sac' ? Math.tanh(dot(A.wmu, phi)) : Math.tanh(dot(A.wa, phi));
+  };
+  A.train = function () {
+    const B = o.batch;
+    for (let b = 0; b < B; b++) {
+      const tr = A.buffer[Math.floor(rng() * A.buffer.length)];
+      let a2, sacLogp = 0;
+      if (o.algo === 'sac') {
+        const mu = dot(A.wmu, tr.phi2), sig = Math.exp(clamp(A.rho, -3, 1));
+        const eps = gauss(rng); a2 = Math.tanh(mu + sig * eps);
+        sacLogp = -0.5 * eps * eps - A.rho - 0.5 * Math.log(2 * Math.PI);
+      } else {
+        a2 = Math.tanh(dot(A.waT, tr.phi2));
+        if (o.smoothing) a2 = clamp(a2 + clamp(gauss(rng) * o.tSig, -o.tClip, o.tClip), -1, 1);
+      }
+      const e1 = criticEval(A.wcT[0], tr.phi2, a2);
+      let q2 = e1.q;
+      if (o.twin) { const e2 = criticEval(A.wcT[1], tr.phi2, a2); if (e2.q < q2) q2 = e2.q; }
+      const y = tr.r + o.gamma * (q2 - (o.algo === 'sac' ? A.alpha * sacLogp : 0));
+      const eo = criticEval(A.wc[0], tr.phi, tr.a);
+      const err = clamp(eo.q - y, -20, 20);
+      for (let k = 0; k < CD; k++) A.wc[0][k] = clamp(A.wc[0][k] - o.lr * 2 * err * eo.z[k], -40, 40);
+      if (o.twin) {
+        const eo2 = criticEval(A.wc[1], tr.phi, tr.a);
+        const err2 = clamp(eo2.q - y, -20, 20);
+        for (let k = 0; k < CD; k++) A.wc[1][k] = clamp(A.wc[1][k] - o.lr * 2 * err2 * eo2.z[k], -40, 40);
+      }
+      A.lastErr = err; A.lastQ = eo.q;
+      A.updates++;
+      if (A.updates % o.pdelay === 0) {
+        if (o.algo === 'sac') {
+          const mu = dot(A.wmu, tr.phi), sig = Math.exp(clamp(A.rho, -3, 1));
+          const eps = gauss(rng), a = Math.tanh(mu + sig * eps);
+          const dq = dQda(A.wc[0], tr.phi);
+          for (let k = 0; k < FD; k++) {
+            const gr = A.alpha * (eps / sig) * tr.phi[k] - dq * (1 - a * a) * tr.phi[k];
+            A.wmu[k] = clamp(A.wmu[k] - o.lrA * gr, -40, 40);
+          }
+          A.rho = clamp(A.rho - 0.5 * o.lrA * A.alpha * (eps * eps - 1), -3, 1);
+          const logp = -0.5 * eps * eps - A.rho - 0.5 * Math.log(2 * Math.PI);
+          if (o.autoAlpha) A.alpha = clamp(A.alpha + o.lrAlpha * (logp + o.targetEntropy), 0.01, 2);
+          A.lastLogp = logp;
+        } else {
+          const a0 = Math.tanh(dot(A.wa, tr.phi));
+          const dq = dQda(A.wc[0], tr.phi);
+          for (let k = 0; k < FD; k++) A.wa[k] = clamp(A.wa[k] - o.lrA * (-dq * (1 - a0 * a0) * tr.phi[k]), -40, 40);
+          A.lastDq = dq; A.lastA = a0;
+        }
+        polyak(A.wcT[0], A.wc[0], o.tau);
+        if (o.twin) polyak(A.wcT[1], A.wc[1], o.tau);
+        if (o.algo !== 'sac') polyak(A.waT, A.wa, o.tau);
+      }
+    }
+  };
+  A.step = function () {
+    const phi = feats(A.th, A.w);
+    const sA = A.sample(phi);
+    const res = pendulumStep(A.th, A.w, sA.a);
+    A.th = res.th; A.w = res.w; A.epR += res.r; A.t++; A.steps++;
+    A.buffer.push({ phi, a: sA.a, r: res.r, phi2: feats(A.th, A.w) });
+    if (A.buffer.length > BUFCAP) A.buffer.shift();
+    if (A.t >= ENV.H) {
+      A.ep++; A.hist.push(A.epR);
+      A.smooth = isNaN(A.smooth) ? A.epR : A.smooth * 0.7 + A.epR * 0.3;
+      A.resetEpisode();
+    }
+    if (A.buffer.length >= WARMUP) A.train();
+  };
+  A.resetEpisode();
+  return A;
+}
+
+/* =====================================================================
+   Plotting helpers
+   ===================================================================== */
+function plotCurves(svg, series, opt) {
+  opt = opt || {};
+  const W = opt.w || 460, H = opt.h || 240, ml = 46, mr = 16, mt = 14, mb = 30;
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  let xmax = 1, ymin = Infinity, ymax = -Infinity;
+  series.forEach(s => s.pts.forEach(p => {
+    if (!isFinite(p[0]) || !isFinite(p[1])) return;
+    if (p[0] > xmax) xmax = p[0];
+    if (p[1] < ymin) ymin = p[1];
+    if (p[1] > ymax) ymax = p[1];
+  }));
+  if (!isFinite(ymin)) { ymin = 0; ymax = 1; }
+  if (ymax - ymin < 1e-3) { ymax += 0.5; ymin -= 0.5; }
+  const pad = (ymax - ymin) * 0.1; ymin -= pad; ymax += pad;
+  if (ymin > 0) ymin = 0; if (ymax < 0) ymax = 0;
+  const X = x => ml + (x / xmax) * (W - ml - mr);
+  const Y = y => H - mb - ((y - ymin) / (ymax - ymin)) * (H - mt - mb);
+  el('rect', { x: ml, y: mt, width: W - ml - mr, height: H - mt - mb, fill: '#fff', stroke: '#f0f0f0' }, svg);
+  [0, 0.5, 1].forEach(f => {
+    const yv = ymin + (ymax - ymin) * f;
+    el('line', { x1: ml, x2: W - mr, y1: Y(yv), y2: Y(yv), stroke: '#f0f0f0' }, svg);
+    el('text', { x: ml - 8, y: Y(yv) + 4, 'text-anchor': 'end', 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, svg).textContent = yv.toFixed(0);
+  });
+  [0, 0.5, 1].forEach(f => {
+    const xv = xmax * f;
+    el('text', { x: X(xv), y: H - mb + 16, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, svg).textContent = Math.round(xv);
+  });
+  if (ymin < 0 && ymax > 0) el('line', { x1: ml, x2: W - mr, y1: Y(0), y2: Y(0), stroke: '#e5e5e5', 'stroke-dasharray': '3 3' }, svg);
+  series.forEach(s => {
+    let d = '', started = false;
+    s.pts.forEach(p => {
+      if (!isFinite(p[0]) || !isFinite(p[1])) return;
+      d += (started ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1) + ' ';
+      started = true;
+    });
+    if (d) el('path', { d, fill: 'none', stroke: s.color, 'stroke-width': s.width || 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: s.opacity || 1 }, svg);
+  });
+  el('text', { x: (ml + W - mr) / 2, y: H - 2, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280' }, svg).textContent = opt.xlab || '';
+  const cy = (mt + H - mb) / 2;
+  el('text', { x: 12, y: cy, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280', transform: 'rotate(-90 12 ' + cy + ')' }, svg).textContent = opt.ylab || '';
+}
+function drawPendulum(svg, th, w) {
+  if (!svg) return;
+  const W = 170, H = 170, cx = 85, cy = 130, L = 88;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  el('line', { x1: 20, y1: cy, x2: W - 20, y2: cy, stroke: '#ececec' }, svg);
+  el('line', { x1: cx, y1: cy, x2: cx, y2: cy - L - 6, stroke: '#e5e5e5', 'stroke-dasharray': '4 4' }, svg);
+  const ex = cx + L * Math.sin(th), ey = cy - L * Math.cos(th);
+  el('line', { x1: cx, y1: cy, x2: ex, y2: ey, stroke: '#111', 'stroke-width': 5, 'stroke-linecap': 'round' }, svg);
+  el('circle', { cx: ex, cy: ey, r: 9, fill: '#1e3a8a' }, svg);
+  el('circle', { cx: cx, cy: cy, r: 6, fill: '#111' }, svg);
+  el('text', { x: cx, y: cy + 24, 'text-anchor': 'middle', 'font-size': 11, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, svg).textContent = 'θ=' + fmt(wrapAngle(th), 2) + '  ω=' + fmt(w, 1);
+}
+function emaPts(hist, a) {
+  const out = []; let e = NaN;
+  hist.forEach((v, i) => { e = isNaN(e) ? v : e * a + v * (1 - a); out.push([i + 1, e]); });
+  return out;
+}
+
+/* =====================================================================
+   Live equations
+   ===================================================================== */
+function updateDpgEq(agent) {
+  const node = $('#dpgEq'); if (!node) return;
+  const dq = agent.lastDq, a = agent.lastA, na = 1 - a * a;
+  T(node, '\\begin{aligned}\\nabla_\\theta J(\\theta)&=\\mathbb{E}_{s\\sim\\mathcal{D}}\\Big[\\nabla_a Q^{\\mu}(s,a)\\big|_{a=\\mu(s)}\\,\\nabla_\\theta\\mu_\\theta(s)\\Big]\\\\[3pt]\\nabla_a Q^{\\mu}&=' + fmt(dq, 3) + ',\\qquad 1-\\mu(s)^2=' + fmt(na, 3) + ',\\qquad \\mu(s)=' + fmt(a, 3) + '\\end{aligned}', true);
+}
+function updateSacEq(agent) {
+  const node = $('#sacEq'); if (!node) return;
+  T(node, '\\begin{aligned}J(\\pi)&=\\sum_{t}\\mathbb{E}_{(s_t,a_t)\\sim\\rho_\\pi}\\Big[r(s_t,a_t)+\\alpha\\,\\mathcal{H}\\big(\\pi(\\cdot\\mid s_t)\\big)\\Big]\\\\[3pt]\\alpha&=' + fmt(agent.alpha, 3) + ',\\qquad \\log\\pi(a\\mid s)=' + fmt(agent.lastLogp || 0, 3) + ',\\qquad Q(s,a)=' + fmt(agent.lastQ || 0, 3) + '\\end{aligned}', true);
+}
+
+/* =====================================================================
+   03 — train one learner
+   ===================================================================== */
+function initTrain() {
+  let algo = 'td3';
+  let agent = makeAgent(cfgFor(algo));
+  let speed = 100, running = false, timer = null;
+  const maxEp = 500, curve = $('#l1Curve');
+
+  function refresh() {
+    const raw = agent.hist.map((v, i) => [i + 1, v]);
+    plotCurves(curve, [
+      { pts: raw, color: '#c2c9d4', width: 1, opacity: .85 },
+      { pts: emaPts(agent.hist, 0.75), color: '#2563eb', width: 2.2 }
+    ], { w: 460, h: 240, xlab: 'episode', ylab: 'return' });
+    drawPendulum($('#l1Pend'), agent.th, agent.w);
+    $('#l1Ep').textContent = String(agent.ep);
+    $('#l1R').textContent = isNaN(agent.smooth) ? '\u2014' : fmt(agent.smooth, 1);
+    $('#l1Err').textContent = fmt(agent.lastErr, 3);
+    $('#l1Steps').textContent = String(agent.steps);
+    $('#l1Info').innerHTML = 'algo <b>' + agent.o.algo.toUpperCase() + '</b> · exploration <b>' +
+      (agent.o.explNoise ? ('noise ' + fmt(agent.o.explNoise, 2)) : 'entropy') +
+      '</b> · buffer <b>' + agent.buffer.length + '</b> · updates <b>' + agent.updates + '</b>';
+    updateDpgEq(agent);
+    if (agent.o.algo === 'sac') updateSacEq(agent);
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } running = false; $('#l1Run').classList.remove('primary'); $('#l1Run').textContent = 'Run ▶'; }
+  function tick() {
+    for (let i = 0; i < speed && agent.ep < maxEp; i++) agent.step();
+    refresh();
+    if (agent.ep >= maxEp || (agent.ep > 40 && agent.smooth > 60)) stop();
+  }
+  function start() { if (running) return; running = true; $('#l1Run').classList.add('primary'); $('#l1Run').textContent = 'Pause'; timer = setInterval(tick, 90); }
+  function reset() { stop(); agent = makeAgent(cfgFor(algo)); refresh(); }
+
+  $$('#l1Algo button').forEach(b => b.addEventListener('click', () => { algo = b.dataset.a; pickSeg('l1Algo', algo); reset(); }));
+  $$('#l1Speed button').forEach(b => b.addEventListener('click', () => { speed = parseInt(b.dataset.s, 10); pickSeg('l1Speed', String(speed)); }));
+  $('#l1Run').addEventListener('click', () => { running ? stop() : start(); });
+  $('#l1Step').addEventListener('click', () => { stop(); for (let i = 0; i < 20; i++) agent.step(); refresh(); });
+  $('#l1Reset').addEventListener('click', reset);
+  refresh();
+}
+
+/* =====================================================================
+   04 — ablation panel
+   ===================================================================== */
+function initAblate() {
+  let running = false, timer = null;
+  const maxEp = 320;
+  let cfgAgent = null, refAgent = null;
+  const curve = $('#l2Curve');
+
+  function currentCfg() {
+    const algo = $('#l2Algo .active').dataset.a;
+    const c = cfgFor(algo);
+    c.twin = $('#l2Twin').classList.contains('active');
+    c.smoothing = $('#l2Smooth').classList.contains('active');
+    c.alpha = parseFloat($('#l2Alpha').value);
+    c.autoAlpha = $('#l2Auto').classList.contains('active');
+    c.seed = 7;
+    return c;
+  }
+  function reset() {
+    stop();
+    cfgAgent = makeAgent(currentCfg());
+    const rc = cfgFor('td3'); rc.seed = 7;
+    refAgent = makeAgent(rc);
+    refresh();
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } running = false; $('#l2Run').classList.remove('primary'); $('#l2Run').textContent = 'Run ▶'; }
+  function tick() {
+    for (let i = 0; i < 80 && cfgAgent.ep < maxEp; i++) cfgAgent.step();
+    for (let i = 0; i < 80 && refAgent.ep < maxEp; i++) refAgent.step();
+    refresh();
+    if ((cfgAgent.ep >= maxEp && refAgent.ep >= maxEp) || (cfgAgent.ep > 40 && cfgAgent.smooth > 60)) stop();
+  }
+  function start() { if (running) return; running = true; $('#l2Run').classList.add('primary'); $('#l2Run').textContent = 'Pause'; timer = setInterval(tick, 90); }
+  function refresh() {
+    plotCurves(curve, [
+      { pts: emaPts(refAgent.hist, 0.75), color: '#111', width: 2.2 },
+      { pts: emaPts(cfgAgent.hist, 0.75), color: '#2563eb', width: 2.2 }
+    ], { w: 460, h: 250, xlab: 'episode', ylab: 'return' });
+    $('#l2Info').innerHTML = 'config <b>' + cfgAgent.o.algo.toUpperCase() + '</b> · twin <b>' +
+      (cfgAgent.o.twin ? 'on' : 'off') + '</b> · smoothing <b>' + (cfgAgent.o.smoothing ? 'on' : 'off') +
+      '</b> · α <b>' + fmt(cfgAgent.alpha, 2) + '</b><br>ep <b>' + cfgAgent.ep + '</b> · smoothed <b>' +
+      (isNaN(cfgAgent.smooth) ? '\u2014' : fmt(cfgAgent.smooth, 1)) + '</b>';
+    updateSacEq(cfgAgent);
+  }
+  $$('#l2Algo button').forEach(b => b.addEventListener('click', () => { pickSeg('l2Algo', b.dataset.a); reset(); }));
+  $('#l2Twin').addEventListener('click', () => { $('#l2Twin').classList.toggle('active'); reset(); });
+  $('#l2Smooth').addEventListener('click', () => { $('#l2Smooth').classList.toggle('active'); reset(); });
+  $('#l2Auto').addEventListener('click', () => { $('#l2Auto').classList.toggle('active'); reset(); });
+  $('#l2Alpha').addEventListener('input', e => { $('#l2AlphaVal').textContent = parseFloat(e.target.value).toFixed(2); reset(); });
+  $('#l2Run').addEventListener('click', () => { running ? stop() : start(); });
+  $('#l2Reset').addEventListener('click', reset);
+  reset();
+}
+
+/* =====================================================================
+   05 — policy & path visualiser
+   ===================================================================== */
+function initPolicy() {
+  let algo = 'td3';
+  let agent = makeAgent(cfgFor(algo));
+  let training = false;
+  const map = $('#l3Map'), dist = $('#l3Dist');
+
+  function drawMap() {
+    const W = 460, H = 250, ml = 44, mr = 14, mt = 14, mb = 28;
+    while (map.firstChild) map.removeChild(map.firstChild);
+    const thMin = -Math.PI, thMax = Math.PI, wMin = -10, wMax = 10, NT = 36, NW = 18;
+    const X = t => ml + ((t - thMin) / (thMax - thMin)) * (W - ml - mr);
+    const Y = w => H - mb - ((w - wMin) / (wMax - wMin)) * (H - mt - mb);
+    const cw = (W - ml - mr) / NT, ch = (H - mt - mb) / NW;
+    for (let i = 0; i < NT; i++) for (let j = 0; j < NW; j++) {
+      const tm = thMin + (i + 0.5) * (thMax - thMin) / NT;
+      const wm = wMin + (j + 0.5) * (wMax - wMin) / NW;
+      const a = agent.meanAction(feats(tm, wm));
+      el('rect', { x: ml + i * cw, y: mt + (NW - 1 - j) * ch, width: cw + 0.6, height: ch + 0.6, fill: colorFor(a) }, map);
+    }
+    el('rect', { x: ml, y: mt, width: W - ml - mr, height: H - mt - mb, fill: 'none', stroke: '#e8e8e8' }, map);
+    el('text', { x: X(-Math.PI), y: H - 8, 'text-anchor': 'middle', 'font-size': 10, fill: '#6b7280' }, map).textContent = '\u2212\u03c0';
+    el('text', { x: X(0), y: H - 8, 'text-anchor': 'middle', 'font-size': 10, fill: '#6b7280' }, map).textContent = '0';
+    el('text', { x: X(Math.PI), y: H - 8, 'text-anchor': 'middle', 'font-size': 10, fill: '#6b7280' }, map).textContent = '\u03c0';
+    el('text', { x: (ml + W - mr) / 2, y: mt - 2, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af' }, map).textContent = '\u03b8  (upright \u2192 0, bottom \u2192 \u00b1\u03c0)';
+    el('text', { x: 12, y: (mt + H - mb) / 2, 'text-anchor': 'middle', 'font-size': 10, fill: '#6b7280', transform: 'rotate(-90 12 ' + ((mt + H - mb) / 2) + ')' }, map).textContent = '\u03c9';
+    let th = Math.PI, w = 0;
+    const pts = [[wrapAngle(th), w]];
+    for (let i = 0; i < ENV.H; i++) {
+      const a = agent.meanAction(feats(th, w));
+      const r = pendulumStep(th, w, a);
+      th = r.th; w = r.w;
+      pts.push([wrapAngle(th), clamp(w, wMin, wMax)]);
+    }
+    let d = '', st = false;
+    pts.forEach(p => { d += (st ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1) + ' '; st = true; });
+    el('path', { d, fill: 'none', stroke: '#111', 'stroke-width': 1.8, 'stroke-linecap': 'round', opacity: .9 }, map);
+    el('circle', { cx: X(pts[0][0]), cy: Y(pts[0][1]), r: 4, fill: '#111' }, map);
+    const pt = parseFloat($('#l3Theta').value), pw = parseFloat($('#l3Omega').value);
+    el('circle', { cx: X(pt), cy: Y(pw), r: 5, fill: '#fff', stroke: '#111', 'stroke-width': 2 }, map);
+  }
+  function drawDist() {
+    const W = 320, H = 150, ml = 30, mr = 14, mt = 14, mb = 26;
+    while (dist.firstChild) dist.removeChild(dist.firstChild);
+    const pt = parseFloat($('#l3Theta').value), pw = parseFloat($('#l3Omega').value);
+    const phi = feats(pt, pw);
+    const X = z => ml + ((z + 3) / 6) * (W - ml - mr);
+    const Y = v => H - mb - v * (H - mt - mb);
+    el('rect', { x: ml, y: mt, width: W - ml - mr, height: H - mt - mb, fill: '#fff', stroke: '#f0f0f0' }, dist);
+    el('line', { x1: X(-1), x2: X(-1), y1: mt, y2: H - mb, stroke: '#e5e5e5', 'stroke-dasharray': '3 3' }, dist);
+    el('line', { x1: X(1), x2: X(1), y1: mt, y2: H - mb, stroke: '#e5e5e5', 'stroke-dasharray': '3 3' }, dist);
+    let info = '';
+    if (agent.o.algo === 'sac') {
+      const mu = dot(agent.wmu, phi), sig = Math.exp(clamp(agent.rho, -3, 1));
+      let maxp = 0; const ps = [];
+      for (let i = 0; i <= 200; i++) { const z = -3 + 6 * i / 200; const p = Math.exp(-0.5 * Math.pow((z - mu) / sig, 2)); ps.push([z, p]); if (p > maxp) maxp = p; }
+      let d = '';
+      ps.forEach((p, i) => { d += (i === 0 ? 'M' : 'L') + X(p[0]).toFixed(1) + ' ' + Y(p[1] / maxp * 0.9).toFixed(1) + ' '; });
+      el('path', { d, fill: 'none', stroke: '#2563eb', 'stroke-width': 2 }, dist);
+      el('line', { x1: X(mu), x2: X(mu), y1: mt, y2: H - mb, stroke: '#1e3a8a', 'stroke-width': 1.5 }, dist);
+      info = 'SAC Gaussian on z · μ=<b>' + fmt(mu, 2) + '</b> σ=<b>' + fmt(sig, 2) + '</b> · a = tanh(z)';
+    } else {
+      const a = agent.meanAction(phi);
+      el('line', { x1: X(a), x2: X(a), y1: mt + 6, y2: H - mb, stroke: '#1e3a8a', 'stroke-width': 2.5 }, dist);
+      el('circle', { cx: X(a), cy: H - mb, r: 4, fill: '#1e3a8a' }, dist);
+      info = 'deterministic · a=<b>' + fmt(a, 2) + '</b> (a spike) · noise-free at test time';
+    }
+    el('text', { x: X(-3), y: H - 8, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af' }, dist).textContent = '\u22123';
+    el('text', { x: X(0), y: H - 8, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af' }, dist).textContent = 'z';
+    el('text', { x: X(3), y: H - 8, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af' }, dist).textContent = '3';
+    $('#l3Info').innerHTML = info;
+  }
+  function refresh() { drawMap(); drawDist(); }
+  function trainMore(n) {
+    if (training) return;
+    training = true;
+    let left = n;
+    const chunk = () => {
+      for (let i = 0; i < 800 && left > 0; i++) { agent.step(); left--; }
+      if (left > 0) requestAnimationFrame(chunk);
+      else { training = false; refresh(); }
+    };
+    chunk();
+  }
+  $('#l3Train').addEventListener('click', () => trainMore(20000));
+  $('#l3Reset').addEventListener('click', () => { agent = makeAgent(cfgFor(algo)); refresh(); trainMore(4000); });
+  $$('#l3Algo button').forEach(b => b.addEventListener('click', () => { algo = b.dataset.a; pickSeg('l3Algo', algo); agent = makeAgent(cfgFor(algo)); refresh(); trainMore(4000); }));
+  $('#l3Theta').addEventListener('input', e => { $('#l3ThetaVal').textContent = parseFloat(e.target.value).toFixed(2); refresh(); });
+  $('#l3Omega').addEventListener('input', e => { $('#l3OmegaVal').textContent = parseFloat(e.target.value).toFixed(2); refresh(); });
+  refresh();
+  trainMore(4000);
+}
+
+/* =====================================================================
+   Code highlighting (verbatim from the chapters)
+   ===================================================================== */
+function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+const PY_KEYWORDS = new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case self'.split(' '));
+const PY_BUILTINS = new Set('abs all any bool dict enumerate filter float int len list map max min print range reversed round set sorted str sum tuple zip isinstance super type'.split(' '));
+function highlightPython(src) {
+  const re = /(#[^\n]*)|((?:[rbfu]{0,2})(?:'''[\s\S]*?'''|"""[\s\S]*?"""|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"))|(@[A-Za-z_]\w*)|(\b\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?\b)|([A-Za-z_]\w*)|([^\w\s]+)|(\s+)/g;
+  let out = '', m;
+  while ((m = re.exec(src))) {
+    if (m[1]) out += '<span class="t-c">' + escapeHtml(m[1]) + '</span>';
+    else if (m[2]) out += '<span class="t-s">' + escapeHtml(m[2]) + '</span>';
+    else if (m[3]) out += '<span class="t-d">' + escapeHtml(m[3]) + '</span>';
+    else if (m[4]) out += '<span class="t-n">' + escapeHtml(m[4]) + '</span>';
+    else if (m[5]) {
+      const w = m[5];
+      if (PY_KEYWORDS.has(w)) out += '<span class="t-k">' + w + '</span>';
+      else if (PY_BUILTINS.has(w)) out += '<span class="t-b">' + w + '</span>';
+      else if (/^\s*\(/.test(src.slice(re.lastIndex))) out += '<span class="t-f">' + w + '</span>';
+      else out += w;
+    }
+    else if (m[6]) out += '<span class="t-o">' + escapeHtml(m[6]) + '</span>';
+    else if (m[7]) out += m[7];
+  }
+  return out;
+}
+function initCode() {
+  document.querySelectorAll('pre.code code[data-lang]').forEach(function (c) {
+    c.innerHTML = highlightPython(c.textContent);
+  });
+  document.querySelectorAll('.cb-copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var code = btn.closest('.cb').querySelector('code');
+      (navigator.clipboard ? navigator.clipboard.writeText(code.textContent) : Promise.reject())
+        .then(function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1400); })
+        .catch(function () {});
+    });
+  });
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initTrain();
+  initAblate();
+  initPolicy();
+  initCode();
+  initScroll();
+});
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
+</script>
+</body>
+</html>

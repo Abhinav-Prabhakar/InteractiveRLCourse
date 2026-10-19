@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<!--
+  Project 3 — Offline RL Benchmark
+  Assumptions:
+   · The gridworld is tabular (16 states, 4 actions), so every learner, penalty and
+     leaderboard number is computed in-page from a fixed sample of a behaviour policy.
+   · The OOD explorer reads each learner's Q along a continuous action coordinate
+     (the four compass actions placed at 0..3): interpolated inside the data support,
+     and extended by each method's own off-support rule outside it.
+   · Chrome (title, brand, eyebrow, pager, arrow keys) is normalized afterwards by
+     tools/normalize_projects.py; this file already carries the standard versions.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project 3 · Offline RL Benchmark</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px;scroll-margin-top:74px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em;text-decoration:none}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- plots, readouts ---------------- */
+input[type=range]:disabled{opacity:.35}
+.sliders{display:flex;gap:6px 26px;flex-wrap:wrap}
+.sliders .slider-row{flex:1 1 200px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.readout{font-family:ui-monospace,monospace;font-size:12.5px;color:#6b7280;margin:10px 0 0;line-height:1.6}
+.readout b{color:#111;font-weight:650}
+.plot-cap{font-size:12.5px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
+.legend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:11.5px;color:#6b7280;font-family:ui-monospace,monospace;margin-top:10px;justify-content:center}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+table.cmp.ax td:first-child{width:18%}
+table.cmp td.n{font-family:ui-monospace,monospace;font-size:13px}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+/* ---------------- code ---------------- */
+.cb{border:1px solid #e8e8e8;border-radius:12px;overflow:hidden;margin:18px 0;background:#fafafa}
+.cb-head{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #f0f0f0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;letter-spacing:.06em;color:#9ca3af}
+.cb-file{font-weight:650;color:#6b7280}
+.cb-lang{color:#9ca3af}
+.cb-copy{margin-left:auto;font:inherit;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:7px;border:1px solid #dcdcdc;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.cb-copy:hover{border-color:#111;color:#111}
+.cb pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.8px;line-height:1.65;color:#111;background:#fafafa}
+.cb code{background:none;padding:0;font-size:inherit;color:inherit}
+.t-c{color:#9ca3af;font-style:italic}
+.t-k{color:#1e3a8a;font-weight:600}
+.t-b{color:#6b7280}
+.t-n{color:#dc2626}
+.t-s{color:#2563eb}
+.t-f{color:#1e3a8a}
+.t-d{color:#6b7280;font-weight:600}
+.t-o{color:#374151}
+
+/* ---------------- lab scaffolding ---------------- */
+.lab{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff;margin:22px 0}
+.lab-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.lab-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.steps{list-style:none;counter-reset:s;margin:18px 0;padding:0}
+.steps li{counter-increment:s;position:relative;padding:2px 0 16px 42px;border-left:1px solid #f0f0f0;margin-left:13px}
+.steps li:last-child{border-left-color:transparent;padding-bottom:0}
+.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:-13px;top:0;width:26px;height:26px;border-radius:8px;background:#eef2ff;color:#1e3a8a;font:600 12px/26px ui-monospace,monospace;text-align:center}
+.steps b{color:#111}
+.deliverable{border-left:2px solid #1e3a8a;background:#eef2ff;padding:12px 16px;border-radius:0 10px 10px 0;margin:22px 0;color:#1e3a8a;font-size:15px}
+.deliverable b{color:#1e3a8a}
+.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}
+.metric{flex:1 1 150px;border:1px solid #e8e8e8;border-radius:12px;padding:12px 14px;background:#fafafa}
+.metric-k{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.metric-v{font-family:ui-monospace,monospace;font-size:22px;font-weight:650;color:#111;margin-top:4px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.tab{font-size:13px;padding:5px 11px;border-radius:8px;border:1px solid #e5e5e5;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.tab:hover{border-color:#111;color:#111}
+.tab.active{background:#111;color:#fff;border-color:#111}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .lab{padding:16px;border-radius:13px}
+  table.cmp{font-size:13.5px}
+  table.cmp th,table.cmp td{padding:9px 6px}
+  .lab-head .slider-row{width:100%!important}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">P03 · Offline RL</a>
+    <nav class="nav">
+      <a href="#bench">Bench</a>
+      <a href="#dataset">Log</a>
+      <a href="#learners">Learners</a>
+      <a href="#ood">OOD</a>
+      <a href="#finetune">Fine-tune</a>
+      <a href="#board">Board</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Projects · Project 3</p>
+    <h1>Offline RL<br>Benchmark</h1>
+    <p class="lede">One frozen log, four learners, and a leaderboard — train naive TD, CQL, IQL and BCQ on the same gridworld data, then interrogate what each believes about actions the log never took.</p>
+  </div>
+</header>
+
+<section id="bench">
+  <div class="wrap">
+    <h2><span class="num">01</span>The bench</h2>
+    <p>Offline reinforcement learning is easiest to measure when nothing is allowed to hide. The environment is a $4\times4$ gridworld with four deterministic moves; the goal pays $+1$, a pit pays $-1$, every other step costs $0.3$, and discounting is $\gamma=0.9$. With those numbers the optimal value of every cell can be written down exactly, so a learner's estimate can be compared against the truth at every step — no evaluation rollouts, no confidence intervals, no excuses.</p>
+    <p>The catch is the data. A fixed behaviour policy walks the grid and writes down what it did. Some state–action pairs are visited constantly; others are never tried. The learner only ever sees the second-hand log. Everything below is the same log, the same reward scale, and the same eight hundred gradient steps; the only thing that changes is what each method does when the log has nothing to say about an action.</p>
+    <div class="eqbox" id="envEq" style="min-height:80px"></div>
+    <p class="small muted">States are numbered row-major from $0$ to $15$. Terminal cells are the goal ($3$) and the pit ($9$); the start is $13$. The behaviour policy is $\varepsilon$-greedy toward the goal, so the log is dominated by the corridor up the right edge — the cells a shortest path actually visits.</p>
+    <table class="cmp ax">
+      <thead><tr><th>Quantity</th><th>Value</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td>Step cost</td><td class="n">$-0.3$</td><td>Punishes dawdling; makes bad policies visibly worse than good ones.</td></tr>
+        <tr><td>Discount</td><td class="n">$\gamma=0.9$</td><td>Keeps values bounded and makes the optimal policy prefer the short corridor.</td></tr>
+        <tr><td>Optimal $\,V^\star(13)$</td><td class="n">$-0.376$</td><td>The number every leaderboard row is chasing.</td></tr>
+        <tr><td>Actions</td><td class="n">4</td><td>Up, right, down, left. Deterministic; walls keep you put.</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><b>Why a tabular bench?</b> Because the failure mode of offline RL is not approximation error — it is asking a function to be confident about an action it has never seen. A $16$-state problem isolates exactly that, and lets the leaderboard be honest about which method was actually conservative versus merely lucky.</div>
+  </div>
+</section>
+
+<section id="dataset">
+  <div class="wrap">
+    <h2><span class="num">02</span>The fixed log</h2>
+    <p>Collected data is the whole experiment. Write a behaviour policy, roll it out, and keep the transitions. The policy below moves toward the goal most of the time and otherwise picks uniformly; the dataset is a uniform sample of non-terminal states, which is what makes the coverage map interesting — some cells are sampled but their outgoing actions are not.</p>
+    <p>Coverage is not the same as visitation. A state can appear hundreds of times in the log while only one of its four actions ever appears, and an offline learner that maximises over all four will happily assign a large value to the three it never saw. The heatmap counts <em>actions</em> seen per state, not states seen, because that is the quantity the learners actually depend on.</p>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab · dataset and action coverage</span>
+        <div class="slider-row">
+          <span class="small muted">ε</span>
+          <input type="range" id="dsEps" min="0" max="40" value="5" step="1" style="width:110px">
+          <span class="val" id="dsEpsVal">0.05</span>
+          <span class="small muted">N</span>
+          <input type="range" id="dsSize" min="100" max="2000" value="500" step="100" style="width:110px">
+          <span class="val" id="dsSizeVal">500</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 250px">
+          <p class="plot-cap">Action coverage</p>
+          <svg id="covSvg" viewBox="0 0 280 280" width="100%" style="max-width:300px;display:block;margin:0 auto" role="img" aria-label="Gridworld action coverage heatmap"></svg>
+          <p class="readout" id="covCap" style="text-align:center"></p>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <p class="plot-cap">Actions covered per state</p>
+          <svg id="covPairs" viewBox="0 0 360 280" width="100%" style="display:block" role="img" aria-label="Histogram of transitions per state"></svg>
+          <div class="metrics" style="margin-top:12px">
+            <div class="metric"><div class="metric-k">States covered</div><div class="metric-v" id="covPct">—</div></div>
+            <div class="metric"><div class="metric-k">Mean pairs / state</div><div class="metric-v" id="covMean">—</div></div>
+            <div class="metric"><div class="metric-k">Coverage ratio</div><div class="metric-v" id="covEq">—</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="eqbox" id="covBox" style="min-height:70px"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px"><button id="dsResample">Resample log</button></div>
+    </div>
+
+    <p>Resampling changes the seed but not the story: raising $\varepsilon$ spreads the log across the grid and improves coverage, while a small $\varepsilon$ concentrates every transition on the shortest path and leaves most actions unseen. Try both extremes before moving on. The learners in the next section are never retrained on a new log — they all read the one you build here.</p>
+
+    <h3>Collecting and logging the data</h3>
+    <p>The collection script is deliberately boring. One pass produces a list of transitions, each of which is a state, an action, a reward, and a next state. There are no rewards for exploration and no resets inside an episode: when the agent reaches the goal or the pit the episode ends and a fresh one starts at $12$.</p>
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">log_dataset.py</span><span class="cb-lang">Python</span><button class="cb-copy">Copy</button></div>
+      <pre><code data-lang="python">import numpy as np
+
+GOAL, PIT, START = 3, 9, 13
+STEP_COST, GAMMA = 0.3, 0.9
+MOVES = [(-1, 0), (0, 1), (1, 0), (0, -1)]  # up, right, down, left
+
+def step(s, a):
+    r, c = divmod(s, 4)
+    dr, dc = MOVES[a]
+    nr, nc = r + dr, c + dc
+    if not (0 &lt;= nr &lt; 4 and 0 &lt;= nc &lt; 4):
+        return s, -STEP_COST, False
+    ns = nr * 4 + nc
+    if ns == GOAL:
+        return ns, 1.0, True
+    if ns == PIT:
+        return ns, -1.0, True
+    return ns, -STEP_COST, False
+
+def dist(s):
+    r, c = divmod(s, 4)
+    return r + (3 - c)          # rows and columns to the goal cell 3 (top-right)
+
+def behavior(s, eps, rng):
+    if rng.random() &lt; eps:
+        return int(rng.integers(4))
+    prog = []
+    for a in range(4):
+        ns, _, _ = step(s, a)
+        prog.append((dist(s) - dist(ns), -6.0 if ns == PIT else 0.0))
+    best = max(p[0] for p in prog)
+    cand = [a for a, p in enumerate(prog) if p[0] == best and p[1] == 0.0]
+    return int(rng.choice(cand))
+
+def collect(n_pairs=500, eps=0.05, seed=4242):
+    rng = np.random.default_rng(seed)
+    non_terminal = [s for s in range(16) if s not in (GOAL, PIT)]
+    log = []
+    while len(log) &lt; n_pairs:
+        s = int(rng.choice(non_terminal))       # uniform over non-terminal states
+        a = behavior(s, eps, rng)
+        ns, r, done = step(s, a)
+        log.append((s, a, r, ns, done))
+    return log</code></pre>
+    </div>
+    <div class="note"><b>The trap is in the sampler.</b> Every state is drawn, but the log stores only the single action the behaviour policy took there. The shortest-path action appears thousands of times; the other three are missing entirely unless $\varepsilon$ scatters a few in. That is realistic — logs are collected by policies with an agenda — and it is precisely the asymmetry that separates the four learners.</div>
+  </div>
+</section>
+
+<section id="learners">
+  <div class="wrap">
+    <h2><span class="num">03</span>Four ways to stay in the data</h2>
+    <p>All four learners share the same skeleton: a table of action-values $Q(s,a)$, one Bellman target per transition, and mean-squared error. They differ in a single line — how the target is computed from the next state. That line is where an offline algorithm lives or dies.</p>
+    <div class="eqbox" id="trEq" style="min-height:96px"></div>
+    <p><b>Naive TD</b> uses the maximum over all four actions, exactly as in online Q-learning. It has no idea which actions are in the log, so its targets chase values it cannot possibly have earned. <b>CQL</b> keeps the same regression but clamps every action's value from below by the smallest value it has support for, minus a margin $\alpha$; unsupported actions are pushed down while supported ones are left alone. <b>IQL</b> never evaluates the policy's actions at all: it fits $V(s)$ as an expectile of $Q$ over the actions present in the data, then regresses $Q$ toward the reward plus discounted $V$. <b>BCQ</b> is the blunt instrument — it simply refuses to consider actions that were never logged, taking a maximum only over the support.</p>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab · train four learners on one log</span>
+        <div class="btnrow">
+          <button id="trainBtn" class="primary">Train</button>
+          <button id="trainReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 420px">
+          <p class="plot-cap">$\hat V(\text{start})$ during training vs. the optimum</p>
+          <svg id="curveSvg" viewBox="0 0 560 300" width="100%" style="display:block" role="img" aria-label="Training curves"></svg>
+          <div class="legend">
+            <span style="color:#dc2626">— naive TD</span><span style="color:#1e3a8a">— CQL</span><span style="color:#2563eb">— IQL</span><span style="color:#111">— BCQ</span><span style="color:#c2c9d4">– – optimal</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="tabs" id="methodTabs">
+            <button class="tab active" data-m="naive">Naive TD</button>
+            <button class="tab" data-m="cql">CQL</button>
+            <button class="tab" data-m="iql">IQL</button>
+            <button class="tab" data-m="bcq">BCQ</button>
+          </div>
+          <p class="plot-cap">Greedy action on the grid</p>
+          <svg id="mapSvg" viewBox="0 0 280 280" width="100%" style="max-width:300px;display:block;margin:0 auto" role="img" aria-label="Greedy policy map"></svg>
+          <p class="readout" id="mapCap" style="text-align:center"></p>
+        </div>
+      </div>
+      <div id="trStatus" class="readout" style="min-height:24px"></div>
+      <div class="eqbox" id="cqlBox" style="min-height:60px"></div>
+      <div class="sliders" style="margin-top:6px">
+        <div class="slider-row"><span class="small muted" style="min-width:74px">CQL&nbsp;α</span><input type="range" id="cqlAlpha" min="0" max="100" value="40" step="1"><span class="val" id="cqlAlphaVal">0.40</span></div>
+        <div class="slider-row"><span class="small muted" style="min-width:74px">IQL&nbsp;τ</span><input type="range" id="iqlTau" min="50" max="95" value="90" step="1"><span class="val" id="iqlTauVal">0.90</span></div>
+      </div>
+      <p class="readout">CQL margin $\alpha$ and IQL expectile $\tau$ are re-read on the next Train. $\tau=0.5$ reduces IQL to plain mean regression; higher $\tau$ leans the value estimate toward the better actions in the data.</p>
+    </div>
+
+    <p>Watch the curves. The naive estimate never comes down: it is being paid value for actions the log never took, so it sits at the top of the plot while CQL, IQL and BCQ descend toward the optimum $-0.376$. They get there for different reasons — CQL by flattening the unsupported actions, IQL by never asking about them, BCQ by deleting them from the maximum — but only the naive estimate is bought with value that was never earned. The greedy map makes it concrete: the naive policy walks the start straight into the pit.</p>
+
+    <h3>The learner, in one file</h3>
+    <p>Every shared piece of machinery — Bellman targets, the replay loop, and the three conservative variants — fits in about sixty lines. The support mask is the only bookkeeping the offline setting adds.</p>
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">offline_learners.py</span><span class="cb-lang">Python</span><button class="cb-copy">Copy</button></div>
+      <pre><code data-lang="python">import numpy as np
+
+def bellman_targets(log, Q, gamma, V=None):
+    S  = np.array([t[0] for t in log])
+    A  = np.array([t[1] for t in log])
+    R  = np.array([t[2] for t in log])
+    NS = np.array([t[3] for t in log])
+    D  = np.array([t[4] for t in log], dtype=float)
+    nxt = Q[NS].max(axis=1) if V is None else V[NS]
+    y = R + gamma * (1.0 - D) * nxt
+    return S, A, y
+
+def batch_update(Q, S, A, y, lr):
+    """Mean TD error per (s, a) pair, so rare pairs learn as fast as common ones."""
+    flat = S * Q.shape[1] + A
+    err = Q[S, A] - y
+    g = np.bincount(flat, weights=err, minlength=Q.size)
+    c = np.bincount(flat, minlength=Q.size).astype(float)
+    seen = c &gt; 0
+    Q.reshape(-1)[seen] -= lr * g[seen] / c[seen]
+
+def train_naive(log, n_act, n_st, steps=1500, lr=0.5, seed=0):
+    Q = np.zeros((n_st, n_act))
+    for _ in range(steps):
+        S, A, y = bellman_targets(log, Q, 0.9)
+        batch_update(Q, S, A, y, lr)
+    return Q
+
+def support_mask(log, n_act, n_st):
+    m = np.zeros((n_st, n_act), dtype=bool)
+    for s, a, *_ in log:
+        m[s, a] = True
+    return m
+
+def train_cql(log, n_act, n_st, alpha=0.4, steps=1500, lr=0.5):
+    sup = support_mask(log, n_act, n_st)
+    Q = np.zeros((n_st, n_act))
+    for _ in range(steps):
+        S, A, y = bellman_targets(log, Q, 0.9)
+        batch_update(Q, S, A, y, lr)
+        mins = np.where(sup, Q, np.inf).min(axis=1, keepdims=True)   # min over support
+        floor = np.where(sup, Q, mins - alpha)                       # clamp the rest below
+        Q = np.minimum(Q, floor)
+    return Q
+
+def train_iql(log, n_act, n_st, tau=0.9, steps=1500, lr=0.5):
+    sup = support_mask(log, n_act, n_st)
+    Q, V = np.zeros((n_st, n_act)), np.zeros(n_st)
+    for _ in range(steps):
+        for _ in range(3):                                            # expectile step
+            w = np.where(np.where(sup, Q - V[:, None], -1.0) &gt; 0, tau, 1.0 - tau)
+            w = np.where(sup, w, 0.0)
+            Vs = (w * Q).sum(1) / np.maximum(w.sum(1), 1e-9)
+            V = V + lr * (Vs - V)
+        S, A, y = bellman_targets(log, Q, 0.9, V=V)
+        batch_update(Q, S, A, y, lr)
+    return Q
+
+def train_bcq(log, n_act, n_st, steps=1500, lr=0.5):
+    sup = support_mask(log, n_act, n_st)
+    Q = np.zeros((n_st, n_act))
+    for _ in range(steps):
+        masked = np.where(sup, Q, -1e9)
+        S, A, y = bellman_targets(log, masked, 0.9)
+        batch_update(Q, S, A, y, lr)
+    return Q</code></pre>
+    </div>
+    <div class="note"><b>Full-batch vs. sampled.</b> The in-page trainer loops over the whole log each step for determinism and speed at this scale; real implementations sample minibatches. The sign of every result here is identical under minibatching, which is exactly why this bench is useful.</div>
+  </div>
+</section>
+
+<section id="ood">
+  <div class="wrap">
+    <h2><span class="num">04</span>What a method believes off-support</h2>
+    <p>Training curves mostly agree, so the interesting question is what happens to a single action value the log never touched. Pick a state and slide across a continuous action coordinate: $0$ is up, $1$ is right, $2$ is down, $3$ is left. Inside the data support the four learners interpolate between the values they actually fitted. Outside it, each method's rule takes over — and the rules disagree loudly.</p>
+    <p>Naive TD has no rule at all, so an unsupported action keeps the value it was initialised with and the curve jumps upward the moment it leaves the data. CQL pushes unsupported values down toward the smallest supported value minus $\alpha$, so the curve flattens below the data. IQL has no per-action off-support behaviour — it reports the state value $V(s)$ and stays there. BCQ does the honest thing and refuses to draw anything outside the support: the action simply has no value under that policy.</p>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab · Q as a function of a continuous action</span>
+        <div class="slider-row">
+          <span class="small muted">state</span>
+          <input type="range" id="oodState" min="0" max="15" value="12" step="1" style="width:130px">
+          <span class="val" id="oodStateLbl">12</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 300px">
+          <p class="plot-cap">Greedy action and support</p>
+          <svg id="oodGridSvg" viewBox="0 0 280 280" width="100%" style="max-width:300px;display:block;margin:0 auto" role="img" aria-label="Gridworld support and greedy actions"></svg>
+          <p class="readout" id="oodNote" style="text-align:center"></p>
+        </div>
+        <div class="col" style="flex:1 1 380px">
+          <p class="plot-cap">Fitted $Q(s,\cdot)$ along the action axis</p>
+          <svg id="oodCurve" viewBox="0 0 520 300" width="100%" style="display:block" role="img" aria-label="Off-support value curves"></svg>
+          <div class="legend">
+            <span style="color:#dc2626">— naive TD</span><span style="color:#1e3a8a">— CQL</span><span style="color:#2563eb">— IQL</span><span style="color:#111">— BCQ</span>
+          </div>
+          <div class="slider-row" style="margin-top:10px">
+            <span class="small muted" style="min-width:54px">action</span>
+            <input type="range" id="oodSweep" min="0" max="300" value="100" step="1">
+            <span class="val" id="oodSweepVal">1.00</span>
+          </div>
+          <div class="eqbox" id="oodEq" style="min-height:64px"></div>
+        </div>
+      </div>
+      <p class="readout">The shaded band marks the support hull $[\min a_i,\ \max a_i]$ over actions present in the log for this state. Everything outside it is where the methods stop describing data and start describing themselves.</p>
+    </div>
+
+    <p>This is the heart of the offline problem, and it is not a tabular curiosity. In a continuous-action setting the max over a learned critic is an optimisation problem, and an over-estimated critic makes the argmax run away from the data. CQL's penalty and BCQ's support constraint are two different answers to the same question: how do you stop a maximum from becoming a search for fiction? IQL sidesteps the question by not taking a maximum over actions at inference time until it has to.</p>
+
+    <table class="cmp">
+      <thead><tr><th>Method</th><th>Off-support rule</th><th>What it costs</th></tr></thead>
+      <tbody>
+        <tr><td>Naive TD</td><td>Unconstrained max; unsupported values receive whatever the Bellman backup propagates.</td><td>Overestimation wherever coverage is thin; a greedy policy that leaves the data.</td></tr>
+        <tr><td>CQL</td><td>Clamp unsupported actions at $\min_a Q(s,a)-\alpha$; tune $\alpha$ for how pessimistic to be.</td><td>Can become too conservative and suppress genuinely good actions near the support edge.</td></tr>
+        <tr><td>IQL</td><td>Fit $V$ by expectile regression over logged actions; $Q$ regresses onto $r+\gamma V$.</td><td>Needs a good $\tau$; outside the support it has no action-level opinion at all.</td></tr>
+        <tr><td>BCQ</td><td>Max only over actions observed in the data.</td><td>Cannot improve on behaviour for states where the log is narrow; coverage ceiling.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="finetune">
+  <div class="wrap">
+    <h2><span class="num">05</span>Fine-tuning, or why the head start matters</h2>
+    <p>Offline pre-training is usually a warm start, not a destination. The question is whether a conservative learner gives online fine-tuning a better beginning than starting from zero — and whether its pessimism becomes a handicap once real interaction is allowed.</p>
+    <p>Each frozen learner is used as the initialisation for the same online $\varepsilon$-greedy Q-learning agent. The plot tracks the true value of the <em>current</em> $\varepsilon$-greedy policy at checkpoints, not the TD error, so it is a step ahead of the learned table and stays smooth. A good offline initialisation hands the online agent a policy that is already on the plateau near $V^\star$; a bad one starts near $-1.1$ and has to climb.</p>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab · online fine-tuning from each offline checkpoint</span>
+        <div class="btnrow">
+          <button id="ftRun" class="primary">Run fine-tuning</button>
+          <button id="ftReset">Reset</button>
+        </div>
+      </div>
+      <p class="plot-cap">True ε-greedy policy value vs. online steps</p>
+      <svg id="ftSvg" viewBox="0 0 620 320" width="100%" style="display:block" role="img" aria-label="Fine-tuning curves"></svg>
+      <div class="legend">
+        <span style="color:#dc2626">— naive TD</span><span style="color:#1e3a8a">— CQL</span><span style="color:#2563eb">— IQL</span><span style="color:#111">— BCQ</span><span style="color:#c2c9d4">– – from scratch</span>
+      </div>
+      <div class="slider-row" style="margin-top:12px"><span class="small muted" style="min-width:64px">online ε</span><input type="range" id="ftEps" min="0" max="40" value="12" step="1"><span class="val" id="ftEpsVal">0.12</span></div>
+      <p class="readout" id="ftInfo" style="min-height:24px"></p>
+      <div class="eqbox" id="ftEq" style="min-height:64px"></div>
+    </div>
+
+    <p>Three things are worth checking. First, whether the conservative methods hand over a policy that is already on the plateau — CQL, IQL and BCQ start at the top of the plot and barely move. Second, whether naive TD's head start survives contact with real rewards: it does not, because the first online updates puncture values the log never supported, and its curve climbs from the bottom together with the from-scratch baseline. Third, whether a very conservative method is slow to recover: raise $\varepsilon$ and watch whether the conservative curves ever leave the plateau as the online agent explores.</p>
+
+    <h3>The fine-tuning loop</h3>
+    <p>Online updates are ordinary Q-learning on the same grid; the only offline-specific code is the initialisation. Actions a method refused to value start at the smallest supported value minus one — the same pessimism the learner already expressed — while CQL arrives already clamped and naive TD keeps its optimistic zeros. The curve evaluates the $\varepsilon$-greedy policy exactly by policy evaluation, so it reflects behaviour, not just the table.</p>
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">finetune.py</span><span class="cb-lang">Python</span><button class="cb-copy">Copy</button></div>
+      <pre><code data-lang="python">import numpy as np
+
+def soft_policy_value(Q, eps):
+    """Exact value of the eps-greedy policy induced by Q (policy evaluation)."""
+    V = np.zeros(Q.shape[0])
+    for _ in range(500):
+        delta = 0.0
+        for s in range(Q.shape[0]):
+            if s in (3, 9):
+                continue
+            pi = np.full(4, eps / 4)
+            pi[int(np.argmax(Q[s]))] += 1.0 - eps
+            v = 0.0
+            for a in range(4):
+                ns, r, done = step(s, a)
+                v += pi[a] * (r + (0.0 if done else 0.9 * V[ns]))
+            delta = max(delta, abs(v - V[s]))
+            V[s] = v
+        if delta &lt; 1e-12:
+            break
+    return V
+
+def prepare(Q0, support, eps=1.0):
+    """Unsupported actions start one point below the smallest supported value."""
+    Q = Q0.copy()
+    for s in range(Q.shape[0]):
+        known = support[s]
+        if known.any():
+            Q[s, ~known] = Q[s, known].min() - eps
+    return Q
+
+def finetune(Q0, steps=1500, lr=0.15, eps=0.12, seed=7):
+    rng = np.random.default_rng(seed)
+    Q, s = Q0.copy(), 13
+    curve = [(0, soft_policy_value(Q0, eps)[13])]
+    for t in range(1, steps + 1):
+        a = int(rng.integers(4)) if rng.random() &lt; eps else int(np.argmax(Q[s]))
+        ns, r, done = step(s, a)
+        target = r + (0.0 if done else 0.9 * Q[ns].max())
+        Q[s, a] += lr * (target - Q[s, a])
+        s = 13 if done else ns
+        if t % 100 == 0:
+            curve.append((t, soft_policy_value(Q, eps)[13]))
+    return Q, curve</code></pre>
+    </div>
+    <div class="note"><b>Read the starting point, not just the endpoint.</b> Any online agent converges eventually on a problem this small. The offline question is how much interaction the warm start saves — and whether a pessimistic initialisation ever recovers the value it suppressed.</div>
+  </div>
+</section>
+
+<section id="board">
+  <div class="wrap">
+    <h2><span class="num">06</span>The leaderboard</h2>
+    <p>Two numbers decide the table. The first is the value each learner claims for the start state, $\hat V(13)$ — what the agent thinks it will get. The second is what it actually gets when you follow its greedy policy to the end, $\mathbb{E}[G]$ — what the policy is worth on the real grid. The gap between them is the overestimation the offline setting is famous for, and only the conservative methods keep it small.</p>
+    <table class="cmp">
+      <thead><tr><th>Method</th><th>$\hat V(13)$</th><th>True return</th><th>Overestimation</th><th>Verdict</th></tr></thead>
+      <tbody id="boardBody">
+        <tr><td colspan="5" class="muted">Train the learners in section 03 to populate the board.</td></tr>
+      </tbody>
+    </table>
+    <p>The board is recomputed from whatever log and settings are on the page — resample the data or retrain and every row updates. Read it together with the OOD explorer: a method with a small overestimation gap is one whose unsupported actions were never allowed to inflate the maximum.</p>
+    <div class="deliverable"><b>Deliverable.</b> A short write-up that (i) names the method with the smallest overestimation gap on the current log, (ii) points to one state where the naive greedy policy leaves the data and what it costs there, and (iii) states whether the conservative warm start saved online fine-tuning steps versus training from scratch.</div>
+    <hr class="soft">
+    <p class="small muted">The point of the whole exercise: offline RL is not about learning faster, it is about learning without permission to explore. Every algorithm here is a different answer to the same question — what should a value be when there is no data to justify it?</p>
+  </div>
+</section>
+
+
+<!-- project-pager -->
+<nav class="pager" aria-label="Project navigation"><a class="pg-prev" href="02-deep-rl-continuous-control.html"><span class="pg-k">Previous</span><span class="pg-t">Deep RL on a Continuous-Control Task</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="04-model-based-world-model.html"><span class="pg-k">Next</span><span class="pg-t">Model-Based World Model</span></a></nav>
+<footer>
+  <div class="wrap">Reinforcement Learning · Project 3 · every number on this page is computed live from the tabular bench.</div>
+</footer>
+
+<script>
+'use strict';
+/* ---------------- the bench ---------------- */
+var GOAL=3, PIT=9, START=13, STEPC=0.3, GAMMA=0.9;
+var MOVES=[[-1,0],[0,1],[1,0],[0,-1]];
+var ACT=['↑','→','↓','←'], ACTNAME=['Up','Right','Down','Left'];
+
+function step(s,a){
+  var r=Math.floor(s/4), c=s%4, nr=r+MOVES[a][0], nc=c+MOVES[a][1];
+  if(nr<0||nr>3||nc<0||nc>3) return {ns:s,r:-STEPC,d:false};
+  var ns=nr*4+nc;
+  if(ns===GOAL) return {ns:ns,r:1,d:true};
+  if(ns===PIT)  return {ns:ns,r:-1,d:true};
+  return {ns:ns,r:-STEPC,d:false};
+}
+function dist(s){ return Math.floor(s/4) + (3 - (s%4)); }
+
+function mulberry32(a){
+  return function(){
+    a|=0; a=a+0x6D2B79F5|0;
+    var t=Math.imul(a^a>>>15,1|a);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return ((t^t>>>14)>>>0)/4294967296;
+  };
+}
+function behavior(s,eps,rnd){
+  if(rnd()<eps) return Math.floor(rnd()*4);
+  var prog=[], best=-Infinity, a;
+  for(a=0;a<4;a++){
+    var t=step(s,a), p=dist(s)-dist(t.ns), pen=(t.ns===PIT)?-6:0;
+    prog.push([p,pen]); if(pen===0&&p>best) best=p;
+  }
+  var cand=[];
+  for(a=0;a<4;a++) if(prog[a][0]===best&&prog[a][1]===0) cand.push(a);
+  if(!cand.length) return Math.floor(rnd()*4);
+  return cand[Math.floor(rnd()*cand.length)];
+}
+var NONTERM=[];
+for(var _s=0;_s<16;_s++) if(_s!==GOAL&&_s!==PIT) NONTERM.push(_s);
+
+function makeLog(nPairs,eps,seed){
+  var rnd=mulberry32(seed), log=[];
+  while(log.length<nPairs){
+    var s=NONTERM[Math.floor(rnd()*NONTERM.length)];
+    var a=behavior(s,eps,rnd), t=step(s,a);
+    log.push([s,a,t.r,t.ns,t.d?1:0]);
+  }
+  return log;
+}
+function supportOf(log){
+  var m=new Uint8Array(64);
+  for(var i=0;i<log.length;i++) m[log[i][0]*4+log[i][1]]=1;
+  return m;
+}
+function sMax(Q,s,sup){
+  var m=-Infinity;
+  for(var a=0;a<4;a++){ if(sup&&!sup[s*4+a]) continue; if(Q[s*4+a]>m) m=Q[s*4+a]; }
+  return m===-Infinity?0:m;
+}
+function sMin(Q,s,sup){
+  var m=Infinity;
+  for(var a=0;a<4;a++) if(!sup||sup[s*4+a]) if(Q[s*4+a]<m) m=Q[s*4+a];
+  return m;
+}
+function batchStep(Q,log,yf,lr){
+  var sum=new Float64Array(64), cnt=new Float64Array(64), i;
+  for(i=0;i<log.length;i++){
+    var e=log[i], s=e[0], a=e[1], y=yf(e[2],e[3],e[4]);
+    sum[s*4+a]+=y; cnt[s*4+a]++;
+  }
+  for(i=0;i<64;i++) if(cnt[i]) Q[i]+=lr*(sum[i]/cnt[i]-Q[i]);
+}
+var STEPS=800, LR=0.08;
+
+function trainNaive(log,sup){
+  var Q=new Float64Array(64), curve=[], it;
+  for(it=0;it<=STEPS;it++){
+    if(it%5===0) curve.push([it,sMax(Q,START)]);
+    if(it===STEPS) break;
+    batchStep(Q,log,function(r,ns,d){return r+(d?0:GAMMA*sMax(Q,ns));},LR);
+  }
+  return {Q:Q,curve:curve};
+}
+function trainCQL(log,sup,alpha){
+  var Q=new Float64Array(64), curve=[], it, s, a;
+  for(it=0;it<=STEPS;it++){
+    if(it%5===0) curve.push([it,sMax(Q,START)]);
+    if(it===STEPS) break;
+    batchStep(Q,log,function(r,ns,d){return r+(d?0:GAMMA*sMax(Q,ns));},LR);
+    for(s=0;s<16;s++){
+      var m=sMin(Q,s,sup);
+      if(m===Infinity) continue;
+      for(a=0;a<4;a++) if(!sup[s*4+a]&&Q[s*4+a]>m-alpha) Q[s*4+a]=m-alpha;
+    }
+  }
+  return {Q:Q,curve:curve};
+}
+function trainIQL(log,sup,tau){
+  var Q=new Float64Array(64), V=new Float64Array(16), curve=[], it, s, a, k;
+  for(it=0;it<=STEPS;it++){
+    if(it%5===0) curve.push([it,V[START]]);
+    if(it===STEPS) break;
+    for(k=0;k<3;k++) for(s=0;s<16;s++){
+      var ws=0, wq=0;
+      for(a=0;a<4;a++){
+        if(!sup[s*4+a]) continue;
+        var q=Q[s*4+a], w=(q>V[s])?tau:1-tau;
+        ws+=w; wq+=w*q;
+      }
+      if(ws>0) V[s]+=LR*(wq/ws-V[s]);
+    }
+    batchStep(Q,log,function(r,ns,d){return r+(d?0:GAMMA*V[ns]);},LR);
+  }
+  return {Q:Q,V:V,curve:curve};
+}
+function trainBCQ(log,sup){
+  var Q=new Float64Array(64), curve=[], it;
+  for(it=0;it<=STEPS;it++){
+    if(it%5===0) curve.push([it,sMax(Q,START,sup)]);
+    if(it===STEPS) break;
+    batchStep(Q,log,function(r,ns,d){return r+(d?0:GAMMA*sMax(Q,ns,sup));},LR);
+  }
+  return {Q:Q,curve:curve};
+}
+
+/* greedy action under a method's own rule; mask=null means "consider every action" */
+function greedy(Q,mask){
+  var pi=new Int8Array(16), s, a;
+  for(s=0;s<16;s++){
+    if(s===GOAL||s===PIT){ pi[s]=-1; continue; }
+    var bi=-1, bv=-Infinity;
+    for(a=0;a<4;a++){
+      if(mask&&!mask[s*4+a]) continue;
+      if(Q[s*4+a]>bv){ bv=Q[s*4+a]; bi=a; }
+    }
+    pi[s]=bi<0?0:bi;
+  }
+  return pi;
+}
+function greedyValue(Q,mask){
+  var pi=greedy(Q,mask), V=new Float64Array(16), k, s;
+  for(k=0;k<800;k++){
+    var ch=0;
+    for(s=0;s<16;s++){
+      if(s===GOAL||s===PIT) continue;
+      var t=step(s,pi[s]), v=t.r+(t.d?0:GAMMA*V[t.ns]);
+      if(Math.abs(v-V[s])>1e-12){ V[s]=v; ch=1; }
+    }
+    if(!ch) break;
+  }
+  return V;
+}
+function softValue(Q,eps){
+  var V=new Float64Array(16), k, s, a;
+  for(k=0;k<800;k++){
+    var ch=0;
+    for(s=0;s<16;s++){
+      if(s===GOAL||s===PIT) continue;
+      var pi=[eps/4,eps/4,eps/4,eps/4], bi=0, bv=-Infinity;
+      for(a=0;a<4;a++) if(Q[s*4+a]>bv){ bv=Q[s*4+a]; bi=a; }
+      pi[bi]+=1-eps;
+      var v=0;
+      for(a=0;a<4;a++){ var t=step(s,a); v+=pi[a]*(t.r+(t.d?0:GAMMA*V[t.ns])); }
+      if(Math.abs(v-V[s])>1e-12){ V[s]=v; ch=1; }
+    }
+    if(!ch) break;
+  }
+  return V;
+}
+
+/* deliverable mask: which rules restrict the greedy action to the support */
+var RULE={ naive:null, cql:null, iql:'support', bcq:'support' };
+var METHOD_COLOR={ naive:'#dc2626', cql:'#1e3a8a', iql:'#2563eb', bcq:'#111' };
+var METHOD_NAME={ naive:'Naive TD', cql:'CQL', iql:'IQL', bcq:'BCQ' };
+
+/* ---------------- application state ---------------- */
+var state={
+  eps:0.05, nPairs:500, seed:4242, log:[], sup:null,
+  trained:null, oodState:12, method:'naive',
+  ftEps:0.12, ft:null
+};
+var KS=function(el,tex,display){ if(!el) return; try{ katex.render(tex,el,{displayMode:!!display,throwOnError:false}); }catch(e){ el.textContent=tex; } };
+
+/* ---------------- dataset + coverage lab ---------------- */
+function drawCoverage(){
+  var svg=document.getElementById('covSvg');
+  if(!svg) return;
+  var svgNS='http://www.w3.org/2000/svg', pad=14, cell=(280-2*pad)/4, i, s, a;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  for(s=0;s<16;s++){
+    var r=Math.floor(s/4), c=s%4, x=pad+c*cell, y=pad+r*cell;
+    var n=0; for(a=0;a<4;a++) n+=state.sup[s*4+a];
+    var fill='#f4f4f5';
+    if(n>0) fill='rgba(37,99,235,'+(0.12+0.2*n)+')';
+    if(s===GOAL) fill='#dcfce7';
+    if(s===PIT) fill='#fee2e2';
+    var rect=document.createElementNS(svgNS,'rect');
+    rect.setAttribute('x',x+1.5); rect.setAttribute('y',y+1.5);
+    rect.setAttribute('width',cell-3); rect.setAttribute('height',cell-3);
+    rect.setAttribute('rx',7); rect.setAttribute('fill',fill);
+    rect.setAttribute('stroke','#e8e8e8');
+    svg.appendChild(rect);
+    var lbl=document.createElementNS(svgNS,'text');
+    lbl.setAttribute('x',x+cell/2); lbl.setAttribute('y',y+cell/2-2);
+    lbl.setAttribute('text-anchor','middle'); lbl.setAttribute('font-size','11');
+    lbl.setAttribute('font-family','ui-monospace,monospace'); lbl.setAttribute('fill','#6b7280');
+    lbl.textContent=(s===GOAL?'GOAL':s===PIT?'PIT':s);
+    svg.appendChild(lbl);
+    if(s!==GOAL&&s!==PIT){
+      var dots=document.createElementNS(svgNS,'text');
+      dots.setAttribute('x',x+cell/2); dots.setAttribute('y',y+cell/2+14);
+      dots.setAttribute('text-anchor','middle'); dots.setAttribute('font-size','12');
+      dots.setAttribute('letter-spacing','1');
+      var str=''; for(a=0;a<4;a++) str+=state.sup[s*4+a]?ACT[a]:'·';
+      dots.setAttribute('fill',n?'#1e3a8a':'#d4d4d8');
+      dots.textContent=str;
+      svg.appendChild(dots);
+    }
+  }
+  var covered=0, total=0;
+  for(s=0;s<16;s++){ var c2=0; for(a=0;a<4;a++) c2+=state.sup[s*4+a]; if(c2>0) covered++; }
+  total=state.log.length;
+  var cap=document.getElementById('covCap');
+  if(cap) cap.textContent=covered+' of 14 non-terminal states carry at least one logged action';
+  var pct=document.getElementById('covPct'); if(pct) pct.textContent=covered+' / 14';
+  var mean=document.getElementById('covMean'); if(mean) mean.textContent=(total/Math.max(covered,1)).toFixed(0);
+  var eq=document.getElementById('covEq'); if(eq) eq.textContent=(total/(14*4)).toFixed(1)+'×';
+  var cnts=[];
+  for(s=0;s<16;s++){ if(s===GOAL||s===PIT) continue; var cc=0; for(a=0;a<4;a++) cc+=state.sup[s*4+a]; cnts.push(cc); }
+  drawPairs(cnts);
+}
+function drawPairs(cnts){
+  var svg=document.getElementById('covPairs');
+  if(!svg) return;
+  var svgNS='http://www.w3.org/2000/svg', W=360, H=280, padL=30, padB=30, padT=12, padR=10, i;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var bw=(W-padL-padR)/cnts.length, maxv=4;
+  for(i=0;i<cnts.length;i++) maxv=Math.max(maxv,cnts[i]);
+  for(i=0;i<=maxv;i++){
+    if(i%2&&i!==maxv) continue;
+    var yy=H-padB-(i/maxv)*(H-padB-padT);
+    var g=document.createElementNS(svgNS,'line');
+    g.setAttribute('x1',padL); g.setAttribute('x2',W-padR);
+    g.setAttribute('y1',yy); g.setAttribute('y2',yy); g.setAttribute('stroke','#f0f0f0');
+    svg.appendChild(g);
+    var t=document.createElementNS(svgNS,'text');
+    t.setAttribute('x',padL-6); t.setAttribute('y',yy+3); t.setAttribute('text-anchor','end');
+    t.setAttribute('font-size','9.5'); t.setAttribute('fill','#9ca3af');
+    t.setAttribute('font-family','ui-monospace,monospace'); t.textContent=i;
+    svg.appendChild(t);
+  }
+  for(i=0;i<cnts.length;i++){
+    var h=(cnts[i]/maxv)*(H-padB-padT), x=padL+i*bw+bw*0.16, w=bw*0.68;
+    var col=cnts[i]===0?'#e5e5e5':(cnts[i]>=4?'#1e3a8a':'#2563eb');
+    var bar=document.createElementNS(svgNS,'rect');
+    bar.setAttribute('x',x); bar.setAttribute('y',H-padB-h);
+    bar.setAttribute('width',w); bar.setAttribute('height',Math.max(h,0.5)); bar.setAttribute('rx',2);
+    bar.setAttribute('fill',col);
+    svg.appendChild(bar);
+  }
+  var lab=document.createElementNS(svgNS,'text');
+  lab.setAttribute('x',W/2); lab.setAttribute('y',H-6); lab.setAttribute('text-anchor','middle');
+  lab.setAttribute('font-size','10.5'); lab.setAttribute('fill','#9ca3af');
+  lab.setAttribute('font-family','ui-monospace,monospace');
+  lab.textContent='actions supported · states left→right';
+  svg.appendChild(lab);
+  KS(document.getElementById('covBox'), '\\text{coverage}=\\frac{\\#\\{(s,a)\\in\\log\\}}{14\\times 4},\\qquad \\text{states touched}=\\frac{\\#\\{s: \\exists a,\\,(s,a)\\in\\log\\}}{14}', true);
+}
+function rebuildDataset(){
+  state.log=makeLog(state.nPairs,state.eps,state.seed);
+  state.sup=supportOf(state.log);
+  state.trained=null;
+  clearFt();
+  drawCoverage();
+  resetCurve();
+  resetMap();
+  resetBoard();
+  drawOod();
+}
+
+/* ---------------- training lab ---------------- */
+function optimalStart(){
+  var Q=new Float64Array(64), s, a;
+  for(s=0;s<16;s++) for(a=0;a<4;a++){ var t=step(s,a); Q[s*4+a]=t.r+(t.d?0:GAMMA*0); }
+  return greedyValue(Q,null)[START];
+}
+function resetCurve(){
+  var svg=document.getElementById('curveSvg');
+  if(svg) while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var st=document.getElementById('trStatus'); if(st) st.textContent='Untrained — press Train.';
+  var cb=document.getElementById('cqlBox'); if(cb&&!state.trained) KS(cb,'\\text{only CQL and IQL carry a tunable pessimism: } \\alpha \\text{ (margin)}, \\ \\tau \\text{ (expectile)}',false);
+}
+function drawCurves(){
+  var svg=document.getElementById('curveSvg');
+  if(!svg||!state.trained) return;
+  var svgNS='http://www.w3.org/2000/svg', W=560, H=300, padL=46, padR=14, padT=16, padB=34, i;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var vstar=optimalStart();
+  var ymin=Infinity, ymax=-Infinity;
+  ['naive','cql','iql','bcq'].forEach(function(k){
+    state.trained[k].curve.forEach(function(p){ ymin=Math.min(ymin,p[1]); ymax=Math.max(ymax,p[1]); });
+  });
+  ymin=Math.min(ymin,vstar); ymax=Math.max(ymax,vstar);
+  var pad=(ymax-ymin)*0.12+0.02; ymin-=pad; ymax+=pad;
+  function X(t){ return padL+(t/STEPS)*(W-padL-padR); }
+  function Y(v){ return H-padB-((v-ymin)/(ymax-ymin))*(H-padB-padT); }
+  for(i=0;i<=4;i++){
+    var v=ymin+(i/4)*(ymax-ymin), yy=Y(v);
+    var g=document.createElementNS(svgNS,'line');
+    g.setAttribute('x1',padL); g.setAttribute('x2',W-padR); g.setAttribute('y1',yy); g.setAttribute('y2',yy);
+    g.setAttribute('stroke','#f0f0f0'); svg.appendChild(g);
+    var t=document.createElementNS(svgNS,'text');
+    t.setAttribute('x',padL-7); t.setAttribute('y',yy+3.5); t.setAttribute('text-anchor','end');
+    t.setAttribute('font-size','10'); t.setAttribute('fill','#9ca3af');
+    t.setAttribute('font-family','ui-monospace,monospace'); t.textContent=v.toFixed(2);
+    svg.appendChild(t);
+  }
+  var dash=document.createElementNS(svgNS,'line');
+  dash.setAttribute('x1',padL); dash.setAttribute('x2',W-padR);
+  dash.setAttribute('y1',Y(vstar)); dash.setAttribute('y2',Y(vstar));
+  dash.setAttribute('stroke','#c2c9d4'); dash.setAttribute('stroke-dasharray','5 5');
+  svg.appendChild(dash);
+  var vlab=document.createElementNS(svgNS,'text');
+  vlab.setAttribute('x',W-padR); vlab.setAttribute('y',Y(vstar)-5); vlab.setAttribute('text-anchor','end');
+  vlab.setAttribute('font-size','10'); vlab.setAttribute('fill','#9ca3af');
+  vlab.setAttribute('font-family','ui-monospace,monospace'); vlab.textContent='V*(13) = '+vstar.toFixed(3);
+  svg.appendChild(vlab);
+  var order=['naive','cql','iql','bcq'];
+  order.forEach(function(k){
+    var cur=state.trained[k].curve, d='';
+    for(i=0;i<cur.length;i++) d+=(i?'L':'M')+X(cur[i][0]).toFixed(1)+' '+Y(cur[i][1]).toFixed(1)+' ';
+    var p=document.createElementNS(svgNS,'path');
+    p.setAttribute('d',d); p.setAttribute('fill','none');
+    p.setAttribute('stroke',METHOD_COLOR[k]); p.setAttribute('stroke-width','2');
+    p.setAttribute('stroke-linejoin','round'); p.setAttribute('stroke-linecap','round');
+    svg.appendChild(p);
+  });
+  var xl=document.createElementNS(svgNS,'text');
+  xl.setAttribute('x',(W)/2); xl.setAttribute('y',H-6); xl.setAttribute('text-anchor','middle');
+  xl.setAttribute('font-size','10.5'); xl.setAttribute('fill','#9ca3af');
+  xl.setAttribute('font-family','ui-monospace,monospace'); xl.textContent='gradient steps · 0 → '+STEPS;
+  svg.appendChild(xl);
+}
+function drawMap(){
+  var svg=document.getElementById('mapSvg');
+  if(!svg) return;
+  if(!state.trained){ while(svg.firstChild) svg.removeChild(svg.firstChild); var m=document.getElementById('mapCap'); if(m) m.textContent='Train to see each method’s greedy policy.'; return; }
+  var svgNS='http://www.w3.org/2000/svg', pad=14, cell=(280-2*pad)/4, s, a;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var mask=RULE[state.method]==='support'?state.sup:null;
+  var Q=state.trained[state.method].Q;
+  for(s=0;s<16;s++){
+    var r=Math.floor(s/4), c=s%4, x=pad+c*cell, y=pad+r*cell;
+    var n=0; for(a=0;a<4;a++) n+=state.sup[s*4+a];
+    var fill='#fff';
+    if(s===GOAL) fill='#dcfce7'; else if(s===PIT) fill='#fee2e2';
+    else if(n>0) fill='rgba(37,99,235,'+(0.06+0.1*n)+')';
+    var rect=document.createElementNS(svgNS,'rect');
+    rect.setAttribute('x',x+1.5); rect.setAttribute('y',y+1.5);
+    rect.setAttribute('width',cell-3); rect.setAttribute('height',cell-3);
+    rect.setAttribute('rx',7); rect.setAttribute('fill',fill); rect.setAttribute('stroke','#e8e8e8');
+    svg.appendChild(rect);
+    if(s===GOAL||s===PIT){
+      var lab=document.createElementNS(svgNS,'text');
+      lab.setAttribute('x',x+cell/2); lab.setAttribute('y',y+cell/2+4); lab.setAttribute('text-anchor','middle');
+      lab.setAttribute('font-size','11'); lab.setAttribute('font-weight','650');
+      lab.setAttribute('fill',s===GOAL?'#166534':'#991b1b'); lab.textContent=(s===GOAL?'GOAL':'PIT');
+      svg.appendChild(lab); continue;
+    }
+    var mask2=(RULE[state.method]==='support')?state.sup:null;
+    var bi=-1, bv=-Infinity, aa;
+    for(aa=0;aa<4;aa++){ if(mask2&&!mask2[s*4+aa]) continue; if(Q[s*4+aa]>bv){ bv=Q[s*4+aa]; bi=aa; } }
+    if(bi<0) bi=0;
+    var unsupported=(!state.sup[s*4+bi]);
+    var ar=document.createElementNS(svgNS,'text');
+    ar.setAttribute('x',x+cell/2); ar.setAttribute('y',y+cell/2+6); ar.setAttribute('text-anchor','middle');
+    ar.setAttribute('font-size','19'); ar.setAttribute('font-weight','650');
+    ar.setAttribute('fill',unsupported?'#dc2626':METHOD_COLOR[state.method]);
+    ar.textContent=ACT[bi];
+    svg.appendChild(ar);
+    if(unsupported&&state.method==='naive'){
+      var ring=document.createElementNS(svgNS,'circle');
+      ring.setAttribute('cx',x+cell/2); ring.setAttribute('cy',y+cell/2-1); ring.setAttribute('r',cell*0.36);
+      ring.setAttribute('fill','none'); ring.setAttribute('stroke','#dc2626');
+      ring.setAttribute('stroke-dasharray','3 3'); ring.setAttribute('opacity','0.75');
+      svg.appendChild(ring);
+    }
+  }
+  var cap=document.getElementById('mapCap');
+  if(cap){
+    var v=vstarOf(state.method), tv=greedyValue(state.trained[state.method].Q,RULE[state.method]==='support'?state.sup:null)[START];
+    cap.textContent=METHOD_NAME[state.method]+' · V̂(13)='+v.toFixed(3)+' · true='+tv.toFixed(3);
+  }
+}
+function vstarOf(k){
+  var c=state.trained[k].curve;
+  return c[c.length-1][1];
+}
+
+/* ---------------- OOD explorer ---------------- */
+function anchorValues(k,s){
+  var out=[null,null,null,null], a;
+  if(!state.trained) return out;
+  var Q=state.trained[k].Q;
+  if(k==='iql'){
+    for(a=0;a<4;a++) out[a]=state.sup[s*4+a]?Q[s*4+a]:state.trained.iql.V[s];
+  } else if(k==='bcq'){
+    for(a=0;a<4;a++) out[a]=state.sup[s*4+a]?Q[s*4+a]:null;
+  } else {
+    for(a=0;a<4;a++) out[a]=Q[s*4+a];
+  }
+  return out;
+}
+function sampleMethod(k,s,x){
+  var v=anchorValues(k,s);
+  var lo=null, hi=null, a;
+  for(a=0;a<4;a++){ if(v[a]!==null){ if(lo===null) lo=a; hi=a; } }
+  if(lo===null) return null;
+  if(k==='bcq'){
+    if(x<lo||x>hi) return null;
+    var support=[];
+    for(a=0;a<4;a++) if(v[a]!==null) support.push(a);
+    for(a=0;a<support.length-1;a++){
+      if(x>=support[a]&&x<=support[a+1]){
+        var f=(x-support[a])/(support[a+1]-support[a]);
+        return v[support[a]]*(1-f)+v[support[a+1]]*f;
+      }
+    }
+    return v[hi];
+  }
+  if(k==='iql'){
+    if(x<=lo) return v[lo];
+    if(x>=hi) return v[hi];
+  }
+  var seg=Math.min(2,Math.floor(x)), f=x-seg;
+  return v[seg]*(1-f)+v[seg+1]*f;
+}
+function drawOod(){
+  var svg=document.getElementById('oodCurve'), grid=document.getElementById('oodGridSvg');
+  var s=state.oodState;
+  if(s===GOAL||s===PIT) s=state.oodState=12;
+  var note=document.getElementById('oodNote');
+  var supActs=[]; for(var a=0;a<4;a++) if(state.sup[s*4+a]) supActs.push(ACTNAME[a]);
+  if(note) note.textContent='state '+s+' · logged actions: '+(supActs.length?supActs.join(', '):'none')+
+    ' · greedy ('+METHOD_NAME[state.method]+'): '+(state.trained?ACT[greedy(state.trained[state.method].Q,RULE[state.method]==='support'?state.sup:null)[s]]:'—');
+
+  if(grid){
+    var svgNS='http://www.w3.org/2000/svg', pad=14, cell=(280-2*pad)/4, st;
+    while(grid.firstChild) grid.removeChild(grid.firstChild);
+    for(st=0;st<16;st++){
+      var r=Math.floor(st/4), c=st%4, x=pad+c*cell, y=pad+r*cell, n=0, aa;
+      for(aa=0;aa<4;aa++) n+=state.sup[st*4+aa];
+      var fill='#fff';
+      if(st===GOAL) fill='#dcfce7'; else if(st===PIT) fill='#fee2e2';
+      else if(n>0) fill='rgba(37,99,235,'+(0.06+0.12*n)+')';
+      var rect=document.createElementNS(svgNS,'rect');
+      rect.setAttribute('x',x+1.5); rect.setAttribute('y',y+1.5);
+      rect.setAttribute('width',cell-3); rect.setAttribute('height',cell-3);
+      rect.setAttribute('rx',7); rect.setAttribute('fill',fill); rect.setAttribute('stroke','#e8e8e8');
+      if(st===s){ rect.setAttribute('stroke','#111'); rect.setAttribute('stroke-width','2'); }
+      grid.appendChild(rect);
+      var lab=document.createElementNS(svgNS,'text');
+      lab.setAttribute('x',x+cell/2); lab.setAttribute('y',y+cell/2+16);
+      lab.setAttribute('text-anchor','middle'); lab.setAttribute('font-size','10');
+      lab.setAttribute('font-family','ui-monospace,monospace');
+      lab.setAttribute('fill','#9ca3af'); lab.textContent=(st===GOAL?'GOAL':st===PIT?'PIT':st);
+      grid.appendChild(lab);
+      var dots=document.createElementNS(svgNS,'text');
+      dots.setAttribute('x',x+cell/2); dots.setAttribute('y',y+cell/2-6);
+      dots.setAttribute('text-anchor','middle'); dots.setAttribute('font-size','10'); dots.setAttribute('letter-spacing','1');
+      var str=''; for(aa=0;aa<4;aa++) str+=state.sup[st*4+aa]?ACT[aa]:'·';
+      dots.setAttribute('fill',n?'#1e3a8a':'#d4d4d8'); dots.textContent=str;
+      grid.appendChild(dots);
+    }
+  }
+
+  if(!svg) return;
+  var W=520, H=300, padL=44, padR=14, padT=14, padB=30, i, k;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var vals=[];
+  for(i=0;i<=60;i++){ vals.push(0+i*(3/60)); }
+  var ymin=Infinity, ymax=-Infinity;
+  ['naive','cql','iql','bcq'].forEach(function(kk){
+    for(i=0;i<=60;i++){ var v=sampleMethod(kk,s,vals[i]); if(v!==null){ ymin=Math.min(ymin,v); ymax=Math.max(ymax,v); } }
+  });
+  if(ymin===Infinity){ ymin=-1; ymax=1; }
+  var pad=(ymax-ymin)*0.15+0.02; ymin-=pad; ymax+=pad;
+  function X(a){ return padL+(a/3)*(W-padL-padR); }
+  function Y(v){ return H-padB-((v-ymin)/(ymax-ymin))*(H-padB-padT); }
+  var lo=null, hi=null;
+  for(a=0;a<4;a++) if(state.sup[s*4+a]){ if(lo===null) lo=a; hi=a; }
+  if(lo!==null&&lo!==hi){
+    var shade=document.createElementNS(svgNS,'rect');
+    shade.setAttribute('x',X(lo)); shade.setAttribute('y',padT);
+    shade.setAttribute('width',X(hi)-X(lo)); shade.setAttribute('height',H-padB-padT);
+    shade.setAttribute('fill','#f4f4f5'); svg.appendChild(shade);
+  }
+  for(i=0;i<=3;i++){
+    var g=document.createElementNS(svgNS,'line');
+    g.setAttribute('x1',X(i)); g.setAttribute('x2',X(i)); g.setAttribute('y1',padT); g.setAttribute('y2',H-padB);
+    g.setAttribute('stroke','#f0f0f0'); svg.appendChild(g);
+    var t=document.createElementNS(svgNS,'text');
+    t.setAttribute('x',X(i)); t.setAttribute('y',H-padB+15); t.setAttribute('text-anchor','middle');
+    t.setAttribute('font-size','10.5'); t.setAttribute('fill',state.sup[s*4+i]?'#1e3a8a':'#c4c4c8');
+    t.setAttribute('font-family','ui-monospace,monospace'); t.textContent=ACT[i];
+    svg.appendChild(t);
+  }
+  for(i=0;i<=4;i++){
+    var vv=ymin+(i/4)*(ymax-ymin);
+    var gl=document.createElementNS(svgNS,'line');
+    gl.setAttribute('x1',padL); gl.setAttribute('x2',W-padR); gl.setAttribute('y1',Y(vv)); gl.setAttribute('y2',Y(vv));
+    gl.setAttribute('stroke','#f0f0f0'); svg.appendChild(gl);
+    var tl=document.createElementNS(svgNS,'text');
+    tl.setAttribute('x',padL-7); tl.setAttribute('y',Y(vv)+3.5); tl.setAttribute('text-anchor','end');
+    tl.setAttribute('font-size','10'); tl.setAttribute('fill','#9ca3af');
+    tl.setAttribute('font-family','ui-monospace,monospace'); tl.textContent=vv.toFixed(2);
+    svg.appendChild(tl);
+  }
+  ['naive','cql','iql','bcq'].forEach(function(kk){
+    var d='', pen=false;
+    for(i=0;i<=60;i++){
+      var v=sampleMethod(kk,s,vals[i]);
+      if(v===null){ pen=false; continue; }
+      d+=(pen?'L':'M')+X(vals[i]).toFixed(1)+' '+Y(v).toFixed(1)+' ';
+      pen=true;
+    }
+    var p=document.createElementNS(svgNS,'path');
+    p.setAttribute('d',d); p.setAttribute('fill','none');
+    p.setAttribute('stroke',METHOD_COLOR[kk]); p.setAttribute('stroke-width','2.2');
+    p.setAttribute('stroke-linejoin','round'); p.setAttribute('stroke-linecap','round');
+    svg.appendChild(p);
+    for(a=0;a<4;a++){
+      var av=anchorValues(kk,s)[a];
+      if(av===null) continue;
+      var dot=document.createElementNS(svgNS,'circle');
+      dot.setAttribute('cx',X(a)); dot.setAttribute('cy',Y(av)); dot.setAttribute('r',3.2);
+      dot.setAttribute('fill',METHOD_COLOR[kk]); svg.appendChild(dot);
+    }
+  });
+  drawSweepMarker(svg,X,Y);
+}
+function drawSweepMarker(svg,X,Y){
+  var x=state.sweepX===undefined?1:state.sweepX;
+  var s=state.oodState, k;
+  var old=svg.querySelector('#oodCursor'); if(old) svg.removeChild(old);
+  var line=document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('id','oodCursor');
+  line.setAttribute('x1',X(x)); line.setAttribute('x2',X(x)); line.setAttribute('y1',14); line.setAttribute('y2',270);
+  line.setAttribute('stroke','#111'); line.setAttribute('stroke-dasharray','3 3'); line.setAttribute('opacity','0.5');
+  svg.appendChild(line);
+  var parts=[];
+  ['naive','cql','iql','bcq'].forEach(function(kk){
+    var v=sampleMethod(kk,s,x);
+    parts.push(METHOD_NAME[kk]+' '+(v===null?'—':v.toFixed(2)));
+  });
+  var eq=document.getElementById('oodEq');
+  if(eq) eq.textContent='x = '+x.toFixed(2)+'   ·   '+parts.join('   ·   ');
+  var sw=document.getElementById('oodSweepVal'); if(sw) sw.textContent=x.toFixed(2);
+}
+
+/* ---------------- fine-tuning ---------------- */
+function prep(Q,mask){
+  var R=Float64Array.from(Q), s, a;
+  for(s=0;s<16;s++){
+    var m=sMin(R,s,mask);
+    if(m===Infinity) continue;
+    for(a=0;a<4;a++) if(!mask[s*4+a]) R[s*4+a]=m-1;
+  }
+  return R;
+}
+function finetune(Q0,eps){
+  var rng=mulberry32(7), Q=Float64Array.from(Q0), s=START, t;
+  var curve=[[0,softValue(Q,eps)[START]]];
+  for(t=1;t<=1500;t++){
+    var a;
+    if(rng()<eps) a=Math.floor(rng()*4);
+    else { a=0; var bv=-Infinity; for(var b=0;b<4;b++) if(Q[s*4+b]>bv){ bv=Q[s*4+b]; a=b; } }
+    var tr=step(s,a), m=-Infinity;
+    for(var b2=0;b2<4;b2++) if(Q[tr.ns*4+b2]>m) m=Q[tr.ns*4+b2];
+    var y=tr.r+(tr.d?0:GAMMA*m);
+    Q[s*4+a]+=0.15*(y-Q[s*4+a]);
+    s=tr.d?START:tr.ns;
+    if(t%100===0) curve.push([t,softValue(Q,eps)[START]]);
+  }
+  return curve;
+}
+function drawFt(){
+  var svg=document.getElementById('ftSvg');
+  if(!svg||!state.ft) return;
+  var svgNS='http://www.w3.org/2000/svg', W=620, H=320, padL=48, padR=14, padT=16, padB=34, i;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var ymin=Infinity, ymax=-Infinity;
+  ['naive','cql','iql','bcq','scratch'].forEach(function(k){
+    state.ft[k].forEach(function(p){ ymin=Math.min(ymin,p[1]); ymax=Math.max(ymax,p[1]); });
+  });
+  var pad=(ymax-ymin)*0.12+0.01; ymin-=pad; ymax+=pad;
+  ymin=Math.max(ymin,-1.5);
+  function X(t){ return padL+(t/1500)*(W-padL-padR); }
+  function Y(v){ return H-padB-((v-ymin)/(ymax-ymin))*(H-padB-padT); }
+  for(i=0;i<=4;i++){
+    var vv=ymin+(i/4)*(ymax-ymin), yy=Y(vv);
+    var gl=document.createElementNS(svgNS,'line');
+    gl.setAttribute('x1',padL); gl.setAttribute('x2',W-padR); gl.setAttribute('y1',yy); gl.setAttribute('y2',yy);
+    gl.setAttribute('stroke','#f0f0f0'); svg.appendChild(gl);
+    var tl=document.createElementNS(svgNS,'text');
+    tl.setAttribute('x',padL-7); tl.setAttribute('y',yy+3.5); tl.setAttribute('text-anchor','end');
+    tl.setAttribute('font-size','10'); tl.setAttribute('fill','#9ca3af');
+    tl.setAttribute('font-family','ui-monospace,monospace'); tl.textContent=vv.toFixed(2);
+    svg.appendChild(tl);
+  }
+  var defs=document.createElementNS(svgNS,'defs');
+  var cp=document.createElementNS(svgNS,'clipPath'); cp.setAttribute('id','ftClip');
+  var cr=document.createElementNS(svgNS,'rect');
+  cr.setAttribute('x',padL); cr.setAttribute('y',padT); cr.setAttribute('width',W-padL-padR); cr.setAttribute('height',H-padT-padB);
+  cp.appendChild(cr); defs.appendChild(cp); svg.appendChild(defs);
+  var grp=document.createElementNS(svgNS,'g'); grp.setAttribute('clip-path','url(#ftClip)'); svg.appendChild(grp);
+  ['naive','cql','iql','bcq'].forEach(function(k){
+    var cur=state.ft[k], d='';
+    for(i=0;i<cur.length;i++) d+=(i?'L':'M')+X(cur[i][0]).toFixed(1)+' '+Y(cur[i][1]).toFixed(1)+' ';
+    var p=document.createElementNS(svgNS,'path');
+    p.setAttribute('d',d); p.setAttribute('fill','none');
+    p.setAttribute('stroke',METHOD_COLOR[k]); p.setAttribute('stroke-width','2.2');
+    p.setAttribute('stroke-linecap','round'); p.setAttribute('stroke-linejoin','round');
+    grp.appendChild(p);
+  });
+  var cur=state.ft.scratch, d2='';
+  for(i=0;i<cur.length;i++) d2+=(i?'L':'M')+X(cur[i][0]).toFixed(1)+' '+Y(cur[i][1]).toFixed(1)+' ';
+  var ps=document.createElementNS(svgNS,'path');
+  ps.setAttribute('d',d2); ps.setAttribute('fill','none'); ps.setAttribute('stroke','#c2c9d4');
+  ps.setAttribute('stroke-width','2'); ps.setAttribute('stroke-dasharray','6 5'); ps.setAttribute('stroke-linecap','round');
+  grp.appendChild(ps);
+  var xl=document.createElementNS(svgNS,'text');
+  xl.setAttribute('x',W/2); xl.setAttribute('y',H-6); xl.setAttribute('text-anchor','middle');
+  xl.setAttribute('font-size','10.5'); xl.setAttribute('fill','#9ca3af');
+  xl.setAttribute('font-family','ui-monospace,monospace'); xl.textContent='online steps · 0 → 1500';
+  svg.appendChild(xl);
+}
+function runFineTune(){
+  if(!state.trained) trainAll();
+  state.ft={};
+  ['naive','cql','iql','bcq'].forEach(function(k){
+    var mask=RULE[k]==='support'?state.sup:null;
+    var Q0=(k==='naive'||k==='cql')?state.trained[k].Q:prep(state.trained[k].Q,state.sup);
+    state.ft[k]=finetune(Q0,state.ftEps);
+  });
+  state.ft.scratch=finetune(new Float64Array(64),state.ftEps);
+  drawFt();
+  var info=document.getElementById('ftInfo');
+  if(info){
+    var s0=['naive','cql','iql','bcq'].map(function(k){ return METHOD_NAME[k]+' '+state.ft[k][0][1].toFixed(2); }).join(' · ');
+    info.textContent='start (ε-greedy value at 13): '+s0+' · from scratch '+state.ft.scratch[0][1].toFixed(2);
+  }
+  var eq=document.getElementById('ftEq');
+  KS(eq,'Q(s,a)\\leftarrow Q(s,a)+\\eta\\big[r+\\gamma\\max_{a\'}Q(s\',a\')-Q(s,a)\\big],\\qquad \\eta=0.15,\\ \\varepsilon=0.12',true);
+}
+
+/* ---------------- fine-tune reset ---------------- */
+function clearFt(){
+  state.ft=null;
+  var svg=document.getElementById('ftSvg'); if(svg) while(svg.firstChild) svg.removeChild(svg.firstChild);
+  setText('ftInfo','');
+  var eq=document.getElementById('ftEq'); if(eq) eq.textContent='';
+}
+
+/* ---------------- board ---------------- */
+function resetBoard(){
+  var tb=document.getElementById('boardBody');
+  if(tb) tb.innerHTML='<tr><td colspan="5" class="muted">Train the learners in section 03 to populate the board.</td></tr>';
+}
+function drawBoard(){
+  var tb=document.getElementById('boardBody');
+  if(!tb||!state.trained) return;
+  var vstar=optimalStart(), rows='';
+  ['naive','cql','iql','bcq'].forEach(function(k){
+    var mask=RULE[k]==='support'?state.sup:null;
+    var vhat=vstarOf(k);
+    var truth=greedyValue(state.trained[k].Q,mask)[START];
+    var gap=vhat-truth;
+    var verdict=(k==='naive')?'optimistic — pays for unseen actions':'conservative — stays in the data';
+    rows+='<tr><td>'+METHOD_NAME[k]+'</td><td class="n">'+vhat.toFixed(3)+'</td><td class="n">'+truth.toFixed(3)+'</td>'+
+      '<td class="n">'+(gap>=0?'+':'')+gap.toFixed(3)+'</td><td class="small muted">'+verdict+'</td></tr>';
+  });
+  rows+='<tr><td>Optimal</td><td class="n">'+vstar.toFixed(3)+'</td><td class="n">'+vstar.toFixed(3)+'</td><td class="n">0.000</td><td class="small muted">V* of the start state</td></tr>';
+  tb.innerHTML=rows;
+}
+function trainAll(){
+  clearFt();
+  var alpha=parseFloat(document.getElementById('cqlAlpha').value)/100;
+  var tau=parseFloat(document.getElementById('iqlTau').value)/100;
+  state.trained={
+    naive:trainNaive(state.log,state.sup),
+    cql:trainCQL(state.log,state.sup,alpha),
+    iql:trainIQL(state.log,state.sup,tau),
+    bcq:trainBCQ(state.log,state.sup)
+  };
+  drawCurves(); drawMap(); drawOod();
+  var st=document.getElementById('trStatus');
+  if(st) st.textContent='Trained '+STEPS+' steps · CQL α='+alpha.toFixed(2)+' · IQL τ='+tau.toFixed(2)+' · '+state.log.length+' transitions.';
+  var cb=document.getElementById('cqlBox');
+  KS(cb,'\\mathcal{L}_{\\text{CQL}} \\;=\\; \\sum_{(s,a)\\in\\log}\\big(Q(s,a)-y\\big)^2 \\;+\\; \\alpha\\!\\sum_{a\\notin\\text{supp}} \\big(\\min_{a\'\\in\\text{supp}} Q(s,a\')-Q(s,a)\\big)_{-}',false);
+  drawBoard();
+}
+function resetMap(){
+  var svg=document.getElementById('mapSvg');
+  if(svg) while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var cap=document.getElementById('mapCap'); if(cap) cap.textContent='Train to see each method’s greedy policy.';
+}
+
+/* ---------------- code blocks ---------------- */
+function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+var PY_RE=/(#[^\n]*)|('[^']*')|("[^"]*")|\b(import|from|def|return|for|while|if|elif|else|in|not|and|or|lambda|class|with|as|yield|global|pass|break|continue|True|False|None)\b|\b(print|range|max|min|abs|sum|len|enumerate|zip|float|int|bool|list|dict|set|tuple|self)\b|\b(\d+\.\d+|\d+)\b|(@[A-Za-z_]\w*)|([=+\-*\/<>!]+(?!=))/g;
+function highlight(raw){
+  var out='', last=0, m;
+  PY_RE.lastIndex=0;
+  while((m=PY_RE.exec(raw))!==null){
+    out+=escapeHtml(raw.slice(last,m.index));
+    var tok=m[0], cls='';
+    if(m[1]) cls='t-c';
+    else if(m[2]||m[3]) cls='t-s';
+    else if(m[4]) cls='t-k';
+    else if(m[5]) cls='t-b';
+    else if(m[6]) cls='t-n';
+    else if(m[7]) cls='t-d';
+    else cls='t-o';
+    out+='<span class="'+cls+'">'+escapeHtml(tok)+'</span>';
+    last=m.index+tok.length;
+  }
+  out+=escapeHtml(raw.slice(last));
+  return out;
+}
+function initCode(){
+  document.querySelectorAll('pre code[data-lang="python"]').forEach(function(el){
+    el.innerHTML=highlight(el.textContent);
+  });
+  document.querySelectorAll('.cb-copy').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var cb=btn.closest('.cb'), pre=cb?cb.querySelector('pre'):null;
+      if(!pre) return;
+      var text=pre.textContent;
+      if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+      btn.textContent='Copied'; setTimeout(function(){ btn.textContent='Copy'; },1200);
+    });
+  });
+}
+
+/* ---------------- chrome ---------------- */
+function initChrome(){
+  var prog=document.getElementById('progress');
+  function upd(){
+    if(!prog) return;
+    var h=document.documentElement;
+    var max=(h.scrollHeight-h.clientHeight)||1;
+    prog.style.width=Math.max(0,Math.min(100,(h.scrollTop/max)*100))+'%';
+  }
+  document.addEventListener('scroll',upd,{passive:true});
+  window.addEventListener('resize',upd);
+  upd();
+}
+
+/* ---------------- wiring ---------------- */
+function val(id,div){ return parseFloat(document.getElementById(id).value)/(div||1); }
+function setText(id,t){ var el=document.getElementById(id); if(el) el.textContent=t; }
+function wire(){
+  var dsEps=document.getElementById('dsEps');
+  dsEps.addEventListener('input',function(){ state.eps=val('dsEps',100); setText('dsEpsVal',state.eps.toFixed(2)); rebuildDataset(); });
+  var dsSize=document.getElementById('dsSize');
+  dsSize.addEventListener('input',function(){ state.nPairs=parseInt(dsSize.value,10); setText('dsSizeVal',String(state.nPairs)); rebuildDataset(); });
+  document.getElementById('dsResample').addEventListener('click',function(){ state.seed=Math.floor(Math.random()*1e6); rebuildDataset(); });
+
+  document.getElementById('trainBtn').addEventListener('click',trainAll);
+  document.getElementById('trainReset').addEventListener('click',function(){
+    state.trained=null; state.ft=null; resetCurve(); resetMap(); resetBoard(); drawOod();
+  });
+  document.getElementById('cqlAlpha').addEventListener('input',function(){ setText('cqlAlphaVal',val('cqlAlpha',100).toFixed(2)); });
+  document.getElementById('iqlTau').addEventListener('input',function(){ setText('iqlTauVal',val('iqlTau',100).toFixed(2)); });
+
+  document.querySelectorAll('#methodTabs .tab').forEach(function(tab){
+    tab.addEventListener('click',function(){
+      document.querySelectorAll('#methodTabs .tab').forEach(function(t){ t.classList.remove('active'); });
+      tab.classList.add('active'); state.method=tab.getAttribute('data-m');
+      drawMap(); drawOod();
+    });
+  });
+
+  var oodState=document.getElementById('oodState');
+  oodState.addEventListener('input',function(){ var v=parseInt(oodState.value,10); if(v===GOAL||v===PIT){ v=12; oodState.value='12'; } state.oodState=v; setText('oodStateLbl',String(v)); drawOod(); });
+  var oodSweep=document.getElementById('oodSweep');
+  oodSweep.addEventListener('input',function(){ state.sweepX=parseInt(oodSweep.value,10)/100; drawOod(); });
+
+  document.getElementById('ftRun').addEventListener('click',function(){ state.ftEps=val('ftEps',100); runFineTune(); });
+  document.getElementById('ftReset').addEventListener('click',function(){
+    state.ft=null; var svg=document.getElementById('ftSvg'); if(svg) while(svg.firstChild) svg.removeChild(svg.firstChild);
+    setText('ftInfo',''); var eq=document.getElementById('ftEq'); if(eq) eq.textContent='';
+  });
+  document.getElementById('ftEps').addEventListener('input',function(){ state.ftEps=val('ftEps',100); setText('ftEpsVal',state.ftEps.toFixed(2)); });
+}
+
+/* ---------------- boot ---------------- */
+function initStatics(){
+  KS(document.getElementById('envEq'),
+    '\\mathcal{M}=(\\mathcal{S},\\mathcal{A},P,r,\\gamma),\\qquad |\\mathcal{S}|=16,\\quad |\\mathcal{A}|=4,\\quad \\gamma=0.9,\\qquad r(s,a)=\\begin{cases}+1 & s\'=\\text{goal}\\\\[2pt] -1 & s\'=\\text{pit}\\\\[2pt] -0.3 & \\text{otherwise}\\end{cases}', true);
+  KS(document.getElementById('trEq'),
+    '\\text{target}(s,a)=r+\\gamma\\,(1-d)\\,\\mathcal{B}\\big[Q(s\',\\cdot)\\big],\\qquad \\mathcal{B}=\\begin{cases}\\displaystyle\\max_{a\'}Q(s\',a\') & \\text{naive TD, CQL}\\\\[6pt] V(s\') & \\text{IQL (expectile over support)}\\\\[6pt] \\displaystyle\\max_{a\'\\in\\,\\text{supp}}Q(s\',a\') & \\text{BCQ}\\end{cases}', true);
+  KS(document.getElementById('oodEq'),'x=\\text{action coordinate},\\ 0=\\uparrow,\\ 1=\\rightarrow,\\ 2=\\downarrow,\\ 3=\\leftarrow',false);
+}
+function init(){
+  initStatics();
+  if(window.renderMathInElement){
+    renderMathInElement(document.body,{
+      delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],
+      throwOnError:false,
+      ignoredTags:['script','noscript','style','textarea','pre','code','option']
+    });
+  }
+  initCode();
+  initChrome();
+  wire();
+  rebuildDataset();
+}
+if(document.readyState==='complete') init();
+else window.addEventListener('load',init);
+</script>
+
+<!-- reader-script -->
+<script>
+(function () {
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
+</script>
+</body>
+</html>

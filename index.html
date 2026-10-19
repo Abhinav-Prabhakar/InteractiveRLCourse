@@ -53,6 +53,8 @@ section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
 .ch-body{flex:1;min-width:0}
 .ch-title{display:block;font-weight:650;letter-spacing:-.01em}
 .ch-desc{display:block;color:#6b7280;font-size:14.5px;line-height:1.5;margin-top:3px}
+.toc li.proj a .ch-num{color:#1e3a8a}
+.proj-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#1e3a8a;background:#eef2ff;border-radius:5px;padding:1px 6px;vertical-align:middle;margin-left:8px}
 
 footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
 
@@ -81,7 +83,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 
 <header class="hero" id="top">
   <div class="wrap">
-    <p class="eyebrow">An interactive course · 22 chapters</p>
+    <p class="eyebrow">An interactive course · 22 chapters · 6 projects</p>
     <h1>Reinforcement Learning,<br>from MDPs to RLHF</h1>
     <p class="lede">Every equation derived. Every idea something you can drag, step, or break.</p>
     <p class="prereq">Assumes linear algebra, probability, and calculus. No RL.</p>
@@ -121,7 +123,7 @@ footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9
 </section>
 
 <footer>
-  <div class="wrap">Each chapter is one self-contained page. Use ← and → to move between them.</div>
+  <div class="wrap">Every chapter and project is one self-contained page. Use ← and → to move between them.</div>
 </footer>
 
 <script>
@@ -149,22 +151,45 @@ const CH = [
   ['21-safe-and-constrained-rl', 'Safe & Constrained RL', 'Constrained MDPs, Lagrange multipliers as the price of safety, and shielding.'],
   ['22-rlhf-and-llm-alignment', 'RLHF & LLM Alignment', 'Reward models from preferences, PPO with a KL leash, DPO, and GRPO.']
 ];
-const PARTS = [[0, 3], [3, 8], [8, 12], [12, 22]];
+const PJ = [
+  ['01-tabular-rl-from-scratch', 'Tabular RL from Scratch', 'Implement value iteration, policy iteration, MC control, Sarsa and Q-learning on a gridworld, then race them.'],
+  ['02-deep-rl-continuous-control', 'Deep RL on a Continuous-Control Task', 'DDPG, TD3 and SAC on a continuous task, with ablatable target smoothing, twin critics and entropy.'],
+  ['03-offline-rl-benchmark', 'Offline RL Benchmark', 'CQL, IQL and BCQ on a fixed log, scored offline and after fine-tuning, with an OOD-action explorer.'],
+  ['04-model-based-world-model', 'Model-Based World Model', 'A learned dynamics model that imagines rollouts — and shows where the imagination drifts from the world.'],
+  ['05-rlhf-dpo-alignment-pipeline', 'RLHF / DPO Alignment Pipeline', 'A reward model from preferences, PPO with a KL leash, and DPO — with a live β slider.'],
+  ['06-multi-agent-coordination', 'Multi-Agent Coordination', 'MAPPO and QMIX on a cooperative task: watch coordination emerge and survive an agent dropout.']
+];
+/* each part lists its chapters, then any projects that extend it */
+const PARTS = [
+  { ch: [0, 3],  pj: [] },
+  { ch: [3, 8],  pj: [0] },
+  { ch: [8, 12], pj: [1] },
+  { ch: [12, 22], pj: [2, 3, 4, 5] }
+];
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-const href = i => `outputs/${CH[i][0]}.html`;
+const hrefCh = i => `outputs/${CH[i][0]}.html`;
+const hrefPj = j => `projects/${PJ[j][0]}.html`;
 
-/* ---------------- chapter lists ---------------- */
+/* ---------------- chapter + project lists ---------------- */
 function initToc() {
   $$('.toc').forEach(ol => {
-    const [a, b] = PARTS[+ol.dataset.part];
-    for (let i = a; i < b; i++) {
+    const part = PARTS[+ol.dataset.part];
+    for (let i = part.ch[0]; i < part.ch[1]; i++) {
       const li = document.createElement('li');
-      li.innerHTML = `<a href="${href(i)}">
+      li.innerHTML = `<a href="${hrefCh(i)}">
         <span class="ch-num">${String(i + 1).padStart(2, '0')}</span>
         <span class="ch-body"><span class="ch-title">${CH[i][1]}</span><span class="ch-desc">${CH[i][2]}</span></span></a>`;
       ol.appendChild(li);
     }
+    part.pj.forEach(j => {
+      const li = document.createElement('li');
+      li.className = 'proj';
+      li.innerHTML = `<a href="${hrefPj(j)}">
+        <span class="ch-num">P${j + 1}</span>
+        <span class="ch-body"><span class="ch-title">${PJ[j][1]}<span class="proj-tag">Project</span></span><span class="ch-desc">${PJ[j][2]}</span></span></a>`;
+      ol.appendChild(li);
+    });
   });
 }
 

@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<!--
+  Project 4 — Model-Based World Model
+  Self-contained guided lab. Design tokens, topbar/hero/footer markup, helpers and
+  boot script are copied verbatim from outputs/01 and outputs/13; the only new
+  classes are the shared .cb* / .t-* code components and the .lab* / .steps /
+  .deliverable / .metrics / .tabs scaffolding required by the project brief.
+
+  Assumptions (per prompt-projects.md):
+   · The environment is a 1-D nonlinear point mass on a rail (state [x, ẋ], control
+     = force). The sample-efficiency comparison switches to a small discrete maze:
+     tabular Q-learning needs a finite state space, and the planning effect is the
+     same. The page says so explicitly.
+   · "Latent" is the model's 2-D code [z1, z2]; for this low-dimensional task it
+     coincides with the physics state, so the perturbation control drags it directly.
+     A note says so in the page.
+   · Everything is computed in-page; the Python in the .cb blocks mirrors the
+     in-page model fit and Dyna planning exactly.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project 4 · Model-Based World Model</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0;min-height:44px}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- diagrams ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.diagram{width:100%;max-width:400px;margin:0 auto;overflow:visible}
+.node-label{font-size:15px;font-weight:650;fill:#111}
+.edge-label{font-size:11.5px;font-weight:600;fill:#4b5563;paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.edge-label.on{fill:#111}
+
+/* ---------------- matrix ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:44px;height:34px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+table.matrix tr.sum td{background:transparent;color:#9ca3af;font-size:11px;height:22px}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.vrow:hover{background:#fafafa}
+.vrow.sel{background:#f4f4f5}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:18px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:60px;text-align:right;font-weight:600}
+
+/* ---------------- legend, plots, readouts ---------------- */
+.legend{display:flex;align-items:center;gap:14px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace;flex-wrap:wrap}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.readout{font-family:ui-monospace,monospace;font-size:12.5px;color:#6b7280;margin:10px 0 0;line-height:1.6}
+.readout b{color:#111;font-weight:650}
+.plot-cap{font-size:12.5px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+table.cmp.ax td:first-child{width:18%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  table.cmp{font-size:13.5px}
+  table.cmp th,table.cmp td{padding:9px 6px}
+}
+
+/* ---------------- code ---------------- */
+.cb{border:1px solid #e8e8e8;border-radius:12px;overflow:hidden;margin:18px 0;background:#fafafa}
+.cb-head{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #f0f0f0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;letter-spacing:.06em;color:#9ca3af}
+.cb-file{font-weight:650;color:#6b7280}
+.cb-lang{color:#9ca3af}
+.cb-copy{margin-left:auto;font:inherit;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:7px;border:1px solid #dcdcdc;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.cb-copy:hover{border-color:#111;color:#111}
+.cb pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.8px;line-height:1.65;color:#111;background:#fafafa}
+.cb code{background:none;padding:0;font-size:inherit;color:inherit}
+.t-c{color:#9ca3af;font-style:italic}
+.t-k{color:#1e3a8a;font-weight:600}
+.t-b{color:#6b7280}
+.t-n{color:#dc2626}
+.t-s{color:#2563eb}
+.t-f{color:#1e3a8a}
+.t-d{color:#6b7280;font-weight:600}
+.t-o{color:#374151}
+
+/* ---------------- lab scaffolding ---------------- */
+.lab{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff;margin:22px 0}
+.lab-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.lab-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.steps{list-style:none;counter-reset:s;margin:18px 0;padding:0}
+.steps li{counter-increment:s;position:relative;padding:2px 0 16px 42px;border-left:1px solid #f0f0f0;margin-left:13px}
+.steps li:last-child{border-left-color:transparent;padding-bottom:0}
+.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:-13px;top:0;width:26px;height:26px;border-radius:8px;background:#eef2ff;color:#1e3a8a;font:600 12px/26px ui-monospace,monospace;text-align:center}
+.steps b{color:#111}
+.deliverable{border-left:2px solid #1e3a8a;background:#eef2ff;padding:12px 16px;border-radius:0 10px 10px 0;margin:22px 0;color:#1e3a8a;font-size:15px}
+.deliverable b{color:#1e3a8a}
+.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}
+.metric{flex:1 1 150px;border:1px solid #e8e8e8;border-radius:12px;padding:12px 14px;background:#fafafa}
+.metric-k{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.metric-v{font-family:ui-monospace,monospace;font-size:22px;font-weight:650;color:#111;margin-top:4px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.tab{font-size:13px;padding:5px 11px;border-radius:8px;border:1px solid #e5e5e5;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.tab:hover{border-color:#111;color:#111}
+.tab.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">P04 · World Model</a>
+    <nav class="nav">
+      <a href="#env">The env</a>
+      <a href="#model">The model</a>
+      <a href="#rollout">Rollout</a>
+      <a href="#latent">Latent</a>
+      <a href="#samples">Sample efficiency</a>
+      <a href="#build">Build it</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Projects · Project 4</p>
+    <h1>Model-Based<br>World Model</h1>
+    <p class="lede">Learn the dynamics of a control task from transitions, plan inside the learned model, and watch imagination peel away from reality as the horizon grows.</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="deliverable">
+    <b>Deliverable.</b> A working world model: a dynamics model fitted from transitions, rolled forward into the future, with its compounding error measured, its latent state perturbed, and its planning shown to solve a discrete control task in half the real environment steps.
+  </div>
+</div>
+
+<!-- ==================================================================== -->
+<section id="env">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>The environment</h2>
+      <p>The first four panels run the same world: a <b>point mass</b> on a rail, state $s=(x,v)$ and a single force $a\in[-1,1]$. A nonlinear asymmetric spring pulls it toward the origin, and a little drag slows it down:</p>
+      <div class="eqbox">
+        $$\dot x = v,\qquad \dot v = a - k\,x - c\,v - \gamma\,x^{2} - \beta\,x^{3},\qquad k=1,\ c=0.2,\ \gamma=0.25,\ \beta=0.4$$
+      </div>
+      <p>The polynomial terms are the whole point. Linear dynamics would be a two-line regression; the $x^{2}$ and $x^{3}$ terms are smooth, deterministic, and just nonlinear enough that capacities one through three separate cleanly. The reward to be maximized regulates the mass to the origin:</p>
+      <div class="eqbox">
+        $$r(s,a)=-\big(x^{2}+0.1\,v^{2}+0.01\,a^{2}\big)$$
+      </div>
+      <p>Push the mass off center and watch the true trajectory. This simulation <em>is</em> the ground truth that every model on the page is graded against.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the environment, simulated live</span>
+        <div class="btnrow">
+          <button id="envStep">Step</button>
+          <button id="envRun" class="primary">Run ▶</button>
+          <button id="envReset">Reset</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 380px">
+          <svg id="envSvg" viewBox="0 0 520 250" role="img" aria-label="A point mass on a rail and its position over time"></svg>
+        </div>
+        <div class="col" style="flex:1 1 220px">
+          <div class="slider-row"><span class="small muted" style="min-width:34px">$x_0$</span>
+            <input type="range" id="envX0" min="-2" max="2" step="0.1" value="1.5" aria-label="initial position x0">
+            <span class="val" id="envX0Val">1.5</span></div>
+          <div class="slider-row"><span class="small muted" style="min-width:34px">$v_0$</span>
+            <input type="range" id="envV0" min="-2" max="2" step="0.1" value="0" aria-label="initial velocity v0">
+            <span class="val" id="envV0Val">0.0</span></div>
+          <div class="slider-row"><span class="small muted" style="min-width:34px">force $a$</span>
+            <input type="range" id="envA" min="-1" max="1" step="0.05" value="0" aria-label="applied force a">
+            <span class="val" id="envAVal">0.00</span></div>
+          <div class="eqbox" id="envEq" style="margin-top:14px"></div>
+          <p class="readout" id="envState"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <h3>The environment, in Python</h3>
+      <p>The page integrates the dynamics with the same fourth-order Runge–Kutta step the code below uses.</p>
+      <div class="cb">
+        <div class="cb-head"><span class="cb-file">env.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+        <pre class="code"><code data-lang="python">import numpy as np
+
+DT, K, C, GAMMA, BETA, A_MAX = 0.05, 1.0, 0.2, 0.25, 0.4, 1.0
+
+def f(s, a):
+    # 1-D point mass on a rail: state s = [x, v]
+    x, v = s
+    return np.array([v, a * A_MAX - K * x - C * v
+                     - GAMMA * x ** 2 - BETA * x ** 3])
+
+def rk4(s, a, dt=DT):
+    k1 = f(s, a)
+    k2 = f(s + dt / 2 * k1, a)
+    k3 = f(s + dt / 2 * k2, a)
+    k4 = f(s + dt * k3, a)
+    return s + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+
+step = rk4
+reward = lambda s, a: -(s[0] ** 2 + 0.1 * s[1] ** 2 + 0.01 * a ** 2)</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="model">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>Learning the dynamics model</h2>
+      <p>Collect transitions from the world, then fit a model that predicts the per-step change $\Delta=s'-s$ from the state and action. The model is a polynomial regression $f_\phi(s,a)=s+\Delta_\phi(s,a)$, and <b>capacity</b> is the degree of the polynomial:</p>
+      <div class="eqbox">
+        $$\Delta_\phi(s,a)=\sum_{i+j+k\le d} \phi_{ijk}\,x^{i}v^{j}a^{k},\qquad \min_\phi\ \mathbb{E}_{(s,a,s')\sim\mathcal{D}}\big\|s'-f_\phi(s,a)\big\|^{2}$$
+      </div>
+      <p>Degree $d=1$ is a linear model. Degree $2$ adds squares and cross-terms. Degree $3$ adds the cubic terms — including the $x^{2}$ and $x^{3}$ the true dynamics contain. The fit is ridge-regularized least squares on standardized features. More capacity means a smaller one-step error, computed live below on held-out transitions the model never trained on.</p>
+    </div>
+
+    <div class="metrics" id="wmMetrics"></div>
+
+    <div class="wrap" style="padding:0">
+      <p>Fit the model once and you can roll it forward forever. The function below is exactly what the page does; <code>bootstrap_ensemble</code> trains several models on resampled data so their disagreement can stand in for uncertainty.</p>
+      <div class="cb">
+        <div class="cb-head"><span class="cb-file">world_model.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+        <pre class="code"><code data-lang="python">import numpy as np
+
+class WorldModel:
+    """Predicts the per-step change ds = s' - s by ridge regression."""
+
+    def __init__(self, degree=2, ridge=1e-4):
+        self.degree, self.ridge = degree, ridge
+
+    def monomials(self):
+        d = self.degree
+        return [(i, j, k)
+                for i in range(d + 1)
+                for j in range(d + 1)
+                for k in range(d + 1)
+                if i + j + k &lt;= d]
+
+    def phi(self, s, a):
+        x, v = s
+        return np.array([x ** i * v ** j * a ** k for i, j, k in self.expo])
+
+    def fit(self, S, A, S2):
+        self.expo = self.monomials()
+        P = np.stack([self.phi(s, a) for s, a in zip(S, A)])
+        self.mu, self.sigma = P.mean(0), P.std(0) + 1e-8
+        X = (P - self.mu) / self.sigma
+        y = S2 - S
+        n = X.shape[1]
+        self.w = np.linalg.solve(X.T @ X + self.ridge * np.eye(n), X.T @ y)
+
+    def step(self, s, a):
+        return s + ((self.phi(s, a) - self.mu) / self.sigma) @ self.w
+
+    def rollout(self, s0, actions):
+        s, traj = s0, [s0]
+        for a in actions:
+            s = self.step(s, a)
+            traj.append(s)
+        return np.array(traj)</code></pre>
+      </div>
+      <div class="cb">
+        <div class="cb-head"><span class="cb-file">ensemble.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+        <pre class="code"><code data-lang="python">def bootstrap_ensemble(data, size=8, degree=2, seed=0):
+    """Fit several models to resampled data; their spread is the uncertainty."""
+    rng = np.random.default_rng(seed)
+    n = len(data)
+    models = []
+    for _ in range(size):
+        idx = rng.integers(0, n, n)
+        m = WorldModel(degree)
+        m.fit(data.s[idx], data.a[idx], data.s2[idx])
+        models.append(m)
+    return models
+
+def imagine(models, s0, actions):
+    """Roll every member forward; return the mean path and the disagreement."""
+    paths = np.stack([m.rollout(s0, actions) for m in models])
+    return paths.mean(0), paths.std(0)</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="rollout">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Imagined rollouts and compounding error</h2>
+      <p>Roll the model forward and it talks only to itself: each predicted state becomes the next input. One-step error is tiny; the rollout starts from beyond the training range, so the model extrapolates and the error compounds.</p>
+      <p>Both trajectories below start at the same off-distribution state. The black path is the true world; the blue path is the model's imagination, drawn to the horizon $H$ you choose. The indigo band is the ensemble's spread.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · real vs. imagined rollout</span>
+        <div class="btnrow">
+          <div class="slider-row" style="width:170px"><span class="small muted">$H$</span>
+            <input type="range" id="rollH" min="4" max="40" step="1" value="20" aria-label="rollout horizon">
+            <span class="val" id="rollHVal">20</span></div>
+          <div class="slider-row" style="width:170px"><span class="small muted">ensemble</span>
+            <input type="range" id="rollEns" min="1" max="8" step="1" value="5" aria-label="ensemble size">
+            <span class="val" id="rollEnsVal">5</span></div>
+        </div>
+      </div>
+      <div class="tabs" id="rollCap">
+        <button class="tab" data-deg="1">linear</button>
+        <button class="tab active" data-deg="2">quadratic</button>
+        <button class="tab" data-deg="3">cubic</button>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 320px">
+          <svg id="rollSvg" viewBox="0 0 360 300" style="max-width:380px;margin:0 auto" role="img" aria-label="Phase portrait of the real and imagined trajectories"></svg>
+          <p class="legend">Real <span style="color:#111;font-weight:700">—</span> · Imagined <span style="color:#2563eb;font-weight:700">– –</span> · Ensemble band <span style="color:#1e3a8a;font-weight:700">▮</span> · phase space $(x,v)$</p>
+        </div>
+        <div class="col" style="flex:1 1 260px">
+          <p class="readout" style="margin-top:0">one-step error&nbsp; <b id="rollOne">—</b><br>$H$-step error&nbsp;&nbsp;&nbsp; <b id="rollHstep">—</b></p>
+          <div class="eqbox" id="rollEq" style="margin-top:14px"></div>
+          <p class="plot-cap" style="margin-top:18px">compounded error vs. horizon</p>
+          <svg id="errSvg" viewBox="0 0 400 180" style="width:100%" role="img" aria-label="Mean prediction error versus rollout horizon for three model capacities"></svg>
+          <p class="readout">linear <span style="color:#9ca3af">▬</span> · quadratic <span style="color:#2563eb">▬</span> · cubic <span style="color:#111">▬</span></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>The measured error is not a coincidence. If the one-step dynamics error is $\epsilon$ and the model is $L$-Lipschitz in its state, the error after $k$ imagined steps is bounded by a geometric sum:</p>
+      <div class="eqbox">
+        $$\big\|\hat s_k-s_k\big\|\;\le\;\epsilon\sum_{i=0}^{k-1}L^{i}\;=\;\epsilon\,\frac{L^{k}-1}{L-1}$$
+      </div>
+      <div class="note">
+        <b>A model is supervised learning with adversarial test data.</b> The planner asks about states its own plan creates — exactly the states the training set never covered. Raise capacity and the one-step error falls; raise the horizon and the blue curve bends away regardless.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="latent">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Perturbing the latent state</h2>
+      <p>A world model plans in a <b>latent</b> code $z$, not in the raw observation. For this task the latent is two-dimensional — $(z_1,z_2)$ — and a plan is a rollout $\hat s_{k+1}=f_\phi(\hat s_k,a_k)$ started from a perturbed code $\tilde z=z+\delta$. For a task this low-dimensional the code coincides with the physical state, so the perturbation is applied directly to $(x,v)$.</p>
+      <p>Drag the handle anywhere in the latent plane. Where the grey cloud is dense, the model interpolates among data it has seen and the imagination tracks the world. Drag it into empty space and the model extrapolates — the blue path leaves the black one almost immediately.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · drag the latent coordinate</span>
+        <div class="btnrow">
+          <span class="small muted mono" id="latZ" style="font-size:12px">z = (—, —)</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="latSvg" viewBox="0 0 360 300" style="max-width:380px;margin:0 auto;touch-action:none;cursor:crosshair" role="img" aria-label="Latent plane with the training-data cloud and a draggable perturbed start state"></svg>
+          <p class="legend">Training states <span style="color:#c2c9d4;font-weight:700">•</span> · Handle <span style="color:#111;font-weight:700">◉</span> · Real <span style="color:#111;font-weight:700">—</span> · Imagined <span style="color:#2563eb;font-weight:700">– –</span></p>
+        </div>
+        <div class="col" style="flex:1 1 260px">
+          <div class="slider-row"><span class="small muted" style="min-width:30px">$z_1$</span>
+            <input type="range" id="latZ1" min="-2.2" max="2.2" step="0.05" value="1.2" aria-label="latent coordinate z1">
+            <span class="val" id="latZ1Val">1.20</span></div>
+          <div class="slider-row"><span class="small muted" style="min-width:30px">$z_2$</span>
+            <input type="range" id="latZ2" min="-3" max="3" step="0.05" value="0.6" aria-label="latent coordinate z2">
+            <span class="val" id="latZ2Val">0.60</span></div>
+          <div class="eqbox" id="latEq" style="margin-top:14px"></div>
+          <p class="readout" id="latOut"></p>
+          <p class="small muted" style="margin:0">The horizon is fixed at $H=25$ and the action sequence is the same for both paths; only the start code changes.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <div class="note">
+        <b>The latent state is where extrapolation happens first.</b> The model is only trustworthy where the training transitions live. Perturbing a coordinate is the smallest possible test of that boundary — and the failure is immediate.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="samples">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Planning pays for itself</h2>
+      <p>A model is only worth the data if it converts one real step into many imagined ones. <b>Dyna</b> does exactly that: after each real transition, sample a pair $(s,a)$ already seen, roll it through the learned model, and apply the same Q-learning backup to the fabricated transition.</p>
+      <div class="eqbox">
+        $$Q(s,a)\leftarrow Q(s,a)+\alpha\big[r+\gamma\max_{a'}Q(s',a')-Q(s,a)\big]$$
+      </div>
+      <p>The point mass has a continuous state space, and tabular Q-learning needs a finite one. So this last experiment runs on a small discrete maze: the same "steer to a target" control task, with the position reduced to cells. The model-free learner (grey) updates only from real experience. The model-based learner (black) also plans: each real step is followed by $n_{\text{plan}}$ backups on transitions its own tabular model produced. Both see the same episodes; the only difference is how far each one stretches them.</p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Interactive · Dyna vs. model-free</span>
+        <div class="slider-row" style="width:230px"><span class="small muted">$n_{\text{plan}}$</span>
+          <input type="range" id="dynaN" min="0" max="10" step="1" value="8" aria-label="number of planning steps">
+          <span class="val" id="dynaNVal">8</span></div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 400px">
+          <svg id="dynaSvg" viewBox="0 0 460 230" role="img" aria-label="Learning curves: model-free Q-learning versus Dyna-Q averaged over runs"></svg>
+          <p class="legend">Model-free <span style="color:#c2c9d4;font-weight:700">– –</span> · Dyna (model-based) <span style="color:#111;font-weight:700">—</span> · solved threshold <span style="color:#dc2626;font-weight:700">– –</span></p>
+        </div>
+        <div class="col" style="flex:1 1 240px">
+          <div class="metrics" id="dynaMetrics" style="margin-top:0"></div>
+          <p class="small muted" style="margin:10px 0 0">Steps to the goal (lower is better), $120$ episodes, averaged over $24$ seeds. Solved means $\le 40$ steps.</p>
+        </div>
+      </div>
+      <div class="eqbox" id="dynaEq"></div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>The plan step is the whole trick, and it is three lines of code. The only thing it uses that Q-learning does not is the learned model.</p>
+      <div class="cb">
+        <div class="cb-head"><span class="cb-file">dyna.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+        <pre class="code"><code data-lang="python">import numpy as np
+
+def dyna_q(env, episodes=120, n_plan=8,
+           alpha=0.2, gamma=0.9, eps=0.2):
+    """Tabular Dyna-Q: one real step, then n_plan imagined updates."""
+    Q, model, seen = {}, {}, []
+    for _ in range(episodes):
+        s = env.reset()                              # discrete cell id
+        while True:
+            if np.random.rand() < eps:
+                a = np.random.randint(env.n_actions)
+            else:
+                a = int(np.argmax([Q.get((s, k), 0.0)
+                                   for k in range(env.n_actions)]))
+            s2, r, done = env.step(s, a)
+            td = r + gamma * max(Q.get((s2, k), 0.0)
+                                 for k in range(env.n_actions)) - Q.get((s, a), 0.0)
+            Q[(s, a)] = Q.get((s, a), 0.0) + alpha * td
+            if (s, a) not in model:                 # learn the model
+                model[(s, a)] = (s2, r)
+                seen.append((s, a))
+            for _ in range(n_plan):                  # plan with the model
+                sp, ap = seen[np.random.randint(len(seen))]
+                ns, rp = model[(sp, ap)]
+                td = rp + gamma * max(Q.get((ns, k), 0.0)
+                                      for k in range(env.n_actions)) - Q.get((sp, ap), 0.0)
+                Q[(sp, ap)] = Q.get((sp, ap), 0.0) + alpha * td
+            s = s2
+            if done:
+                break
+    return Q</code></pre>
+      </div>
+      <p>With a continuous action space you would replace the tabular backup with <b>model-predictive control</b> — sample action sequences, roll them through the model, execute only the first action of the best one, then replan.</p>
+      <div class="cb">
+        <div class="cb-head"><span class="cb-file">plan.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+        <pre class="code"><code data-lang="python">import numpy as np
+
+def random_shooting(model, s0, horizon, n_candidate, rng, gamma=0.99):
+    """Model-predictive control: sample action sequences, keep the best."""
+    best_u, best_ret = None, -np.inf
+    for _ in range(n_candidate):
+        U = rng.uniform(-A_MAX, A_MAX, size=horizon)
+        s, ret = s0, 0.0
+        for k, a in enumerate(U):
+            ret += gamma ** k * reward(s, a)
+            s = model.step(s, a)
+        if ret &gt; best_ret:
+            best_ret, best_u = ret, U
+    return best_u[0], best_ret</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="build">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>Build it, then measure it</h2>
+      <p>The page above is a lab, not a finished project. Rebuild it, then answer the questions it raises.</p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head"><span class="lab-title">Lab · implementation plan</span></div>
+      <ol class="steps">
+        <li><b>Simulate the world.</b> Integrate the point mass with a fourth-order Runge–Kutta step and log transitions $(s,a,s')$. Everything downstream is graded against this.</li>
+        <li><b>Fit the dynamics model.</b> Standardize polynomial features of $(x,v,a)$, add a ridge term, and solve the normal equations once per capacity — linear, quadratic, cubic.</li>
+        <li><b>Roll it out.</b> Feed each prediction back as the next input and measure $\|\hat s_k-s_k\|$ against the real trajectory. Sweep the horizon and watch the curve bend.</li>
+        <li><b>Build an ensemble.</b> Refit on resampled data. Report the mean path and the spread; the spread is the model's own estimate of where it is unsure.</li>
+        <li><b>Perturb the latent.</b> Move the start code out of the data cloud and confirm the imagination diverges — the operational meaning of "the model is only valid on-distribution".</li>
+        <li><b>Close the loop with planning.</b> Add Dyna-Q, sweep $n_{\text{plan}}$, and measure the real environment steps each learner needs to reach a fixed solve threshold.</li>
+        <li><b>Compare fairly.</b> Hold the reward, the state space, and the seeds fixed across both learners; report sample efficiency in real steps, not wall-clock.</li>
+      </ol>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <h3>What to compare and measure</h3>
+      <table class="cmp">
+        <tr><th></th><th>Model-free</th><th>Model-based (this lab)</th></tr>
+        <tr><td>Learns</td><td>$Q(s,a)$ only, from real transitions</td><td>A dynamics model $\hat s'=f_\phi(s,a)$ then plans inside it</td></tr>
+        <tr><td>One real step buys</td><td>One update</td><td>One update plus $n_{\text{plan}}$ imagined ones</td></tr>
+        <tr><td>Error with horizon</td><td>None — returns are sampled, not rolled</td><td>Compounds like $\epsilon\,(L^{k}-1)/(L-1)$</td></tr>
+        <tr><td>Failure mode</td><td>Sample-hungry</td><td>Confidently wrong off-distribution</td></tr>
+      </table>
+      <p>Measure three numbers: real steps to a fixed solve threshold, one-step dynamics error by capacity, and the horizon at which the imagined trajectory leaves a fixed error budget. Reaching the same threshold in fewer real steps is the case for the model; the horizon at which imagination collapses is the price.</p>
+      <p class="small muted">From here the natural next step is to stop writing the model down at all and let a neural network learn the latent dynamics end-to-end — the Dreamer and MuZero line of Chapter 13, where the model is trained for the plans it will be asked to produce rather than for accuracy on the data it was given.</p>
+    </div>
+  </div>
+</section>
+
+<!-- project-pager -->
+<nav class="pager" aria-label="Project navigation"><a class="pg-prev" href="03-offline-rl-benchmark.html"><span class="pg-k">Previous</span><span class="pg-t">Offline RL Benchmark</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="05-rlhf-dpo-alignment-pipeline.html"><span class="pg-k">Next</span><span class="pg-t">RLHF / DPO Alignment Pipeline</span></a></nav>
+<footer>
+  <div class="wrap">Project 4 · A world model you can perturb. Drag the latent and watch it lie.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function inv(M) {
+  const n = M.length;
+  const A = M.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = 0; j < 2 * n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (!f) continue;
+      for (let j = 0; j < 2 * n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(r => r.slice(n));
+}
+function T(node, tex, display = false) {
+  if (!window.katex || !node) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const fmt = (v, d = 2) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+function pickTab(group, val) {
+  $$(`#${group} .tab`).forEach(b => b.classList.toggle('active', b.dataset.deg === String(val)));
+}
+
+/* =====================================================================
+   The environment: 1-D nonlinear point mass, RK4 at dt = 0.05
+   ===================================================================== */
+const DT = 0.05, Kk = 1.0, Cdmp = 0.2, GAM = 0.25, BETA = 0.4, AMAX = 1.0;
+function fDeriv(s, a) {
+  return [s[1], a * AMAX - Kk * s[0] - Cdmp * s[1] - GAM * s[0] * s[0] - BETA * s[0] * s[0] * s[0]];
+}
+function rk4(s, a, dt) {
+  const k1 = fDeriv(s, a);
+  const s2 = [s[0] + dt / 2 * k1[0], s[1] + dt / 2 * k1[1]];
+  const k2 = fDeriv(s2, a);
+  const s3 = [s[0] + dt / 2 * k2[0], s[1] + dt / 2 * k2[1]];
+  const k3 = fDeriv(s3, a);
+  const s4 = [s[0] + dt * k3[0], s[1] + dt * k3[1]];
+  const k4 = fDeriv(s4, a);
+  return [s[0] + dt / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]),
+          s[1] + dt / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])];
+}
+function stepEnv(s, a) { return rk4(s, a, DT); }
+
+/* =====================================================================
+   Tiny learned dynamics model (matches world_model.py / ensemble.py)
+   ===================================================================== */
+function expoList(deg) {
+  const L = [];
+  for (let i = 0; i <= deg; i++)
+    for (let j = 0; j <= deg; j++)
+      for (let k = 0; k <= deg; k++)
+        if (i + j + k <= deg) L.push([i, j, k]);
+  return L;
+}
+function phiFeat(s, a, expo) {
+  const o = [];
+  for (let t = 0; t < expo.length; t++) {
+    const e = expo[t];
+    o.push(Math.pow(s[0], e[0]) * Math.pow(s[1], e[1]) * Math.pow(a, e[2]));
+  }
+  return o;
+}
+function makeData(seed, bursts, len) {
+  const rng = mulberry32(seed), D = [];
+  for (let b = 0; b < bursts; b++) {
+    let x = (rng() * 2 - 1) * 1.6, v = (rng() * 2 - 1) * 2.2;
+    for (let k = 0; k < len; k++) {
+      const a = (rng() * 2 - 1) * 1.0;
+      const s = [x, v], s2 = stepEnv(s, a);
+      D.push({ s, a, s2 });
+      x = s2[0]; v = s2[1];
+    }
+  }
+  return D;
+}
+function fitModel(D, deg) {
+  const expo = expoList(deg), n = expo.length, N = D.length;
+  const P = D.map(q => phiFeat(q.s, q.a, expo));
+  const mean = new Array(n).fill(0), std = new Array(n).fill(0);
+  for (let j = 0; j < n; j++) { let m = 0; for (let i = 0; i < N; i++) m += P[i][j]; mean[j] = m / N; }
+  for (let j = 0; j < n; j++) {
+    let v = 0;
+    for (let i = 0; i < N; i++) { const d = P[i][j] - mean[j]; v += d * d; }
+    std[j] = Math.sqrt(v / N) || 1;
+  }
+  const XtX = Array.from({ length: n }, () => new Array(n).fill(0));
+  const Xty = Array.from({ length: n }, () => [0, 0]);
+  const xs = new Array(n);
+  for (let i = 0; i < N; i++) {
+    const ph = P[i];
+    for (let j = 0; j < n; j++) xs[j] = (ph[j] - mean[j]) / std[j];
+    const d0 = D[i].s2[0] - D[i].s[0], d1 = D[i].s2[1] - D[i].s[1];
+    for (let j = 0; j < n; j++) {
+      Xty[j][0] += xs[j] * d0; Xty[j][1] += xs[j] * d1;
+      for (let k = j; k < n; k++) XtX[j][k] += xs[j] * xs[k];
+    }
+  }
+  for (let j = 0; j < n; j++) for (let k = 0; k < j; k++) XtX[j][k] = XtX[k][j];
+  for (let j = 0; j < n; j++) XtX[j][j] += 1e-4 * N;
+  const Xi = inv(XtX);
+  const beta = Array.from({ length: n }, () => [0, 0]);
+  for (let j = 0; j < n; j++) {
+    let b0 = 0, b1 = 0;
+    for (let k = 0; k < n; k++) { b0 += Xi[j][k] * Xty[k][0]; b1 += Xi[j][k] * Xty[k][1]; }
+    beta[j] = [b0, b1];
+  }
+  return { expo, mean, std, beta };
+}
+function modelStep(M, s, a) {
+  let d0 = 0, d1 = 0;
+  for (let i = 0; i < M.expo.length; i++) {
+    const e = M.expo[i];
+    const val = Math.pow(s[0], e[0]) * Math.pow(s[1], e[1]) * Math.pow(a, e[2]);
+    const z = (val - M.mean[i]) / M.std[i];
+    d0 += M.beta[i][0] * z; d1 += M.beta[i][1] * z;
+  }
+  return [s[0] + d0, s[1] + d1];
+}
+function modelRollout(M, s0, acts) {
+  const path = [s0.slice()]; let s = s0.slice();
+  for (let k = 0; k < acts.length; k++) { s = modelStep(M, s, acts[k]); path.push(s.slice()); }
+  return path;
+}
+function realRollout(s0, acts) {
+  const path = [s0.slice()]; let s = s0.slice();
+  for (let k = 0; k < acts.length; k++) { s = stepEnv(s, acts[k]); path.push(s.slice()); }
+  return path;
+}
+function ensembleRollout(members, s0, acts) {
+  const paths = members.map(m => modelRollout(m, s0, acts));
+  const Tn = paths[0].length, mean = [], lo = [], hi = [];
+  for (let t = 0; t < Tn; t++) {
+    let a0 = 0, a1 = 0, l0 = 1e9, l1 = 1e9, h0 = -1e9, h1 = -1e9;
+    for (let m = 0; m < paths.length; m++) {
+      const p = paths[m][t];
+      a0 += p[0]; a1 += p[1];
+      l0 = Math.min(l0, p[0]); l1 = Math.min(l1, p[1]);
+      h0 = Math.max(h0, p[0]); h1 = Math.max(h1, p[1]);
+    }
+    mean.push([a0 / paths.length, a1 / paths.length]);
+    lo.push([l0, l1]); hi.push([h0, h1]);
+  }
+  return { mean, lo, hi };
+}
+
+/* shared state -------------------------------------------------------- */
+const PP = { x0: -2.2, x1: 2.2, v0: -3.0, v1: 3.0 };
+let DATA = null, ENS = {};
+const ROLL_S0 = [1.9, 1.4];
+const ROLL_ACTS = (() => { const a = []; for (let k = 0; k < 40; k++) a.push(0.85 * Math.sin(0.55 * k)); return a; })();
+function getData() { if (!DATA) DATA = makeData(1234, 400, 6); return DATA; }
+function ensemble(deg) {
+  if (!ENS[deg]) {
+    const D = getData(), rng = mulberry32(1000 + deg), members = [];
+    for (let m = 0; m < 8; m++) {
+      const idx = new Array(D.length);
+      for (let i = 0; i < D.length; i++) idx[i] = (rng() * D.length) | 0;
+      members.push(fitModel(idx.map(i => D[i]), deg));
+    }
+    ENS[deg] = members;
+  }
+  return ENS[deg];
+}
+function oneStepError(deg) {
+  const Dtest = makeData(424242, 200, 6), M = ensemble(deg)[0];
+  let se = 0;
+  for (const q of Dtest) {
+    const p = modelStep(M, q.s, q.a);
+    const dx = p[0] - q.s2[0], dv = p[1] - q.s2[1];
+    se += dx * dx + dv * dv;
+  }
+  return Math.sqrt(se / Dtest.length);
+}
+function errorCurve(deg, size) {
+  const real = realRollout(ROLL_S0, ROLL_ACTS);
+  const ens = ensembleRollout(ensemble(deg).slice(0, size), ROLL_S0, ROLL_ACTS);
+  return real.map((p, k) => Math.hypot(p[0] - ens.mean[k][0], p[1] - ens.mean[k][1]));
+}
+
+/* =====================================================================
+   01 — the environment, simulated live
+   ===================================================================== */
+function initEnv() {
+  const svg = $('#envSvg');
+  const W = 520, Hh = 250, RL = 54, RR = W - 30, RY = 58, TY0 = 108, TY1 = Hh - 30;
+  const MAXT = 200;
+  const mx = x => RL + (clamp(x, PP.x0, PP.x1) - PP.x0) / (PP.x1 - PP.x0) * (RR - RL);
+  const tx = t => RL + (t / MAXT) * (RR - RL);
+  const txv = x => TY1 - (clamp(x, -2.2, 2.2) + 2.2) / 4.4 * (TY1 - TY0);
+
+  const g = el('g', {}, svg);
+  el('line', { x1: RL, x2: RR, y1: RY, y2: RY, stroke: '#d4d4d8', 'stroke-width': 2 }, g);
+  [-2, -1, 0, 1, 2].forEach(v => {
+    el('line', { x1: mx(v), x2: mx(v), y1: RY - 6, y2: RY + 6, stroke: '#c2c9d4' }, g);
+    el('text', { x: mx(v), y: RY - 12, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af', class: 'mono' }, g).textContent = v;
+  });
+  el('line', { x1: mx(0), x2: mx(0), y1: RY - 22, y2: RY + 22, stroke: '#111', 'stroke-width': 1.4, 'stroke-dasharray': '4 3' }, g);
+  el('text', { x: mx(0), y: RY + 34, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280' }, g).textContent = 'target';
+  el('text', { x: RL - 34, y: RY + 4, 'font-size': 11, fill: '#6b7280', class: 'mono' }, g).textContent = 'x';
+  const puck = el('circle', { cx: mx(1.5), cy: RY, r: 11, fill: '#111' }, g);
+
+  el('line', { x1: RL, x2: RL, y1: TY0, y2: TY1, stroke: '#e5e5e5' }, g);
+  el('line', { x1: RL, x2: RR, y1: txv(0), y2: txv(0), stroke: '#e5e5e5' }, g);
+  el('text', { x: RL - 34, y: (TY0 + TY1) / 2, 'font-size': 11, fill: '#6b7280', class: 'mono' }, g).textContent = 'x(t)';
+  const traceLine = el('polyline', { points: '', fill: 'none', stroke: '#2563eb', 'stroke-width': 2 }, g);
+
+  let s = [1.5, 0], t = 0, trace = [1.5], running = null;
+
+  function force() { return parseFloat($('#envA').value); }
+  function converged() { return Math.abs(s[0]) < 0.03 && Math.abs(s[1]) < 0.03; }
+  function render() {
+    puck.setAttribute('cx', mx(s[0]));
+    traceLine.setAttribute('points', trace.map((x, i) => `${tx(i).toFixed(1)},${txv(x).toFixed(1)}`).join(' '));
+    $('#envState').innerHTML = `t = ${t} · x = <b>${fmt(s[0], 3)}</b> · v = <b>${fmt(s[1], 3)}</b>`;
+    const a = force();
+    const d = fDeriv(s, a);
+    T($('#envEq'), `\\dot x = v = ${s[1].toFixed(3)},\\quad \\dot v = a - kx - cv - \\gamma x^{2} - \\beta x^{3} = ${d[1].toFixed(3)}`, true);
+  }
+  function step() {
+    if (t >= MAXT) { stop(); return; }
+    s = stepEnv(s, force()); t++; trace.push(s[0]); render();
+    if (converged() || t >= MAXT) stop();
+  }
+  function stop() { if (running) { clearInterval(running); running = null; $('#envRun').textContent = 'Run ▶'; } }
+  function reset() {
+    stop();
+    s = [parseFloat($('#envX0').value), parseFloat($('#envV0').value)];
+    t = 0; trace = [s[0]]; render();
+  }
+
+  $('#envStep').addEventListener('click', () => { stop(); step(); });
+  $('#envRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    running = setInterval(step, 110); $('#envRun').textContent = 'Pause';
+  });
+  $('#envReset').addEventListener('click', reset);
+  $('#envX0').addEventListener('input', e => { $('#envX0Val').textContent = parseFloat(e.target.value).toFixed(1); reset(); });
+  $('#envV0').addEventListener('input', e => { $('#envV0Val').textContent = parseFloat(e.target.value).toFixed(1); reset(); });
+  $('#envA').addEventListener('input', e => { $('#envAVal').textContent = parseFloat(e.target.value).toFixed(2); render(); });
+  render();
+}
+
+/* =====================================================================
+   02 — one-step error readouts by capacity
+   ===================================================================== */
+function initMetrics() {
+  const names = { 1: 'linear', 2: 'quadratic', 3: 'cubic' };
+  const host = $('#wmMetrics');
+  host.innerHTML = '';
+  [1, 2, 3].forEach(deg => {
+    const card = document.createElement('div');
+    card.className = 'metric';
+    card.innerHTML = `<div class="metric-k">${names[deg]} · one-step RMSE</div><div class="metric-v">${oneStepError(deg).toFixed(4)}</div>`;
+    host.appendChild(card);
+  });
+}
+
+/* =====================================================================
+   03 — real vs. imagined rollout
+   ===================================================================== */
+function initRollout() {
+  const svg = $('#rollSvg'), errSvg = $('#errSvg');
+  const W = 360, Hh = 300, pad = 30;
+  const mx = x => pad + (clamp(x, PP.x0, PP.x1) - PP.x0) / (PP.x1 - PP.x0) * (W - 2 * pad);
+  const my = v => pad + (PP.v1 - clamp(v, PP.v0, PP.v1)) / (PP.v1 - PP.v0) * (Hh - 2 * pad);
+  const s0 = ROLL_S0, acts = ROLL_ACTS;
+  let deg = 2, size = 5;
+
+  function drawErr(h) {
+    const W2 = 400, H2 = 180, p = 34, HMAX = 40;
+    errSvg.setAttribute('viewBox', `0 0 ${W2} ${H2}`);
+    errSvg.innerHTML = '';
+    let ymax = 0.2;
+    const curves = { 1: errorCurve(1, size), 2: errorCurve(2, size), 3: errorCurve(3, size) };
+    [1, 2, 3].forEach(d => { for (const v of curves[d]) ymax = Math.max(ymax, v); });
+    ymax = Math.ceil(ymax * 10) / 10;
+    const X = k => p + (k / HMAX) * (W2 - p - 12);
+    const Y = e => H2 - p - (e / ymax) * (H2 - 2 * p);
+    const g = el('g', {}, errSvg);
+    [0, 0.5, 1].forEach(f => {
+      const e = ymax * f;
+      el('line', { x1: p, x2: W2 - 12, y1: Y(e), y2: Y(e), stroke: '#f0f0f0' }, g);
+      el('text', { x: p - 6, y: Y(e) + 3, 'text-anchor': 'end', 'font-size': 9.5, fill: '#9ca3af', class: 'mono' }, g).textContent = e.toFixed(1);
+    });
+    el('line', { x1: p, x2: W2 - 12, y1: Y(0), y2: Y(0), stroke: '#d4d4d8' }, g);
+    el('text', { x: W2 / 2, y: H2 - 6, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280' }, g).textContent = 'rollout horizon k';
+    const cols = { 1: '#9ca3af', 2: '#2563eb', 3: '#111' };
+    [1, 2, 3].forEach((d, i) => {
+      const c = cols[d], active = d === deg;
+      el('path', {
+        d: 'M ' + curves[d].map((e, k) => `${X(k).toFixed(1)} ${Y(e).toFixed(1)}`).join(' L '),
+        fill: 'none', stroke: c, 'stroke-width': active ? 2.4 : 1.3,
+        'stroke-dasharray': active ? 'none' : '4 3', 'stroke-linejoin': 'round'
+      }, g);
+    });
+    el('line', { x1: X(h), x2: X(h), y1: p - 6, y2: H2 - p, stroke: '#111', 'stroke-width': 1, 'stroke-dasharray': '3 3' }, g);
+    el('circle', { cx: X(h), cy: Y(curves[deg][h]), r: 3.4, fill: cols[deg] }, g);
+  }
+
+  function draw(upto) {
+    const h = parseInt($('#rollH').value, 10);
+    const K = (upto === undefined || upto > h) ? h : upto;
+    $('#rollHVal').textContent = h;
+    $('#rollEnsVal').textContent = size;
+    svg.setAttribute('viewBox', `0 0 ${W} ${Hh}`);
+    svg.innerHTML = '';
+    const g = el('g', {}, svg);
+    el('rect', { x: pad, y: pad, width: W - 2 * pad, height: Hh - 2 * pad, rx: 8, fill: '#fafafa', stroke: '#f0f0f0' }, g);
+    for (let xx = -2; xx <= 2; xx++) el('line', { x1: mx(xx), x2: mx(xx), y1: pad, y2: Hh - pad, stroke: '#f0f0f0' }, g);
+    for (let vv = -3; vv <= 3; vv++) el('line', { x1: pad, x2: W - pad, y1: my(vv), y2: my(vv), stroke: '#f0f0f0' }, g);
+    el('text', { x: W - pad, y: Hh - pad + 16, 'text-anchor': 'end', 'font-size': 11, fill: '#9ca3af', class: 'mono' }, g).textContent = 'x';
+    el('text', { x: pad - 8, y: pad + 12, 'text-anchor': 'end', 'font-size': 11, fill: '#9ca3af', class: 'mono' }, g).textContent = 'v';
+
+    const A = acts.slice(0, K);
+    const real = realRollout(s0, A);
+    const ens = ensembleRollout(ensemble(deg).slice(0, size), s0, A);
+    if (K > 0) {
+      const up = ens.hi.map(pt => `${mx(pt[0]).toFixed(1)},${my(pt[1]).toFixed(1)}`);
+      const dn = ens.lo.slice().reverse().map(pt => `${mx(pt[0]).toFixed(1)},${my(pt[1]).toFixed(1)}`);
+      el('polygon', { points: up.concat(dn).join(' '), fill: '#eef2ff' }, g);
+      el('polyline', { points: ens.mean.map(pt => `${mx(pt[0]).toFixed(1)},${my(pt[1]).toFixed(1)}`).join(' '), fill: 'none', stroke: '#2563eb', 'stroke-width': 2, 'stroke-dasharray': '6 3' }, g);
+      el('polyline', { points: real.map(pt => `${mx(pt[0]).toFixed(1)},${my(pt[1]).toFixed(1)}`).join(' '), fill: 'none', stroke: '#111', 'stroke-width': 2.4 }, g);
+    }
+    el('circle', { cx: mx(s0[0]), cy: my(s0[1]), r: 4.5, fill: '#111' }, g);
+    const lr = real[real.length - 1], li = ens.mean[ens.mean.length - 1];
+    el('circle', { cx: mx(lr[0]), cy: my(lr[1]), r: 3.4, fill: '#111' }, g);
+    el('circle', { cx: mx(li[0]), cy: my(li[1]), r: 3.4, fill: '#2563eb' }, g);
+
+    const rf = realRollout(s0, acts.slice(0, h));
+    const ef = ensembleRollout(ensemble(deg).slice(0, size), s0, acts.slice(0, h));
+    const one = oneStepError(deg);
+    const hErr = Math.hypot(rf[h][0] - ef.mean[h][0], rf[h][1] - ef.mean[h][1]);
+    $('#rollOne').textContent = one.toFixed(4);
+    $('#rollHstep').textContent = hErr.toFixed(3);
+    drawErr(h);
+    T($('#rollEq'), `\\underbrace{\\epsilon}_{\\text{one step}}=${one.toFixed(4)},\\qquad \\big\\|\\hat s_{${h}}-s_{${h}}\\big\\|=${hErr.toFixed(3)}`, true);
+  }
+
+  let reveal = null;
+  function stopReveal() { if (reveal) { clearInterval(reveal); reveal = null; } }
+  function animate() {
+    stopReveal();
+    const h = parseInt($('#rollH').value, 10);
+    let k = 0; draw(k);
+    reveal = setInterval(() => {
+      k += 2;
+      if (k >= h) { draw(h); stopReveal(); return; }
+      draw(k);
+    }, 24);
+  }
+
+  $('#rollH').addEventListener('input', animate);
+  $('#rollEns').addEventListener('input', e => { size = parseInt(e.target.value, 10); animate(); });
+  $$('#rollCap .tab').forEach(b => b.addEventListener('click', () => {
+    deg = parseInt(b.dataset.deg, 10); pickTab('rollCap', deg); animate();
+  }));
+  animate();
+}
+
+/* =====================================================================
+   04 — perturbing the latent state
+   ===================================================================== */
+function initLatent() {
+  const svg = $('#latSvg');
+  const W = 360, Hh = 300, pad = 30;
+  const mx = x => pad + (clamp(x, PP.x0, PP.x1) - PP.x0) / (PP.x1 - PP.x0) * (W - 2 * pad);
+  const my = v => pad + (PP.v1 - clamp(v, PP.v0, PP.v1)) / (PP.v1 - PP.v0) * (Hh - 2 * pad);
+  const invX = px => PP.x0 + (clamp(px, pad, W - pad) - pad) / (W - 2 * pad) * (PP.x1 - PP.x0);
+  const invY = py => PP.v1 - (clamp(py, pad, Hh - pad) - pad) / (Hh - 2 * pad) * (PP.v1 - PP.v0);
+  const Hh_ = 25, acts = [];
+  for (let k = 0; k < Hh_; k++) acts.push(0.7 * Math.sin(0.5 * k));
+  let z = [1.2, 0.6];
+  const cloud = (() => {
+    const rng = mulberry32(55), pts = [];
+    for (let i = 0; i < 420; i++) pts.push([(rng() * 2 - 1) * 1.6, (rng() * 2 - 1) * 2.2]);
+    return pts;
+  })();
+
+  function draw(upto) {
+    const K = (upto === undefined || upto > acts.length) ? acts.length : upto;
+    $('#latZ1Val').textContent = z[0].toFixed(2);
+    $('#latZ2Val').textContent = z[1].toFixed(2);
+    $('#latZ').textContent = `z = (${z[0].toFixed(2)}, ${z[1].toFixed(2)})`;
+    svg.setAttribute('viewBox', `0 0 ${W} ${Hh}`);
+    svg.innerHTML = '';
+    const g = el('g', {}, svg);
+    el('rect', { x: pad, y: pad, width: W - 2 * pad, height: Hh - 2 * pad, rx: 8, fill: '#fafafa', stroke: '#f0f0f0' }, g);
+    el('rect', { x: mx(-1.6), y: my(2.2), width: mx(1.6) - mx(-1.6), height: my(-2.2) - my(2.2), fill: '#eef2ff', opacity: 0.5 }, g);
+    for (let xx = -2; xx <= 2; xx++) el('line', { x1: mx(xx), x2: mx(xx), y1: pad, y2: Hh - pad, stroke: '#f0f0f0' }, g);
+    for (let vv = -3; vv <= 3; vv++) el('line', { x1: pad, x2: W - pad, y1: my(vv), y2: my(vv), stroke: '#f0f0f0' }, g);
+    cloud.forEach(p => el('circle', { cx: mx(p[0]), cy: my(p[1]), r: 1.5, fill: '#c2c9d4' }, g));
+    el('text', { x: W - pad, y: Hh - pad + 16, 'text-anchor': 'end', 'font-size': 11, fill: '#9ca3af', class: 'mono' }, g).textContent = 'z₁';
+    el('text', { x: pad - 8, y: pad + 12, 'text-anchor': 'end', 'font-size': 11, fill: '#9ca3af', class: 'mono' }, g).textContent = 'z₂';
+
+    const A = acts.slice(0, K);
+    const real = realRollout(z, A);
+    const ens = ensembleRollout(ensemble(2).slice(0, 5), z, A);
+    if (K > 0) {
+      el('polyline', { points: ens.mean.map(p => `${mx(p[0]).toFixed(1)},${my(p[1]).toFixed(1)}`).join(' '), fill: 'none', stroke: '#2563eb', 'stroke-width': 2, 'stroke-dasharray': '6 3' }, g);
+      el('polyline', { points: real.map(p => `${mx(p[0]).toFixed(1)},${my(p[1]).toFixed(1)}`).join(' '), fill: 'none', stroke: '#111', 'stroke-width': 2.4 }, g);
+    }
+    el('line', { x1: mx(0), y1: my(0), x2: mx(z[0]), y2: my(z[1]), stroke: '#dc2626', 'stroke-width': 1.2, 'stroke-dasharray': '3 3' }, g);
+    el('circle', { cx: mx(z[0]), cy: my(z[1]), r: 6, fill: '#111', stroke: '#fff', 'stroke-width': 2 }, g);
+
+    const rf = realRollout(z, acts), ef = ensembleRollout(ensemble(2).slice(0, 5), z, acts);
+    const div = Math.hypot(rf[Hh_][0] - ef.mean[Hh_][0], rf[Hh_][1] - ef.mean[Hh_][1]);
+    const dist = Math.hypot(z[0], z[1]);
+    $('#latOut').innerHTML = `‖δ‖ = <b>${dist.toFixed(2)}</b> from the equilibrium · imagined vs. real at $H=25$: <b>${div.toFixed(3)}</b>`;
+    T($('#latEq'), `\\tilde z=z+\\delta,\\quad \\delta=(${z[0].toFixed(2)},\\,${z[1].toFixed(2)}),\\quad \\big\\|\\hat s_{25}-s_{25}\\big\\|=${div.toFixed(3)}`, true);
+  }
+
+  let reveal = null;
+  function stopReveal() { if (reveal) { clearInterval(reveal); reveal = null; } }
+  function animate() {
+    stopReveal();
+    let k = 0; draw(k);
+    reveal = setInterval(() => {
+      k += 2;
+      if (k >= Hh_) { draw(Hh_); stopReveal(); return; }
+      draw(k);
+    }, 22);
+  }
+
+  let dragging = false;
+  const toZ = e => {
+    const b = svg.getBoundingClientRect();
+    const px = (e.clientX - b.left) / b.width * W, py = (e.clientY - b.top) / b.height * Hh;
+    z = [invX(px), invY(py)];
+    $('#latZ1').value = z[0].toFixed(2); $('#latZ2').value = z[1].toFixed(2);
+    stopReveal(); draw();
+  };
+  svg.addEventListener('pointerdown', e => { dragging = true; svg.setPointerCapture(e.pointerId); toZ(e); });
+  svg.addEventListener('pointermove', e => { if (dragging) toZ(e); });
+  svg.addEventListener('pointerup', () => { dragging = false; animate(); });
+  svg.addEventListener('pointercancel', () => { dragging = false; animate(); });
+  $('#latZ1').addEventListener('input', e => { z[0] = parseFloat(e.target.value); animate(); });
+  $('#latZ2').addEventListener('input', e => { z[1] = parseFloat(e.target.value); animate(); });
+  animate();
+}
+
+/* =====================================================================
+   05 — Dyna vs. model-free on a small discrete maze
+   ===================================================================== */
+const MZ = { R: 5, C: 7, START: [4, 0], GOAL: [0, 6], DIRS: [[-1, 0], [0, 1], [1, 0], [0, -1]] };
+const MZ_WALL = new Set();
+for (let c = 2; c <= 6; c++) MZ_WALL.add('2,' + c);
+function mazeStep(r, c, a) {
+  const nr = r + MZ.DIRS[a][0], nc = c + MZ.DIRS[a][1];
+  if (nr < 0 || nr >= MZ.R || nc < 0 || nc >= MZ.C || MZ_WALL.has(nr + ',' + nc)) return [r, c];
+  return [nr, nc];
+}
+function runAgent(nPlan, seed) {
+  const EP = 120, CAP = 120, ALPHA = 0.2, GAMMA = 0.9, EPS = 0.2;
+  const rng = mulberry32(seed);
+  const Q = new Float64Array(MZ.R * MZ.C * 4);
+  const modelNext = new Int32Array(MZ.R * MZ.C * 4).fill(-1);
+  const modelR = new Float64Array(MZ.R * MZ.C * 4);
+  const visited = [], curve = [];
+  for (let ep = 0; ep < EP; ep++) {
+    let r = MZ.START[0], c = MZ.START[1], steps = 0;
+    while (steps < CAP) {
+      const sd = r * MZ.C + c;
+      let a;
+      if (rng() < EPS) a = (rng() * 4) | 0;
+      else {
+        let best = 0, bv = -Infinity;
+        for (let k = 0; k < 4; k++) { const q = Q[sd * 4 + k]; if (q > bv) { bv = q; best = k; } }
+        a = best;
+      }
+      const [r2, c2] = mazeStep(r, c, a);
+      const goal = (r2 === MZ.GOAL[0] && c2 === MZ.GOAL[1]);
+      const rew = goal ? 1 : 0;
+      const sd2 = r2 * MZ.C + c2, idx = sd * 4 + a;
+      let maxq = -Infinity;
+      for (let k = 0; k < 4; k++) maxq = Math.max(maxq, Q[sd2 * 4 + k]);
+      Q[idx] += ALPHA * (rew + GAMMA * maxq - Q[idx]);
+      if (modelNext[idx] < 0) { modelNext[idx] = sd2; modelR[idx] = rew; visited.push(idx); }
+      for (let p = 0; p < nPlan; p++) {
+        const j = visited[(rng() * visited.length) | 0];
+        const nxt = modelNext[j];
+        let mq = -Infinity;
+        for (let k = 0; k < 4; k++) mq = Math.max(mq, Q[nxt * 4 + k]);
+        Q[j] += ALPHA * (modelR[j] + GAMMA * mq - Q[j]);
+      }
+      r = r2; c = c2; steps++;
+      if (goal) break;
+    }
+    curve.push(steps);
+  }
+  return curve;
+}
+function initDyna() {
+  const EP = 120, RUNS = 24, TARGET = 40;
+  const svg = $('#dynaSvg');
+  let nPlan = 8, timer = null, shown = 0, cur = null;
+
+  function compute(n) {
+    const free = new Float64Array(EP), based = new Float64Array(EP);
+    for (let r = 0; r < RUNS; r++) {
+      const a = runAgent(0, 100 + r);
+      const b = runAgent(n, 100 + r);
+      for (let e = 0; e < EP; e++) { free[e] += a[e] / RUNS; based[e] += b[e] / RUNS; }
+    }
+    return { free: Array.from(free), based: Array.from(based) };
+  }
+  function firstSolved(curve) {
+    for (let e = 0; e < curve.length; e++) {
+      let sum = 0, n = 0;
+      for (let j = Math.max(0, e - 4); j <= e; j++) { sum += curve[j]; n++; }
+      if (sum / n <= TARGET) return e;
+    }
+    return null;
+  }
+  function firstSolvedSteps(curve) {
+    const e = firstSolved(curve);
+    if (e === null) return null;
+    let s = 0;
+    for (let i = 0; i <= e; i++) s += curve[i];
+    return Math.round(s);
+  }
+  function draw(upto) {
+    const W = 460, H2 = 230, p = 44;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H2}`);
+    svg.innerHTML = '';
+    const g = el('g', {}, svg);
+    const ymin = 0, ymax = 120;
+    const X = e => p + (e / (EP - 1)) * (W - p - 14);
+    const Y = v => p + (ymax - v) / (ymax - ymin) * (H2 - 2 * p);
+    [0, 40, 80, 120].forEach(v => {
+      el('line', { x1: p, x2: W - 14, y1: Y(v), y2: Y(v), stroke: '#f0f0f0' }, g);
+      el('text', { x: p - 6, y: Y(v) + 3, 'text-anchor': 'end', 'font-size': 9.5, fill: '#9ca3af', class: 'mono' }, g).textContent = v;
+    });
+    el('line', { x1: p, x2: W - 14, y1: Y(TARGET), y2: Y(TARGET), stroke: '#dc2626', 'stroke-width': 1, 'stroke-dasharray': '4 3' }, g);
+    el('text', { x: W - 14, y: Y(TARGET) - 5, 'text-anchor': 'end', 'font-size': 9.5, fill: '#dc2626', class: 'mono' }, g).textContent = 'solved';
+    el('text', { x: W / 2, y: H2 - 8, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280' }, g).textContent = 'episode';
+    el('text', { x: 12, y: H2 / 2, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#6b7280', transform: `rotate(-90 12 ${H2 / 2})` }, g).textContent = 'steps to goal';
+    const line = (arr, col, dash, n) => {
+      const pts = [];
+      for (let e = 0; e < n; e++) pts.push(`${X(e).toFixed(1)},${Y(arr[e]).toFixed(1)}`);
+      el('polyline', { points: pts.join(' '), fill: 'none', stroke: col, 'stroke-width': col === '#111' ? 2.4 : 1.8, 'stroke-dasharray': dash, 'stroke-linejoin': 'round' }, g);
+    };
+    line(cur.free, '#c2c9d4', '5 4', upto);
+    line(cur.based, '#111', 'none', upto);
+  }
+  function updateEq() {
+    const sf = firstSolvedSteps(cur.free), sb = firstSolvedSteps(cur.based);
+    const freeTxt = sf === null ? '—' : String(sf);
+    const basedTxt = sb === null ? '—' : String(sb);
+    const ratio = (sf !== null && sb !== null && sb > 0) ? (sf / sb).toFixed(1) + '×' : '—';
+    $('#dynaMetrics').innerHTML =
+      `<div class="metric"><div class="metric-k">model-free steps</div><div class="metric-v">${freeTxt}</div></div>` +
+      `<div class="metric"><div class="metric-k">Dyna steps</div><div class="metric-v">${basedTxt}</div></div>` +
+      `<div class="metric"><div class="metric-k">fewer real steps</div><div class="metric-v">${ratio}</div></div>`;
+    T($('#dynaEq'), `Q(s,a)\\leftarrow Q(s,a)+\\alpha\\big[r+\\gamma\\max_{a'}Q(s',a')-Q(s,a)\\big],\\qquad n_{\\text{plan}}=${nPlan}`, true);
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+  function animate() {
+    stop(); shown = 2; draw(shown); updateEq();
+    timer = setInterval(() => {
+      shown = Math.min(EP, shown + 4);
+      draw(shown);
+      if (shown >= EP) stop();
+    }, 55);
+  }
+  function recompute() {
+    cur = compute(nPlan); animate();
+  }
+  $('#dynaN').addEventListener('input', e => {
+    nPlan = parseInt(e.target.value, 10);
+    $('#dynaNVal').textContent = nPlan;
+    recompute();
+  });
+  cur = compute(nPlan); animate();
+}
+
+/* =====================================================================
+   Code highlighting (verbatim from the brief)
+   ===================================================================== */
+function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+const PY_KEYWORDS = new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case self'.split(' '));
+const PY_BUILTINS = new Set('abs all any bool dict enumerate filter float int len list map max min print range reversed round set sorted str sum tuple zip isinstance super type'.split(' '));
+function highlightPython(src){
+  const re = /(#[^\n]*)|((?:[rbfu]{0,2})(?:'''[\s\S]*?'''|"""[\s\S]*?"""|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"))|(@[A-Za-z_]\w*)|(\b\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?\b)|([A-Za-z_]\w*)|([^\w\s]+)|(\s+)/g;
+  let out='',m;
+  while((m=re.exec(src))){
+    if(m[1]) out+='<span class="t-c">'+escapeHtml(m[1])+'</span>';
+    else if(m[2]) out+='<span class="t-s">'+escapeHtml(m[2])+'</span>';
+    else if(m[3]) out+='<span class="t-d">'+escapeHtml(m[3])+'</span>';
+    else if(m[4]) out+='<span class="t-n">'+escapeHtml(m[4])+'</span>';
+    else if(m[5]){const w=m[5];
+      if(PY_KEYWORDS.has(w)) out+='<span class="t-k">'+w+'</span>';
+      else if(PY_BUILTINS.has(w)) out+='<span class="t-b">'+w+'</span>';
+      else if(/^\s*\(/.test(src.slice(re.lastIndex))) out+='<span class="t-f">'+w+'</span>';
+      else out+=w;
+    }
+    else if(m[6]) out+='<span class="t-o">'+escapeHtml(m[6])+'</span>';
+    else if(m[7]) out+=m[7];
+  }
+  return out;
+}
+function initCode(){
+  document.querySelectorAll('pre.code code[data-lang]').forEach(function(c){
+    c.innerHTML = highlightPython(c.textContent);
+  });
+  document.querySelectorAll('.cb-copy').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var code = btn.closest('.cb').querySelector('code');
+      (navigator.clipboard ? navigator.clipboard.writeText(code.textContent) : Promise.reject())
+        .then(function(){ btn.textContent='Copied'; setTimeout(function(){ btn.textContent='Copy'; },1400); })
+        .catch(function(){});
+    });
+  });
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initCode();
+  initEnv();
+  initMetrics();
+  initRollout();
+  initLatent();
+  initDyna();
+  initScroll();
+});
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
+</script>
+</body>
+</html>

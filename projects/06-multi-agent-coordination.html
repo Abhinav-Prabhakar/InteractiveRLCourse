@@ -1,0 +1,1693 @@
+<!DOCTYPE html>
+<!--
+  Project 6 — Multi-Agent Coordination
+  Assumptions:
+   · The in-page benchmark is a 5×5 cooperative coverage grid (2 agents, 2 fixed
+     landmarks) so the three learners can be trained tabularly, live, without a
+     framework. The Python blocks mirror the same update rules.
+   · Learners share one environment, seed and exploration budget. MAPPO uses a
+     shared actor and a centralised joint-state critic; QMIX uses a monotone
+     softplus mixing network over per-agent Q tables.
+   · Chrome is normalised afterwards (title, brand, eyebrow, project pager).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project 6 · Multi-Agent Coordination</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em;text-decoration:none}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- diagrams, plots, readouts ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace;flex-wrap:wrap}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.readout{font-family:ui-monospace,monospace;font-size:12.5px;color:#6b7280;margin:10px 0 0;line-height:1.6}
+.readout b{color:#111;font-weight:650}
+.plot-cap{font-size:12.5px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
+.sliders{display:flex;gap:6px 26px;flex-wrap:wrap}
+.sliders .slider-row{flex:1 1 200px}
+.axis-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* ---------------- value bars ---------------- */
+.vrow{display:flex;align-items:center;gap:12px;margin:7px 0;border-radius:8px;padding:2px 4px}
+.vlabel{font-family:ui-monospace,monospace;font-weight:650;font-size:13px;width:60px}
+.vtrack{position:relative;flex:1;height:22px;background:#fafafa;border-radius:5px;overflow:hidden;border:1px solid #f0f0f0}
+.vzero{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#d4d4d8}
+.vbar{position:absolute;top:3px;bottom:3px;left:50%;border-radius:3px;transition:width .28s cubic-bezier(.4,0,.2,1),transform .28s cubic-bezier(.4,0,.2,1),background .2s}
+.vbar.pos{background:#2563eb}
+.vbar.neg{background:#dc2626}
+.vval{font-family:ui-monospace,monospace;font-size:12.5px;width:56px;text-align:right;font-weight:600}
+
+/* ---------------- matrices ---------------- */
+table.matrix{border-collapse:separate;border-spacing:2px;font-size:13px;font-family:ui-monospace,monospace;margin:0 auto}
+table.matrix th{font-weight:600;color:#6b7280;padding:4px 9px;font-size:12px;font-family:inherit}
+table.matrix td{width:64px;height:38px;text-align:center;border-radius:6px;background:#f7f7f8;transition:background .12s,color .12s;cursor:default}
+table.matrix td.nz{background:#eef2ff;color:#1e3a8a;font-weight:600}
+table.matrix td.z{color:#d4d4d8}
+table.matrix td.hl{background:#111;color:#fff}
+
+/* ---------------- comparison table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:26%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+/* ---------------- code ---------------- */
+.cb{border:1px solid #e8e8e8;border-radius:12px;overflow:hidden;margin:18px 0;background:#fafafa}
+.cb-head{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #f0f0f0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;letter-spacing:.06em;color:#9ca3af}
+.cb-file{font-weight:650;color:#6b7280}
+.cb-lang{color:#9ca3af}
+.cb-copy{margin-left:auto;font:inherit;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:7px;border:1px solid #dcdcdc;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.cb-copy:hover{border-color:#111;color:#111}
+.cb pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.8px;line-height:1.65;color:#111;background:#fafafa}
+.cb code{background:none;padding:0;font-size:inherit;color:inherit}
+.t-c{color:#9ca3af;font-style:italic}
+.t-k{color:#1e3a8a;font-weight:600}
+.t-b{color:#6b7280}
+.t-n{color:#dc2626}
+.t-s{color:#2563eb}
+.t-f{color:#1e3a8a}
+.t-d{color:#6b7280;font-weight:600}
+.t-o{color:#374151}
+
+/* ---------------- lab scaffolding ---------------- */
+.lab{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff;margin:22px 0}
+.lab-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.lab-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.steps{list-style:none;counter-reset:s;margin:18px 0;padding:0}
+.steps li{counter-increment:s;position:relative;padding:2px 0 16px 42px;border-left:1px solid #f0f0f0;margin-left:13px}
+.steps li:last-child{border-left-color:transparent;padding-bottom:0}
+.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:-13px;top:0;width:26px;height:26px;border-radius:8px;background:#eef2ff;color:#1e3a8a;font:600 12px/26px ui-monospace,monospace;text-align:center}
+.steps b{color:#111}
+.deliverable{border-left:2px solid #1e3a8a;background:#eef2ff;padding:12px 16px;border-radius:0 10px 10px 0;margin:22px 0;color:#1e3a8a;font-size:15px}
+.deliverable b{color:#1e3a8a}
+.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}
+.metric{flex:1 1 150px;border:1px solid #e8e8e8;border-radius:12px;padding:12px 14px;background:#fafafa}
+.metric-k{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.metric-v{font-family:ui-monospace,monospace;font-size:22px;font-weight:650;color:#111;margin-top:4px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.tab{font-size:13px;padding:5px 11px;border-radius:8px;border:1px solid #e5e5e5;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.tab:hover{border-color:#111;color:#111}
+.tab.active{background:#111;color:#fff;border-color:#111}
+
+/* ---------------- inter-chapter navigation ---------------- */
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel,.lab{padding:16px;border-radius:13px}
+  table.cmp{font-size:13.5px}
+  table.cmp th,table.cmp td{padding:9px 6px}
+  .pager{flex-wrap:wrap}
+  .pager .pg-t{white-space:normal}
+  .pager a.pg-home{order:3;width:100%}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">P06 · Multi-Agent</a>
+    <nav class="nav">
+      <a href="#task">Task</a>
+      <a href="#ctde">CTDE</a>
+      <a href="#train">Train</a>
+      <a href="#coordination">Coordination</a>
+      <a href="#dropout">Dropout</a>
+      <a href="#close">Close</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Projects · Project 6</p>
+    <h1>Multi-Agent Coordination</h1>
+    <p class="lede">Two agents, two landmarks, one shared reward. Train independent learners, a shared-critic MAPPO team and a monotone QMIX team in the same world, then take a partner away and watch what the coordination was worth.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="task">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">01</span>The cooperative benchmark</h2>
+      <p>Cooperative multi-agent RL replaces one policy with a <b>joint policy</b> $\pi(\mathbf{a}\mid s)=\prod_i \pi_i(a_i\mid o_i)$. Every agent receives the same team reward, so the objective is a single number that no agent can improve alone:</p>
+      <div class="eqbox">
+        $$J(\pi)=\mathbb{E}_{\pi}\!\Big[\textstyle\sum_{t\ge 0}\gamma^{t}R_{t+1}\Big],\qquad \mathbf{a}_t\sim\pi(\cdot\mid s_t),\quad a_{i,t}\sim\pi_i(\cdot\mid o_{i,t})$$
+      </div>
+      <p>The benchmark is a 5×5 grid with two agents and two landmarks. An agent sees its own cell and its partner's cell — nothing else. Each step, the team earns a dense distance term and a bonus for every landmark inside a king-move of an agent, plus a completion bonus when both landmarks are covered. Colliding costs the team.</p>
+      <div class="eqbox">
+        $$r_{t+1}=-\sum_{k=1}^{2}0.04\,d_k\;+\;0.3\sum_{k=1}^{2}\mathbf{1}[d_k\le 1]\;+\;0.8\,\mathbf{1}[\text{both covered}]\;-\;0.2\,\mathbf{1}[\text{same cell}]$$
+      </div>
+      <p>This is the smallest task that still separates the three learning architectures. A lone agent can touch both landmarks if it runs; two agents only win the completion bonus every step if they split the work and stay split. That division of labour is the <b>coordination</b> the project is about.</p>
+      <div class="deliverable"><b>Deliverable.</b> A joint-policy visualiser, three live learning curves, and a measured table of return lost when an agent is disabled — the CTDE team versus the independent baseline.</div>
+      <p>The environment, reward and joint state fit in forty lines. The file below is the exact transition used by the page.</p>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">coverage_env.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">import numpy as np
+
+GRID = 5
+LANDMARKS = [(0, 0), (4, 4)]
+N_AGENTS, N_ACTIONS, T_MAX = 2, 5, 20
+GAMMA = 0.95
+
+def manhattan(a, b):
+    return abs(a // GRID - b // GRID) + abs(a % GRID - b % GRID)
+
+def chebyshev(a, b):
+    return max(abs(a // GRID - b // GRID), abs(a % GRID - b % GRID))
+
+def reset(rng):
+    cells = rng.choice(GRID * GRID, size=N_AGENTS, replace=False)
+    return [int(c) for c in cells]
+
+def local_obs(cells, i):
+    # decentralized: own cell and the partner's cell
+    return cells[i] * (GRID * GRID) + cells[1 - i]
+
+def move(cell, a):
+    r, c = divmod(cell, GRID)
+    r += (a == 0) - (a == 2)          # up / down
+    c += (a == 1) - (a == 3)          # right / left
+    r, c = min(max(r, 0), GRID - 1), min(max(c, 0), GRID - 1)
+    return r * GRID + c
+
+def step(cells, actions):
+    nxt = [move(c, a) for c, a in zip(cells, actions)]
+    reward, covered = 0.0, 0
+    for lm in LANDMARKS:
+        near = [chebyshev(c, lm) &lt;= 1 for c in nxt]
+        reward -= 0.04 * min(manhattan(c, lm) for c in nxt)
+        if any(near):
+            reward += 0.3
+            covered += 1
+    if covered == 2:
+        reward += 0.8
+    if nxt[0] == nxt[1]:
+        reward -= 0.2
+    return nxt, reward, covered</code></pre>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p class="small muted">The joint state for the critic is the pair of cells; the joint action is the pair of moves. Execution is decentralized: each actor conditions on $o_i$ alone.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="ctde">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>Centralized training, decentralized execution</h2>
+      <p><b>CTDE</b> splits what an agent knows at training time from what it needs at execution time. Training may use the joint state $s$ and every agent's action; execution uses only $o_i$. The shared critic turns a single team scalar into per-agent advantages:</p>
+      <div class="eqbox">
+        $$A_i(s,\mathbf{a})=Q^{\pi}(s,\mathbf{a})-V^{\pi}(s),\qquad V^{\pi}(s)=\mathbb{E}_{\pi}\!\Big[\textstyle\sum_{t\ge0}\gamma^t R_{t+1}\mid s_0=s\Big]$$
+      </div>
+      <p>MAPPO learns a decentralized actor $\pi_i(a_i\mid o_i)$ and a centralized critic $V(s)$; the actor update is a clipped policy gradient weighted by the shared-critic advantage. QMIX instead learns per-agent $Q_i(o_i,a_i)$ and combines them with a <b>monotone</b> mixing network:</p>
+      <div class="eqbox">
+        $$Q_{\text{tot}}(s,\mathbf{a})=f\big(Q_1(o_1,a_1),\dots,Q_N(o_N,a_N);s\big),\qquad \frac{\partial Q_{\text{tot}}}{\partial Q_i}\ge 0$$
+      </div>
+      <p>That derivative constraint is the whole trick. If every partial derivative is non-negative, the joint greedy action factorises into per-agent greedy actions — so execution never needs the joint state or a central mixer.</p>
+
+      <table class="cmp">
+        <tr><th></th><th>Independent Q</th><th>MAPPO</th><th>QMIX</th></tr>
+        <tr><td>Training signal</td><td>Each agent's own TD target; others treated as environment</td><td>One team advantage from a centralized critic</td><td>One team TD error through the mixer</td></tr>
+        <tr><td>Execution</td><td>Decentralized</td><td>Decentralized actors; critic discarded</td><td>Decentralized $Q_i$; mixer discarded</td></tr>
+        <tr><td>Credit assignment</td><td>No sharing — non-stationary</td><td>Shared baseline; counterfactual scale via the joint state</td><td>Monotone factorization preserves individual orderings</td></tr>
+        <tr><td>Failure mode</td><td>Agents lock into the same landmark</td><td>Critic overfits the joint states it saw</td><td>Mixing capacity too weak for the task</td></tr>
+      </table>
+
+      <h3>Implementation plan</h3>
+      <ol class="steps">
+        <li><b>Build the world.</b> Grid transitions, the shared reward above, and a joint-state index $s=c_A N+c_B$ for the critic.</li>
+        <li><b>Roll out with exploration.</b> ε-greedy for the Q learners; a softmax policy for MAPPO. Every learner sees the same spawns and the same number of episodes.</li>
+        <li><b>Update three ways.</b> Independent TD targets; GAE plus a clipped actor loss with a centralized value; monotone mixing with a team TD target.</li>
+        <li><b>Measure coordination.</b> Coverage is the fraction of landmark-steps covered; specialisation counts steps where the two agents cover different landmarks.</li>
+        <li><b>Break it.</b> Freeze one agent at test time, replay the same starts, and record the return lost.</li>
+      </ol>
+
+      <div class="note"><b>The baseline is not a straw man.</b> Independent Q-learning is what you get if every agent treats the rest of the team as part of the environment. It is cheap, decentralized, and quietly wrong when the environment is other agents who are also learning.</div>
+    </div>
+
+    <h3 style="max-width:720px;margin-left:auto;margin-right:auto;padding:0 24px">The shared-critic advantage</h3>
+    <div class="wrap" style="padding:0">
+      <p>Generalized advantage estimation needs one value per joint state. Map it back through the trajectory, normalise, then push each actor along the clipped gradient. The critic is thrown away after training; the actors never see it.</p>
+    </div>
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">mappo_update.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">import numpy as np
+
+def softmax(z):
+    z = z - z.max()
+    e = np.exp(z)
+    return e / e.sum()
+
+def gae(rewards, values, next_values, gamma=0.95, lam=0.95):
+    adv, acc = np.zeros_like(rewards), 0.0
+    for t in reversed(range(len(rewards))):
+        delta = rewards[t] + gamma * next_values[t] - values[t]
+        acc = delta + gamma * lam * acc
+        adv[t] = acc
+    return (adv - adv.mean()) / (adv.std() + 1e-8)
+
+def update(actor, critic, batch):
+    # one shared critic sees the joint state; each actor sees only its own obs
+    adv = gae(batch.rewards, batch.values, batch.next_values)
+    for i in range(N_AGENTS):
+        for t in range(len(batch.rewards)):
+            o, a, old = batch.obs[t][i], batch.acts[t][i], batch.logp[t][i]
+            p = softmax(actor[o])
+            ratio = p[a] / old
+            surr1 = ratio * adv[t]
+            surr2 = np.clip(ratio, 0.8, 1.2) * adv[t]
+            coef = adv[t] if surr1 &lt; surr2 else (adv[t] if 0.8 &lt;= ratio &lt;= 1.2 else 0.0)
+            actor[o] += LR * coef * ratio * (np.eye(N_ACTIONS)[a] - p)
+    critic[batch.joint] += LR_V * adv</code></pre>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>The alternative is to keep independent $Q_i$ and let a small hypernetwork turn the global state into non-negative mixing weights. Softplus makes the constraint structural rather than a penalty.</p>
+    </div>
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">qmix_mixing.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">import numpy as np
+
+def softplus(z):
+    return np.log1p(np.exp(-np.abs(z))) + np.maximum(z, 0.0)
+
+def mix(qs, g, u, b):
+    # w_i = softplus(u_i . g) &gt; 0  -- the monotonicity constraint
+    w = [softplus(u[i] @ g) for i in range(N_AGENTS)]
+    return sum(wi * qi for wi, qi in zip(w, qs)) + b @ g
+
+def qmix_update(Q, batch, u, b, gamma=0.95):
+    qs = np.array([Q[i][batch.obs[i], batch.act[i]] for i in range(N_AGENTS)])
+    q_tot = mix(qs, batch.g, u, b)
+    q_next = [Q[i][batch.next_obs[i]].max() for i in range(N_AGENTS)]
+    y = batch.r + gamma * mix(q_next, batch.next_g, u, b)  # semi-gradient target
+    loss = (q_tot - y) ** 2
+    # dL/dQ_i = 2 (q_tot - y) w_i, and w_i >= 0 preserves the ordering
+    return loss</code></pre>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>The third learner is deliberately the simplest: two tables, two TD targets, no sharing.</p>
+    </div>
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">independent_q.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">def independent_update(Q, batch, alpha=0.1, gamma=0.95):
+    for i in range(N_AGENTS):
+        for o, a, r, no in zip(batch.obs[i], batch.acts[i],
+                               batch.rewards, batch.next_obs[i]):
+            target = r + gamma * Q[i][no].max()
+            Q[i][o, a] += alpha * (target - Q[i][o, a])</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="train">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Train the three learners</h2>
+      <p>All three run in the same world, from the same spawn sequence, on the same episode budget. Press <b>Train</b> and watch the greedy return separate. The curves are moving averages of the deterministic greedy return; the grid shows a full greedy rollout for the selected learner.</p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Interactive · three learners, one environment</span>
+        <div class="btnrow">
+          <button id="trainRun" class="primary">Train ▶</button>
+          <button id="trainPlay">Play greedy</button>
+          <button id="trainReset">Reset</button>
+        </div>
+      </div>
+
+      <div class="tabs" id="trainTabs">
+        <button class="tab" data-l="IQL">Independent Q</button>
+        <button class="tab active" data-l="MAPPO">MAPPO · shared critic</button>
+        <button class="tab" data-l="QMIX">QMIX · monotone mix</button>
+      </div>
+
+      <div class="row">
+        <div class="col" style="flex:1 1 290px">
+          <p class="plot-cap">Benchmark · greedy rollout</p>
+          <svg id="envSvg" viewBox="0 0 300 300" style="max-width:310px;margin:0 auto" role="img" aria-label="Cooperative grid with two agents, two landmarks, covered cells and greedy actions"></svg>
+          <div class="legend">
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#111;margin-right:4px"></span>A</span>
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#2563eb;margin-right:4px"></span>B</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#eef2ff;border:1px solid #1e3a8a;margin-right:4px"></span>landmark</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:rgba(37,99,235,.18);margin-right:4px"></span>covered</span>
+          </div>
+          <p class="readout" id="trainStats"></p>
+        </div>
+
+        <div class="col" style="flex:1 1 380px">
+          <p class="plot-cap">Greedy return · episode</p>
+          <svg id="retSvg" viewBox="0 0 440 240" role="img" aria-label="Learning curves for independent Q, MAPPO and QMIX"></svg>
+          <div class="legend">
+            <span><span style="display:inline-block;width:16px;height:2px;background:#dc2626;margin-right:5px;vertical-align:middle"></span>IQL</span>
+            <span><span style="display:inline-block;width:16px;height:2px;background:#2563eb;margin-right:5px;vertical-align:middle"></span>MAPPO</span>
+            <span><span style="display:inline-block;width:16px;height:2px;background:#111;margin-right:5px;vertical-align:middle"></span>QMIX</span>
+          </div>
+          <div class="metrics">
+            <div class="metric"><div class="metric-k">IQL</div><div class="metric-v" id="mIQL">—</div></div>
+            <div class="metric"><div class="metric-k">MAPPO</div><div class="metric-v" id="mMAPPO">—</div></div>
+            <div class="metric"><div class="metric-k">QMIX</div><div class="metric-v" id="mQMIX">—</div></div>
+            <div class="metric"><div class="metric-k">coverage</div><div class="metric-v" id="mCov">—</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slider-row" style="max-width:360px">
+        <span class="small muted">episodes / tick</span>
+        <input type="range" id="trainSpeed" min="2" max="24" step="2" value="8" aria-label="Training episodes per tick">
+        <span class="val" id="trainSpeedVal">8</span>
+      </div>
+      <div class="eqbox" id="trainEq" style="min-height:64px"></div>
+      <p class="small muted" style="margin:0">Every plotted number is the consequence of the update rules above. Training stops at the episode budget or when all three greedy curves plateau.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="coordination">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>Joint policies and coordination</h2>
+      <p>A decentralized policy is a map from local observation to action. Put two such maps side by side and the coordination is visible: each agent's move depends on where the partner stands. The heatmap on the right is the value of every joint cell configuration under the selected learner — dark blue is valuable, red is costly.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · joint-policy view</span>
+        <button id="jointRefresh">Refresh</button>
+      </div>
+      <div class="tabs" id="jointTabs">
+        <button class="tab" data-l="IQL">Independent Q</button>
+        <button class="tab active" data-l="MAPPO">MAPPO</button>
+        <button class="tab" data-l="QMIX">QMIX</button>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 270px">
+          <p class="plot-cap">Decentralized greedy actions</p>
+          <svg id="jointSvg" viewBox="0 0 280 280" style="max-width:290px;margin:0 auto" role="img" aria-label="Grid with agent A and agent B, landmarks and their greedy action arrows"></svg>
+          <p class="readout" id="jointInfo"></p>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <p class="plot-cap">Joint value · rows A, columns B</p>
+          <svg id="jointMap" viewBox="0 0 330 330" style="max-width:340px;margin:0 auto" role="img" aria-label="Heatmap of joint state value over all pairs of agent cells"></svg>
+          <div class="legend">
+            <span>low</span><span class="grad"></span><span>high</span>
+            <span class="muted">· outline = selected pair</span>
+          </div>
+        </div>
+      </div>
+      <div class="sliders">
+        <div class="slider-row">
+          <span class="small muted">agent A cell</span>
+          <input type="range" id="jointA" min="0" max="24" step="1" value="0" aria-label="Agent A grid cell">
+          <span class="val" id="jointAVal">(0,0)</span>
+        </div>
+        <div class="slider-row">
+          <span class="small muted">agent B cell</span>
+          <input type="range" id="jointB" min="0" max="24" step="1" value="24" aria-label="Agent B grid cell">
+          <span class="val" id="jointBVal">(4,4)</span>
+        </div>
+      </div>
+      <div class="eqbox" id="jointEq" style="min-height:60px"></div>
+      <p class="small muted" style="margin:0">MAPPO shows the centralized $V(s)$; the Q learners show the value of their decentralized greedy joint action. Values are normalised within the selected learner.</p>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <h3>Why monotonicity is enough</h3>
+      <p>QMIX does not need the joint action at execution because its mixer is increasing in every $Q_i$. Move the weight below zero and the guarantee breaks: the per-agent greedy pair stops being the joint argmax. The table shows the joint values for two actions per agent.</p>
+    </div>
+
+    <div class="panel" style="margin-top:22px">
+      <div class="panel-head">
+        <span class="panel-title">Interactive · the monotonicity constraint</span>
+        <span class="mono small" id="monoWVal">w = 1.00</span>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 300px">
+          <div id="monoTable"></div>
+          <p class="readout" id="monoInfo" style="text-align:center"></p>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <div class="slider-row">
+            <span class="small muted">mixing weight $w$</span>
+            <input type="range" id="monoW" min="-1" max="2" step="0.05" value="1" aria-label="Mixing weight w">
+            <span class="val" id="monoWVal2">1.00</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$Q_1(a)$</span>
+            <input type="range" id="q1a" min="-2" max="2" step="0.05" value="0.8" aria-label="Q value for agent 1 action a">
+            <span class="val" id="q1aVal">0.80</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$Q_1(b)$</span>
+            <input type="range" id="q1b" min="-2" max="2" step="0.05" value="-0.4" aria-label="Q value for agent 1 action b">
+            <span class="val" id="q1bVal">−0.40</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$Q_2(a)$</span>
+            <input type="range" id="q2a" min="-2" max="2" step="0.05" value="0.6" aria-label="Q value for agent 2 action a">
+            <span class="val" id="q2aVal">0.60</span>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">$Q_2(b)$</span>
+            <input type="range" id="q2b" min="-2" max="2" step="0.05" value="0.2" aria-label="Q value for agent 2 action b">
+            <span class="val" id="q2bVal">0.20</span>
+          </div>
+          <div class="eqbox" id="monoEq" style="min-height:56px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="dropout">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Robustness to agent dropout</h2>
+      <p>Coordination is a dependency. A policy trained with a partner may rely on that partner being there; disabling one at test time is a direct measure of how much of the team return was joint work. Both conditions replay the same start states, so the difference is not sampling noise.</p>
+      <div class="note"><b>Read the drop alongside the return.</b> A learner that never coordinated has little to lose. The interesting number is the fraction of the team's return that disappears when one actor is frozen.</div>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Interactive · freeze one agent at test time</span>
+        <div class="btnrow">
+          <button id="dropEval" class="primary">Evaluate</button>
+        </div>
+      </div>
+      <div class="tabs" id="dropTabs">
+        <button class="tab active" data-d="none">Both active</button>
+        <button class="tab" data-d="A">Agent A offline</button>
+        <button class="tab" data-d="B">Agent B offline</button>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 380px">
+          <p class="plot-cap">Return · all agents vs. one offline</p>
+          <svg id="dropSvg" viewBox="0 0 420 200" role="img" aria-label="Grouped bars comparing return with all agents and with one agent offline"></svg>
+          <div class="legend">
+            <span><span style="display:inline-block;width:9px;height:9px;background:#111;margin-right:5px"></span>both active</span>
+            <span><span style="display:inline-block;width:9px;height:9px;background:#dc2626;margin-right:5px"></span>one offline</span>
+          </div>
+        </div>
+        <div class="col" style="flex:1 1 320px">
+          <p class="plot-cap">Return lost</p>
+          <div id="dropRows"></div>
+          <div class="metrics">
+            <div class="metric"><div class="metric-k">full return</div><div class="metric-v" id="dropFull">—</div></div>
+            <div class="metric"><div class="metric-k">with dropout</div><div class="metric-v" id="dropLost">—</div></div>
+            <div class="metric"><div class="metric-k">drop Δ</div><div class="metric-v" id="dropDelta">—</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="eqbox" id="dropEq" style="min-height:60px"></div>
+      <p class="small muted" style="margin:0">Evaluation runs 120 deterministic greedy episodes; the move set is frozen for the disabled agent. Train first, then evaluate.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="close">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">06</span>What to compare</h2>
+      <p>Run the same budget three times and read four things. <b>Sample efficiency</b>: which curve reaches a positive return first. <b>Coordination</b>: coverage and specialisation, not just return. <b>Joint structure</b>: whether the heatmap has a diagonal ridge — different landmarks are worth more than the same one. <b>Dropout</b>: how much return depends on the partner.</p>
+      <p>The honest result is usually a trade: centralized training buys coordination and pays for it in brittleness when the team changes. That trade is the design space for every cooperative multi-agent system you will build after this one.</p>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <table class="cmp">
+        <tr><th>Measure</th><th>What it tells you</th></tr>
+        <tr><td>Greedy return</td><td>Whether the joint policy actually solves the task, not just whether the critic fits.</td></tr>
+        <tr><td>Coverage</td><td>Fraction of landmark-steps with at least one agent in range; separates competence from luck.</td></tr>
+        <tr><td>Specialisation</td><td>Steps where the two agents cover different landmarks; the signature of a division of labour.</td></tr>
+        <tr><td>Dropout Δ</td><td>Return sacrificed when a partner is frozen; the price of coordination.</td></tr>
+      </table>
+      <p class="small muted">Next, swap the reward for a competitive one and watch the same three learners discover that a shared critic is no longer a baseline you can trust.</p>
+    </div>
+  </div>
+</section>
+
+<!-- project-pager -->
+<nav class="pager" aria-label="Project navigation"><a class="pg-prev" href="05-rlhf-dpo-alignment-pipeline.html"><span class="pg-k">Previous</span><span class="pg-t">RLHF / DPO Alignment Pipeline</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" aria-disabled="true"><span class="pg-k">Next</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained lab. Two agents, one scalar, and a partner you can switch off.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function T(node, tex, display = false) {
+  if (!window.katex) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const fmt = (v, d = 2) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+const fmtS = (v, d = 2) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+function pickSeg(group, val) {
+  $$(`#${group} button`).forEach(b => b.classList.toggle('active', Object.values(b.dataset)[0] === val));
+}
+function arrowMarker(defs, id, color) {
+  const m = el('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto', markerUnits: 'userSpaceOnUse' }, defs);
+  el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: color }, m);
+  return `url(#${id})`;
+}
+
+/* =====================================================================
+   Code highlighting
+   ===================================================================== */
+function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+const PY_KEYWORDS = new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case self'.split(' '));
+const PY_BUILTINS = new Set('abs all any bool dict enumerate filter float int len list map max min print range reversed round set sorted str sum tuple zip isinstance super type'.split(' '));
+function highlightPython(src){
+  const re = /(#[^\n]*)|((?:[rbfu]{0,2})(?:'''[\s\S]*?'''|"""[\s\S]*?"""|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"))|(@[A-Za-z_]\w*)|(\b\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?\b)|([A-Za-z_]\w*)|([^\w\s]+)|(\s+)/g;
+  let out='',m;
+  while((m=re.exec(src))){
+    if(m[1]) out+='<span class="t-c">'+escapeHtml(m[1])+'</span>';
+    else if(m[2]) out+='<span class="t-s">'+escapeHtml(m[2])+'</span>';
+    else if(m[3]) out+='<span class="t-d">'+escapeHtml(m[3])+'</span>';
+    else if(m[4]) out+='<span class="t-n">'+escapeHtml(m[4])+'</span>';
+    else if(m[5]){const w=m[5];
+      if(PY_KEYWORDS.has(w)) out+='<span class="t-k">'+w+'</span>';
+      else if(PY_BUILTINS.has(w)) out+='<span class="t-b">'+w+'</span>';
+      else if(/^\s*\(/.test(src.slice(re.lastIndex))) out+='<span class="t-f">'+w+'</span>';
+      else out+=w;
+    }
+    else if(m[6]) out+='<span class="t-o">'+escapeHtml(m[6])+'</span>';
+    else if(m[7]) out+=m[7];
+  }
+  return out;
+}
+function initCode(){
+  document.querySelectorAll('pre.code code[data-lang]').forEach(function(c){
+    c.innerHTML = highlightPython(c.textContent);
+  });
+  document.querySelectorAll('.cb-copy').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var code = btn.closest('.cb').querySelector('code');
+      (navigator.clipboard ? navigator.clipboard.writeText(code.textContent) : Promise.reject())
+        .then(function(){ btn.textContent='Copied'; setTimeout(function(){ btn.textContent='Copy'; },1400); })
+        .catch(function(){});
+    });
+  });
+}
+
+/* =====================================================================
+   Cooperative coverage environment
+   ===================================================================== */
+const G = 5, NC = 25, NA = 5;
+const LM = [0, 24];
+const TMAX = 20, GAMMA = 0.95, LAMBDA = 0.95;
+
+function rc(c) { return [Math.floor(c / G), c % G]; }
+function dist1(a, b) {
+  const A = rc(a), B = rc(b);
+  return Math.abs(A[0] - B[0]) + Math.abs(A[1] - B[1]);
+}
+function cheb(a, b) {
+  const A = rc(a), B = rc(b);
+  return Math.max(Math.abs(A[0] - B[0]), Math.abs(A[1] - B[1]));
+}
+function moveCell(c, a) {
+  let r = Math.floor(c / G), cc = c % G;
+  if (a === 0) r--; else if (a === 1) cc++; else if (a === 2) r++; else if (a === 3) cc--;
+  r = Math.max(0, Math.min(G - 1, r));
+  cc = Math.max(0, Math.min(G - 1, cc));
+  return r * G + cc;
+}
+function teamReward(cells) {
+  let r = 0, covered = 0;
+  for (const L of LM) {
+    const d = Math.min(dist1(cells[0], L), dist1(cells[1], L));
+    r -= 0.04 * d;
+    if (cheb(cells[0], L) <= 1 || cheb(cells[1], L) <= 1) { r += 0.3; covered++; }
+  }
+  if (covered === 2) r += 0.8;
+  if (cells[0] === cells[1]) r -= 0.2;
+  return { r, covered };
+}
+function globalFeats(cells) {
+  const spread = dist1(cells[0], cells[1]);
+  let md = 9;
+  for (const L of LM) md = Math.min(md, dist1(cells[0], L), dist1(cells[1], L));
+  return [1, spread / 8, md / 8];
+}
+const softplus = z => Math.log1p(Math.exp(-Math.abs(z))) + Math.max(z, 0);
+const sigmoid = z => 1 / (1 + Math.exp(-z));
+function spawn(rng) {
+  const a = Math.floor(rng() * NC);
+  let b;
+  do { b = Math.floor(rng() * NC); } while (b === a);
+  return [a, b];
+}
+function softmaxAt(logits, o) {
+  const z = new Array(NA); let m = -1e9;
+  for (let a = 0; a < NA; a++) { z[a] = logits[o * NA + a]; if (z[a] > m) m = z[a]; }
+  let s = 0;
+  for (let a = 0; a < NA; a++) { z[a] = Math.exp(z[a] - m); s += z[a]; }
+  for (let a = 0; a < NA; a++) z[a] /= s;
+  return z;
+}
+function samplePr(pr, rng) {
+  const u = rng(); let acc = 0;
+  for (let a = 0; a < NA; a++) { acc += pr[a]; if (u <= acc + 1e-12) return a; }
+  return NA - 1;
+}
+function argmaxQ(Q, o) {
+  let best = 0, bv = Q[o * NA];
+  for (let a = 1; a < NA; a++) { const v = Q[o * NA + a]; if (v > bv) { bv = v; best = a; } }
+  return best;
+}
+function maxQ(Q, o) {
+  let bv = Q[o * NA];
+  for (let a = 1; a < NA; a++) { const v = Q[o * NA + a]; if (v > bv) bv = v; }
+  return bv;
+}
+function epsGreedy(Q, o, rng, eps) {
+  if (rng() < eps) return Math.floor(rng() * NA);
+  return argmaxQ(Q, o);
+}
+
+/* ---------------- learners ---------------- */
+function makeIQL() {
+  return {
+    kind: 'ql', name: 'IQL',
+    Q: [new Float64Array(NC * NC * NA), new Float64Array(NC * NC * NA)],
+    greedy(o, i) { return argmaxQ(this.Q[i], o); },
+    update(steps) {
+      const lr = 0.15;
+      for (const s of steps) {
+        for (let i = 0; i < 2; i++) {
+          const Q = this.Q[i];
+          const o = i ? s.o1 : s.o0, a = i ? s.a1 : s.a0, no = i ? s.no1 : s.no0;
+          const tgt = s.r + GAMMA * maxQ(Q, no);
+          Q[o * NA + a] += lr * (tgt - Q[o * NA + a]);
+        }
+      }
+    }
+  };
+}
+function makeQMIX() {
+  return {
+    kind: 'ql', name: 'QMIX',
+    Q: [new Float64Array(NC * NC * NA), new Float64Array(NC * NC * NA)],
+    u: [[0.1, 0, 0], [0.1, 0, 0]], braw: [0, 0, 0],
+    greedy(o, i) { return argmaxQ(this.Q[i], o); },
+    mixes(cells, q0, q1) {
+      const g = globalFeats(cells);
+      const z0 = this.u[0][0] * g[0] + this.u[0][1] * g[1] + this.u[0][2] * g[2];
+      const z1 = this.u[1][0] * g[0] + this.u[1][1] * g[1] + this.u[1][2] * g[2];
+      const w0 = softplus(z0), w1 = softplus(z1);
+      const b = this.braw[0] * g[0] + this.braw[1] * g[1] + this.braw[2] * g[2];
+      return { g, z0, z1, w0, w1, b, qtot: w0 * q0 + w1 * q1 + b };
+    },
+    update(steps) {
+      const lr = 0.1, lrM = 0.03;
+      for (const s of steps) {
+        const q0 = this.Q[0][s.o0 * NA + s.a0];
+        const q1 = this.Q[1][s.o1 * NA + s.a1];
+        const m = this.mixes(s.cells, q0, q1);
+        const nxt = this.mixes(s.next, maxQ(this.Q[0], s.no0), maxQ(this.Q[1], s.no1));
+        const tgt = s.r + GAMMA * nxt.qtot;
+        const err = m.qtot - tgt;
+        this.Q[0][s.o0 * NA + s.a0] -= lr * err * m.w0;
+        this.Q[1][s.o1 * NA + s.a1] -= lr * err * m.w1;
+        const dz0 = err * q0 * sigmoid(m.z0);
+        const dz1 = err * q1 * sigmoid(m.z1);
+        for (let j = 0; j < 3; j++) {
+          this.u[0][j] -= lrM * dz0 * m.g[j];
+          this.u[1][j] -= lrM * dz1 * m.g[j];
+          this.braw[j] -= lrM * err * m.g[j];
+        }
+      }
+    }
+  };
+}
+function makeMAPPO() {
+  return {
+    kind: 'pg', name: 'MAPPO',
+    logits: new Float64Array(NC * NC * NA),
+    V: new Float64Array(NC * NC),
+    greedy(o) {
+      const pr = softmaxAt(this.logits, o);
+      let b = 0;
+      for (let a = 1; a < NA; a++) if (pr[a] > pr[b]) b = a;
+      return b;
+    },
+    update(steps) {
+      const Tn = steps.length, clip = 0.2, lr = 0.03, lrV = 0.1, lrE = 0.01, K = 3;
+      const adv = [new Float64Array(Tn), new Float64Array(Tn)];
+      let gae = 0;
+      for (let t = Tn - 1; t >= 0; t--) {
+        const boot = t === Tn - 1 ? 0 : GAMMA * this.V[steps[t].jn];
+        const delta = steps[t].r + boot - this.V[steps[t].j];
+        gae = delta + GAMMA * LAMBDA * gae;
+        adv[0][t] = gae; adv[1][t] = gae;
+      }
+      let mean = 0;
+      for (let t = 0; t < Tn; t++) mean += adv[0][t] + adv[1][t];
+      mean /= (2 * Tn);
+      let sd = 0;
+      for (let t = 0; t < Tn; t++) {
+        sd += (adv[0][t] - mean) ** 2 + (adv[1][t] - mean) ** 2;
+      }
+      sd = Math.sqrt(sd / (2 * Tn)) + 1e-8;
+      for (let k = 0; k < K; k++) {
+        for (let t = 0; t < Tn; t++) {
+          for (let i = 0; i < 2; i++) {
+            const o = i ? steps[t].o1 : steps[t].o0;
+            const a = i ? steps[t].a1 : steps[t].a0;
+            const po = i ? steps[t].p1 : steps[t].p0;
+            const A = (adv[i][t] - mean) / sd;
+            const pr = softmaxAt(this.logits, o);
+            const ratio = pr[a] / (po + 1e-12);
+            const s1 = ratio * A;
+            const s2 = Math.min(Math.max(ratio, 1 - clip), 1 + clip) * A;
+            let coef;
+            if (s1 < s2) coef = A;
+            else if (ratio >= 1 - clip && ratio <= 1 + clip) coef = A;
+            else coef = 0;
+            for (let b = 0; b < NA; b++) {
+              const g = ratio * ((b === a ? 1 : 0) - pr[b]);
+              this.logits[o * NA + b] += lr * coef * g;
+            }
+            let H = 0;
+            for (let b = 0; b < NA; b++) if (pr[b] > 1e-12) H -= pr[b] * Math.log(pr[b]);
+            for (let b = 0; b < NA; b++) {
+              this.logits[o * NA + b] += lrE * (-pr[b] * (Math.log(pr[b] + 1e-12) + H));
+            }
+          }
+        }
+        for (let t = 0; t < Tn; t++) this.V[steps[t].j] += lrV * adv[0][t];
+      }
+    }
+  };
+}
+
+/* ---------------- rollout ---------------- */
+function rollout(L, rng, train, eps) {
+  let cells = spawn(rng);
+  const steps = [];
+  for (let t = 0; t < TMAX; t++) {
+    const o0 = cells[0] * NC + cells[1];
+    const o1 = cells[1] * NC + cells[0];
+    let a0, a1, p0 = 0, p1 = 0;
+    if (L.kind === 'pg') {
+      const pr0 = softmaxAt(L.logits, o0);
+      a0 = samplePr(pr0, rng); p0 = pr0[a0];
+      const pr1 = softmaxAt(L.logits, o1);
+      a1 = samplePr(pr1, rng); p1 = pr1[a1];
+    } else {
+      a0 = epsGreedy(L.Q[0], o0, rng, train ? eps : 0);
+      a1 = epsGreedy(L.Q[1], o1, rng, train ? eps : 0);
+    }
+    const nc0 = moveCell(cells[0], a0);
+    const nc1 = moveCell(cells[1], a1);
+    const next = [nc0, nc1];
+    const rw = teamReward(next);
+    steps.push({
+      cells: cells.slice(), next: next.slice(),
+      o0, o1, no0: nc0 * NC + nc1, no1: nc1 * NC + nc0,
+      a0, a1, p0, p1, r: rw.r, covered: rw.covered,
+      j: cells[0] * NC + cells[1], jn: nc0 * NC + nc1
+    });
+    cells = next;
+  }
+  return steps;
+}
+function episodeReturn(steps) {
+  let s = 0;
+  for (const st of steps) s += st.r;
+  return s;
+}
+function greedySteps(L, start) {
+  let cells = [start[0], start[1]];
+  const steps = [];
+  for (let t = 0; t < TMAX; t++) {
+    const o0 = cells[0] * NC + cells[1];
+    const o1 = cells[1] * NC + cells[0];
+    const a0 = L.greedy(o0, 0), a1 = L.greedy(o1, 1);
+    const nc0 = moveCell(cells[0], a0), nc1 = moveCell(cells[1], a1);
+    const next = [nc0, nc1];
+    const rw = teamReward(next);
+    steps.push({
+      cells: cells.slice(), next: next.slice(),
+      o0, o1, no0: nc0 * NC + nc1, no1: nc1 * NC + nc0,
+      a0, a1, p0: 1, p1: 1, r: rw.r, covered: rw.covered,
+      j: cells[0] * NC + cells[1], jn: nc0 * NC + nc1
+    });
+    cells = next;
+  }
+  return steps;
+}
+function greedyFromStart(L, start, drop) {
+  let cells = [start[0], start[1]], ret = 0;
+  for (let t = 0; t < TMAX; t++) {
+    const o0 = cells[0] * NC + cells[1];
+    const o1 = cells[1] * NC + cells[0];
+    const a0 = drop === 0 ? 4 : L.greedy(o0, 0);
+    const a1 = drop === 1 ? 4 : L.greedy(o1, 1);
+    cells = [moveCell(cells[0], a0), moveCell(cells[1], a1)];
+    ret += teamReward(cells).r;
+  }
+  return ret;
+}
+
+/* =====================================================================
+   Shared lab state
+   ===================================================================== */
+const LAB = {
+  names: ['IQL', 'MAPPO', 'QMIX'],
+  L: null,
+  ep: 0, maxEp: 1200,
+  hist: { IQL: [], MAPPO: [], QMIX: [] },
+  smooth: { IQL: [], MAPPO: [], QMIX: [] },
+  greedy: { IQL: null, MAPPO: null, QMIX: null },
+  active: 'MAPPO',
+  running: false,
+  timer: null,
+  play: null,
+  subs: [],
+  notify() { for (const f of this.subs) f(); }
+};
+
+function setActive(name) {
+  LAB.active = name;
+  $$('#trainTabs .tab').forEach(b => b.classList.toggle('active', b.dataset.l === name));
+  $$('#jointTabs .tab').forEach(b => b.classList.toggle('active', b.dataset.l === name));
+  LAB.notify();
+}
+
+function episodeMetrics(steps) {
+  let cov = 0, spec = 0;
+  for (const s of steps) {
+    cov += s.covered / 2;
+    const a0 = cheb(s.next[0], LM[0]) <= 1, a1 = cheb(s.next[0], LM[1]) <= 1;
+    const b0 = cheb(s.next[1], LM[0]) <= 1, b1 = cheb(s.next[1], LM[1]) <= 1;
+    if ((a0 && b1) || (a1 && b0)) spec++;
+  }
+  return { cov: cov / steps.length, spec: spec / steps.length };
+}
+
+/* =====================================================================
+   03 — training lab
+   ===================================================================== */
+function initTrain() {
+  const envSvg = $('#envSvg');
+  const retSvg = $('#retSvg');
+  const speed = $('#trainSpeed');
+  const speedVal = $('#trainSpeedVal');
+  const runBtn = $('#trainRun');
+
+  const L = { IQL: makeIQL(), MAPPO: makeMAPPO(), QMIX: makeQMIX() };
+  LAB.L = L;
+  let trainRng = mulberry32(12345);
+  let stable = 0;
+  let playTimer = null;
+  const evalStarts = (() => {
+    const rng = mulberry32(2024);
+    const out = [];
+    for (let i = 0; i < 32; i++) out.push(spawn(rng));
+    return out;
+  })();
+  function evalSet(L) {
+    let s = 0;
+    for (const st of evalStarts) s += greedyFromStart(L, st, null);
+    return s / evalStarts.length;
+  }
+  function evalMetrics(L) {
+    let cov = 0, spec = 0;
+    for (const st of evalStarts) {
+      const m = episodeMetrics(greedySteps(L, st));
+      cov += m.cov; spec += m.spec;
+    }
+    return { cov: cov / evalStarts.length, spec: spec / evalStarts.length };
+  }
+
+  function freshGreedy() {
+    LAB.greedy = {
+      IQL: rollout(L.IQL, mulberry32(4321), false, 0),
+      MAPPO: rollout(L.MAPPO, mulberry32(4321), false, 0),
+      QMIX: rollout(L.QMIX, mulberry32(4321), false, 0)
+    };
+  }
+
+  function drawEnv() {
+    envSvg.innerHTML = '';
+    const CELL = 56, PAD = 6, W = G * CELL + 2 * PAD;
+    envSvg.setAttribute('viewBox', `0 0 ${W} ${W}`);
+    const defs = el('defs', {}, envSvg);
+    const mDark = arrowMarker(defs, 'ev-d', '#111');
+    const mBlue = arrowMarker(defs, 'ev-b', '#2563eb');
+
+    const chosen = (LAB.play && LAB.play.name === LAB.active) ? LAB.play : null;
+    const stepsAll = chosen ? chosen.steps : LAB.greedy[LAB.active];
+    const tShow = chosen ? chosen.t : (stepsAll ? stepsAll.length : 0);
+    const steps = stepsAll ? stepsAll.slice(0, tShow) : [];
+
+    const finalCells = steps.length
+      ? steps[steps.length - 1].next
+      : (LAB.active === 'MAPPO' ? [0, 24] : [0, 24]);
+
+    for (let i = 0; i < NC; i++) {
+      const r = Math.floor(i / G), c = i % G;
+      const x = PAD + c * CELL, y = PAD + r * CELL;
+      let fill = '#fafafa';
+      const isLM = LM.includes(i);
+      const coveredLM = isLM && (cheb(finalCells[0], i) <= 1 || cheb(finalCells[1], i) <= 1);
+      if (isLM) fill = '#eef2ff';
+      el('rect', { x: x + 1.5, y: y + 1.5, width: CELL - 3, height: CELL - 3, rx: 8, fill, stroke: isLM ? (coveredLM ? '#2563eb' : '#1e3a8a') : '#ececec', 'stroke-width': isLM ? (coveredLM ? 2 : 1.4) : 1 }, envSvg);
+      if (isLM) {
+        el('rect', { x: x + CELL / 2 - 7, y: y + CELL / 2 - 7, width: 14, height: 14, rx: 3, fill: '#1e3a8a' }, envSvg);
+        el('text', { x: x + CELL / 2, y: y + CELL / 2 + 4, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 700, fill: '#fff' }, envSvg).textContent = 'L';
+      }
+    }
+
+    const pathFor = (which) => {
+      if (!steps.length) return [];
+      const pts = [steps[0].cells[which]];
+      for (const s of steps) pts.push(s.next[which]);
+      return pts;
+    };
+    const drawPath = (which, color) => {
+      const pts = pathFor(which);
+      if (pts.length < 2) return;
+      const d = pts.map((p, k) => {
+        const x = PAD + (p % G) * CELL + CELL / 2, y = PAD + Math.floor(p / G) * CELL + CELL / 2;
+        return (k ? 'L' : 'M') + x + ',' + y;
+      }).join(' ');
+      el('path', { d, fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: .18 }, envSvg);
+    };
+    drawPath(0, '#111');
+    drawPath(1, '#2563eb');
+
+    const drawAgent = (which, cell, fill, label, marker) => {
+      const x = PAD + (cell % G) * CELL + CELL / 2, y = PAD + Math.floor(cell / G) * CELL + CELL / 2;
+      el('circle', { cx: x, cy: y, r: 11, fill }, envSvg);
+      el('text', { x, y: y + 4, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 700, fill: '#fff' }, envSvg).textContent = label;
+      const o = which ? finalCells[1] * NC + finalCells[0] : finalCells[0] * NC + finalCells[1];
+      const agent = LAB.L[LAB.active];
+      const a = which ? agent.greedy(o, 1) : agent.greedy(o, 0);
+      if (a === 4) {
+        el('circle', { cx: x, cy: y, r: 15, fill: 'none', stroke: fill, 'stroke-width': 1.2, opacity: .5 }, envSvg);
+      } else {
+        const dx = a === 1 ? 1 : a === 3 ? -1 : 0;
+        const dy = a === 0 ? -1 : a === 2 ? 1 : 0;
+        el('line', { x1: x + dx * 13, y1: y + dy * 13, x2: x + dx * 25, y2: y + dy * 25, stroke: fill, 'stroke-width': 2, 'marker-end': marker }, envSvg);
+      }
+    };
+    if (steps.length) {
+      drawAgent(0, finalCells[0], '#111', 'A', mDark);
+      drawAgent(1, finalCells[1], '#2563eb', 'B', mBlue);
+    }
+  }
+
+  function drawReturns() {
+    retSvg.innerHTML = '';
+    const W = 440, H = 240, Lp = 36, Rp = 10, Tp = 12, Bp = 26;
+    let lo = Infinity, hi = -Infinity, any = false;
+    for (const n of LAB.names) {
+      for (const v of LAB.smooth[n]) {
+        if (!Number.isFinite(v)) continue;
+        any = true;
+        if (v < lo) lo = v; if (v > hi) hi = v;
+      }
+    }
+    if (!any) { lo = -1; hi = 1; }
+    if (hi - lo < 1) { const m = (hi + lo) / 2; lo = m - 1; hi = m + 1; }
+    const pad = (hi - lo) * 0.1; lo -= pad; hi += pad;
+
+    const X = ep => Lp + (ep / LAB.maxEp) * (W - Lp - Rp);
+    const Y = v => Tp + (hi - v) / (hi - lo) * (H - Tp - Bp);
+
+    for (let k = 0; k <= 4; k++) {
+      const v = lo + (hi - lo) * k / 4;
+      const y = Y(v);
+      el('line', { x1: Lp, y1: y, x2: W - Rp, y2: y, stroke: '#f0f0f0', 'stroke-width': 1 }, retSvg);
+      el('text', { x: Lp - 5, y: y + 3, 'text-anchor': 'end', 'font-size': 9, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, retSvg).textContent = fmt(v, 0);
+    }
+    for (let k = 0; k <= 4; k++) {
+      const ep = LAB.maxEp * k / 4;
+      const x = X(ep);
+      el('line', { x1: x, y1: H - Bp, x2: x, y2: H - Bp + 3, stroke: '#d4d4d8' }, retSvg);
+      el('text', { x, y: H - 8, 'text-anchor': 'middle', 'font-size': 9, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, retSvg).textContent = Math.round(ep);
+    }
+    if (lo < 0 && hi > 0) {
+      el('line', { x1: Lp, y1: Y(0), x2: W - Rp, y2: Y(0), stroke: '#e5e5e5', 'stroke-width': 1 }, retSvg);
+    }
+
+    const colors = { IQL: '#dc2626', MAPPO: '#2563eb', QMIX: '#111' };
+    for (const n of LAB.names) {
+      const arr = LAB.smooth[n];
+      if (arr.length < 2) continue;
+      const step = Math.max(1, Math.floor(arr.length / 300));
+      const pts = [];
+      for (let i = 0; i < arr.length; i += step) pts.push(`${X(i + 1)},${Y(arr[i])}`);
+      pts.push(`${X(arr.length)},${Y(arr[arr.length - 1])}`);
+      el('polyline', { points: pts.join(' '), fill: 'none', stroke: colors[n], 'stroke-width': 1.8, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, retSvg);
+    }
+    if (!any) {
+      el('text', { x: (Lp + W - Rp) / 2, y: (Tp + H - Bp) / 2, 'text-anchor': 'middle', 'font-size': 12, fill: '#9ca3af' }, retSvg).textContent = 'press Train';
+    }
+  }
+
+  function updateStats() {
+    const name = LAB.active;
+    const steps = LAB.greedy[name];
+    const statEl = $('#trainStats');
+    if (!steps) {
+      statEl.innerHTML = `episode 0 / ${LAB.maxEp} · <b>${name}</b> untrained`;
+      return;
+    }
+    const m = evalMetrics(LAB.L[name]);
+    const ret = evalSet(LAB.L[name]);
+    statEl.innerHTML = `episode <b>${LAB.ep}</b> / ${LAB.maxEp} · <b>${name}</b> greedy return <b>${fmt(ret)}</b><br>coverage <b>${(m.cov * 100).toFixed(0)}%</b> · specialisation <b>${(m.spec * 100).toFixed(0)}%</b>`;
+    $('#mCov').textContent = (m.cov * 100).toFixed(0) + '%';
+  }
+
+  function updateMetrics() {
+    for (const n of LAB.names) {
+      const a = LAB.smooth[n];
+      const id = n === 'IQL' ? '#mIQL' : n === 'MAPPO' ? '#mMAPPO' : '#mQMIX';
+      $(id).textContent = a.length ? fmt(a[a.length - 1]) : '—';
+    }
+    updateStats();
+  }
+
+  function updateEq() {
+    const e = $('#trainEq');
+    if (!LAB.ep) {
+      T(e, '\\text{press Train to run the three updates on the same world}');
+      return;
+    }
+    const g = n => { const a = LAB.smooth[n]; return a.length ? fmt(a[a.length - 1]) : '0.00'; };
+    T(e, '\\bar G_{\\text{IQL}}=' + g('IQL') + ',\\qquad \\bar G_{\\text{MAPPO}}=' + g('MAPPO') + ',\\qquad \\bar G_{\\text{QMIX}}=' + g('QMIX') + '\\qquad (\\text{episode }' + LAB.ep + ')', true);
+  }
+
+  function redraw() {
+    drawEnv(); drawReturns(); updateMetrics(); updateEq();
+  }
+
+  function pushHist(name, ret) {
+    const h = LAB.hist[name];
+    h.push(ret);
+    const k = Math.min(h.length, 30);
+    let s = 0;
+    for (let i = h.length - k; i < h.length; i++) s += h[i];
+    LAB.smooth[name].push(s / k);
+  }
+
+  function trainTick() {
+    const n = +speed.value;
+    for (let e = 0; e < n && LAB.ep < LAB.maxEp; e++) {
+      L.IQL.update(rollout(L.IQL, trainRng, true, 0.1));
+      L.QMIX.update(rollout(L.QMIX, trainRng, true, 0.1));
+      L.MAPPO.update(rollout(L.MAPPO, trainRng, true, 0));
+      pushHist('IQL', evalSet(L.IQL));
+      pushHist('MAPPO', evalSet(L.MAPPO));
+      pushHist('QMIX', evalSet(L.QMIX));
+      const seed = LAB.ep + 99;
+      LAB.greedy.IQL = rollout(L.IQL, mulberry32(seed), false, 0);
+      LAB.greedy.MAPPO = rollout(L.MAPPO, mulberry32(seed), false, 0);
+      LAB.greedy.QMIX = rollout(L.QMIX, mulberry32(seed), false, 0);
+      LAB.ep++;
+    }
+    redraw();
+    if (LAB.ep > 400) {
+      const drift = n => {
+        const a = LAB.smooth[n];
+        const i = Math.max(0, a.length - 80);
+        return Math.abs(a[a.length - 1] - a[i]);
+      };
+      if (LAB.names.every(n => drift(n) < 0.12)) stable++; else stable = 0;
+    }
+    if (LAB.ep >= LAB.maxEp || stable >= 4) {
+      stopTraining();
+      runBtn.textContent = 'Trained ✓';
+      LAB.notify();
+      if (LAB.onTrained) LAB.onTrained();
+    }
+  }
+
+  function stopTraining() {
+    if (LAB.timer) { clearInterval(LAB.timer); LAB.timer = null; }
+    LAB.running = false;
+    if (runBtn.textContent !== 'Trained ✓') runBtn.textContent = 'Train ▶';
+  }
+
+  function startTraining() {
+    if (LAB.running) { stopTraining(); return; }
+    if (LAB.ep >= LAB.maxEp) {
+      reset();
+    }
+    LAB.running = true;
+    runBtn.textContent = 'Pause';
+    LAB.timer = setInterval(trainTick, 110);
+  }
+
+  function stopPlay() {
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    LAB.play = null;
+  }
+
+  function playGreedy() {
+    stopTraining();
+    stopPlay();
+    const name = LAB.active;
+    const steps = rollout(LAB.L[name], mulberry32(4321), false, 0);
+    LAB.play = { name, steps, t: 0 };
+    drawEnv();
+    playTimer = setInterval(() => {
+      LAB.play.t++;
+      drawEnv();
+      if (LAB.play.t >= steps.length) {
+        clearInterval(playTimer); playTimer = null;
+        LAB.play = null;
+        LAB.greedy[name] = steps;
+        drawEnv(); updateStats();
+      }
+    }, 220);
+  }
+
+  function reset() {
+    stopTraining();
+    stopPlay();
+    const NN = { IQL: makeIQL(), MAPPO: makeMAPPO(), QMIX: makeQMIX() };
+    L.IQL = NN.IQL; L.MAPPO = NN.MAPPO; L.QMIX = NN.QMIX;
+    LAB.L = L;
+    LAB.ep = 0; stable = 0;
+    LAB.hist = { IQL: [], MAPPO: [], QMIX: [] };
+    LAB.smooth = { IQL: [], MAPPO: [], QMIX: [] };
+    trainRng = mulberry32(12345);
+    runBtn.textContent = 'Train ▶';
+    freshGreedy();
+    redraw();
+  }
+
+  $('#trainTabs').addEventListener('click', e => {
+    const b = e.target.closest('.tab');
+    if (b) setActive(b.dataset.l);
+  });
+  runBtn.addEventListener('click', startTraining);
+  $('#trainPlay').addEventListener('click', playGreedy);
+  $('#trainReset').addEventListener('click', reset);
+  speed.addEventListener('input', () => { speedVal.textContent = speed.value; });
+
+  LAB.subs.push(redraw);
+  freshGreedy();
+  redraw();
+}
+
+/* =====================================================================
+   04a — joint-policy view
+   ===================================================================== */
+function initJoint() {
+  const svg = $('#jointSvg');
+  const map = $('#jointMap');
+  const sA = $('#jointA'), sB = $('#jointB');
+  const vA = $('#jointAVal'), vB = $('#jointBVal');
+  let ca = 0, cb = 24;
+
+  function jointVal(L, a, b) {
+    const oA = a * NC + b, oB = b * NC + a, j = a * NC + b;
+    if (L.kind === 'pg') return L.V[j];
+    const qa = maxQ(L.Q[0], oA), qb = maxQ(L.Q[1], oB);
+    if (L.name === 'QMIX') return L.mixes([a, b], qa, qb).qtot;
+    return qa + qb;
+  }
+
+  function drawGrid(L) {
+    svg.innerHTML = '';
+    const CELL = 52, PAD = 6, W = G * CELL + 2 * PAD;
+    svg.setAttribute('viewBox', `0 0 ${W} ${W}`);
+    const defs = el('defs', {}, svg);
+    const mD = arrowMarker(defs, 'jo-d', '#111');
+    const mB = arrowMarker(defs, 'jo-b', '#2563eb');
+    for (let i = 0; i < NC; i++) {
+      const r = Math.floor(i / G), c = i % G;
+      const x = PAD + c * CELL, y = PAD + r * CELL;
+      const isLM = LM.includes(i);
+      const covered = isLM && (cheb(ca, i) <= 1 || cheb(cb, i) <= 1);
+      el('rect', { x: x + 1.5, y: y + 1.5, width: CELL - 3, height: CELL - 3, rx: 8, fill: isLM ? '#eef2ff' : (i === ca || i === cb ? '#f4f4f5' : '#fafafa'), stroke: isLM ? (covered ? '#2563eb' : '#1e3a8a') : '#ececec', 'stroke-width': isLM ? (covered ? 2 : 1.4) : 1 }, svg);
+      if (isLM) el('rect', { x: x + CELL / 2 - 6, y: y + CELL / 2 - 6, width: 12, height: 12, rx: 3, fill: '#1e3a8a' }, svg);
+    }
+    const arrow = (cell, a, color, marker) => {
+      if (a === 4) return;
+      const x = PAD + (cell % G) * CELL + CELL / 2, y = PAD + Math.floor(cell / G) * CELL + CELL / 2;
+      const dx = a === 1 ? 1 : a === 3 ? -1 : 0;
+      const dy = a === 0 ? -1 : a === 2 ? 1 : 0;
+      el('line', { x1: x - dx * 4, y1: y - dy * 4, x2: x + dx * 20, y2: y + dy * 20, stroke: color, 'stroke-width': 2.2, 'marker-end': marker }, svg);
+    };
+    const oA = ca * NC + cb, oB = cb * NC + ca;
+    const aA = L.greedy(oA, 0), aB = L.greedy(oB, 1);
+    arrow(ca, aA, '#111', mD);
+    arrow(cb, aB, '#2563eb', mB);
+    const put = (cell, fill, label) => {
+      const x = PAD + (cell % G) * CELL + CELL / 2, y = PAD + Math.floor(cell / G) * CELL + CELL / 2;
+      el('circle', { cx: x, cy: y, r: 11, fill }, svg);
+      el('text', { x, y: y + 4, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 700, fill: '#fff' }, svg).textContent = label;
+    };
+    if (ca === cb) {
+      el('circle', { cx: PAD + (ca % G) * CELL + CELL / 2, cy: PAD + Math.floor(ca / G) * CELL + CELL / 2, r: 15, fill: '#2563eb', opacity: .9 }, svg);
+      el('text', { x: PAD + (ca % G) * CELL + CELL / 2, y: PAD + Math.floor(ca / G) * CELL + CELL / 2 + 4, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 700, fill: '#fff' }, svg).textContent = 'AB';
+    } else {
+      put(ca, '#111', 'A');
+      put(cb, '#2563eb', 'B');
+    }
+    return { aA, aB };
+  }
+
+  function drawMap(L) {
+    map.innerHTML = '';
+    const SIDE = 300, PAD = 20, W = SIDE + PAD + 10;
+    map.setAttribute('viewBox', `0 0 ${W} ${W}`);
+    const C = SIDE / NC;
+    const vals = [];
+    let maxAbs = 0;
+    for (let i = 0; i < NC; i++) {
+      vals.push([]);
+      for (let j = 0; j < NC; j++) {
+        const v = jointVal(L, i, j);
+        vals[i].push(v);
+        maxAbs = Math.max(maxAbs, Math.abs(v));
+      }
+    }
+    if (maxAbs < 1e-9) maxAbs = 1;
+    for (let i = 0; i < NC; i++) {
+      for (let j = 0; j < NC; j++) {
+        const v = vals[i][j];
+        const a = Math.min(0.92, Math.abs(v) / maxAbs * 0.92);
+        const fill = Math.abs(v) < 1e-9 ? '#fafafa' : v > 0
+          ? `rgba(37,99,235,${a.toFixed(3)})`
+          : `rgba(220,38,38,${a.toFixed(3)})`;
+        el('rect', { x: PAD + j * C, y: PAD + i * C, width: C + 0.4, height: C + 0.4, fill }, map);
+      }
+    }
+    el('rect', { x: PAD + cb * C - 1, y: PAD + ca * C - 1, width: C + 2, height: C + 2, fill: 'none', stroke: '#1e3a8a', 'stroke-width': 2 }, map);
+    el('text', { x: PAD + SIDE / 2, y: W - 3, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, map).textContent = 'agent B cell';
+    el('text', { x: 10, y: PAD + SIDE / 2, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace', transform: `rotate(-90 10 ${PAD + SIDE / 2})` }, map).textContent = 'agent A cell';
+  }
+
+  function render() {
+    if (!LAB.L) return;
+    const L = LAB.L[LAB.active];
+    const acts = drawGrid(L);
+    drawMap(L);
+    const rA = Math.floor(ca / G), cA = ca % G, rB = Math.floor(cb / G), cB = cb % G;
+    const ARW = ['↑', '→', '↓', '←', '·'];
+    const tr = teamReward([ca, cb]);
+    $('#jointInfo').innerHTML = `A (${rA},${cA}) → <b>${ARW[acts.aA]}</b> · B (${rB},${cB}) → <b>${ARW[acts.aB]}</b><br>state reward <b>${fmt(tr.r)}</b> · covered <b>${tr.covered}/2</b>`;
+    const v = jointVal(L, ca, cb);
+    if (L.kind === 'pg') {
+      T($('#jointEq'), 'V(s)=V(' + ca + ',' + cb + ')=' + fmt(v) + '\\qquad\\text{shared critic, joint state }s=(c_A,c_B)', true);
+    } else if (L.name === 'QMIX') {
+      T($('#jointEq'), 'Q_{\\text{tot}}(s,\\pi(s))=' + fmt(v) + '\\qquad\\text{monotone mix of decentralized greedy }Q_i', true);
+    } else {
+      T($('#jointEq'), 'Q_1(o_A,\\pi_A)+Q_2(o_B,\\pi_B)=' + fmt(v) + '\\qquad\\text{independent values, no mixer}', true);
+    }
+  }
+
+  $('#jointTabs').addEventListener('click', e => {
+    const b = e.target.closest('.tab');
+    if (b) setActive(b.dataset.l);
+  });
+  $('#jointRefresh').addEventListener('click', () => { if (LAB.L) render(); });
+  sA.addEventListener('input', () => {
+    ca = +sA.value;
+    const r = Math.floor(ca / G), c = ca % G;
+    vA.textContent = `(${r},${c})`;
+    if (LAB.L) render();
+  });
+  sB.addEventListener('input', () => {
+    cb = +sB.value;
+    const r = Math.floor(cb / G), c = cb % G;
+    vB.textContent = `(${r},${c})`;
+    if (LAB.L) render();
+  });
+  LAB.subs.push(render);
+  if (LAB.L) render();
+}
+
+/* =====================================================================
+   04b — monotonicity explorer
+   ===================================================================== */
+function initMono() {
+  const ids = ['monoW', 'q1a', 'q1b', 'q2a', 'q2b'];
+  const valIds = { monoW: 'monoWVal2', q1a: 'q1aVal', q1b: 'q1bVal', q2a: 'q2aVal', q2b: 'q2bVal' };
+
+  function values() {
+    return {
+      w: +$('#monoW').value,
+      q1: [+$('#q1a').value, +$('#q1b').value],
+      q2: [+$('#q2a').value, +$('#q2b').value]
+    };
+  }
+  function render() {
+    const { w, q1, q2 } = values();
+    for (const id of ids) {
+      const elv = $('#' + valIds[id]);
+      if (elv) elv.textContent = id === 'monoW' ? fmtS(w) : fmt(+$('#' + id).value);
+    }
+    $('#monoWVal').textContent = 'w = ' + fmtS(w);
+    const Q = [[0, 0], [0, 0]];
+    let best = -Infinity, bi = 0, bj = 0;
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+      Q[i][j] = w * (q1[i] + q2[j]);
+      if (Q[i][j] > best) { best = Q[i][j]; bi = i; bj = j; }
+    }
+    const iStar = q1[0] >= q1[1] ? 0 : 1;
+    const jStar = q2[0] >= q2[1] ? 0 : 1;
+    const labels = ['a', 'b'];
+    let html = '<table class="matrix"><tr><th></th><th>B: a</th><th>B: b</th></tr>';
+    for (let i = 0; i < 2; i++) {
+      html += `<tr><th>A: ${labels[i]}</th>`;
+      for (let j = 0; j < 2; j++) {
+        const cls = (i === bi && j === bj) ? 'hl' : 'nz';
+        const ring = (w < 0 && i === iStar && j === jStar && !(i === bi && j === bj)) ? 'box-shadow:inset 0 0 0 2px #dc2626;' : '';
+        html += `<td class="${cls}" style="${ring}">${fmt(Q[i][j])}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</table>';
+    $('#monoTable').innerHTML = html;
+    const match = bi === iStar && bj === jStar;
+    $('#monoInfo').innerHTML = `joint argmax <b>(${labels[bi]}, ${labels[bj]})</b> · per-agent greedy <b>(${labels[iStar]}, ${labels[jStar]})</b><br>` +
+      (w > 0
+        ? '<span style="color:#2563eb">monotone — the argmax factorises</span>'
+        : Math.abs(w) < 1e-9
+          ? '<span class="muted">w = 0 — the mixer ignores both values</span>'
+          : `<span style="color:#dc2626">w &lt; 0 — ordering flips${match ? '' : ', argmaxs disagree'}</span>`);
+    T($('#monoEq'), 'Q_{\\text{tot}}(a_1,a_2)=' + fmtS(w) + '\\big(Q_1(a_1)+Q_2(a_2)\\big)\\qquad \\frac{\\partial Q_{\\text{tot}}}{\\partial Q_i}=' + fmtS(w), true);
+  }
+  ids.forEach(id => $('#' + id).addEventListener('input', render));
+  render();
+}
+
+/* =====================================================================
+   05 — agent-dropout robustness
+   ===================================================================== */
+function initDropout() {
+  const svg = $('#dropSvg');
+  const EVAL_EPS = 120, CHUNK = 20;
+  let mode = 'none';
+  let timer = null;
+  let acc = null;
+  let done = 0;
+
+  function modeLabel() {
+    return mode === 'A' ? 'agent A offline' : mode === 'B' ? 'agent B offline' : 'both active';
+  }
+  function makeStarts() {
+    const rng = mulberry32(4242);
+    const out = [];
+    for (let e = 0; e < EVAL_EPS; e++) out.push(spawn(rng));
+    return out;
+  }
+  function epFromStart(L, start, drop) {
+    let cells = [start[0], start[1]];
+    let ret = 0;
+    for (let t = 0; t < TMAX; t++) {
+      const o0 = cells[0] * NC + cells[1];
+      const o1 = cells[1] * NC + cells[0];
+      const a0 = drop === 0 ? 4 : L.greedy(o0, 0);
+      const a1 = drop === 1 ? 4 : L.greedy(o1, 1);
+      cells = [moveCell(cells[0], a0), moveCell(cells[1], a1)];
+      ret += teamReward(cells).r;
+    }
+    return ret;
+  }
+
+  function emptyChart(msg) {
+    svg.innerHTML = '';
+    el('line', { x1: 40, y1: 166, x2: 410, y2: 166, stroke: '#e5e5e5' }, svg);
+    el('text', { x: 210, y: 100, 'text-anchor': 'middle', 'font-size': 12, fill: '#9ca3af' }, svg).textContent = msg;
+  }
+
+  function drawBars(n) {
+    svg.innerHTML = '';
+    const W = 420, H = 200, base = 168, top = 18;
+    const avg = (name, key) => (n ? acc[name][key] / n : 0);
+    let maxV = 1;
+    for (const name of LAB.names) {
+      maxV = Math.max(maxV, avg(name, 'full'), avg(name, 'dropped'));
+    }
+    maxV *= 1.15;
+    el('line', { x1: 34, y1: base, x2: 410, y2: base, stroke: '#e5e5e5' }, svg);
+    el('text', { x: 30, y: top + 4, 'text-anchor': 'end', 'font-size': 9, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, svg).textContent = fmt(maxV, 0);
+    el('text', { x: 30, y: base + 3, 'text-anchor': 'end', 'font-size': 9, fill: '#9ca3af', 'font-family': 'ui-monospace,monospace' }, svg).textContent = '0';
+    LAB.names.forEach((name, k) => {
+      const gx = 62 + k * 120;
+      const full = avg(name, 'full'), dropped = avg(name, 'dropped');
+      const hF = Math.max(0, full / maxV * (base - top));
+      const hD = Math.max(0, dropped / maxV * (base - top));
+      el('rect', { x: gx, y: base - hF, width: 34, height: hF, rx: 3, fill: '#111' }, svg);
+      el('rect', { x: gx + 42, y: base - hD, width: 34, height: hD, rx: 3, fill: '#dc2626' }, svg);
+      el('text', { x: gx + 17, y: base - hF - 5, 'text-anchor': 'middle', 'font-size': 9.5, fill: '#111', 'font-family': 'ui-monospace,monospace', 'font-weight': 600 }, svg).textContent = fmt(full, 1);
+      el('text', { x: gx + 59, y: base - hD - 5, 'text-anchor': 'middle', 'font-size': 9.5, fill: '#dc2626', 'font-family': 'ui-monospace,monospace', 'font-weight': 600 }, svg).textContent = fmt(dropped, 1);
+      el('text', { x: gx + 38, y: base + 16, 'text-anchor': 'middle', 'font-size': 11, fill: '#6b7280', 'font-family': 'ui-monospace,monospace' }, svg).textContent = name;
+    });
+    el('text', { x: 210, y: 196, 'text-anchor': 'middle', 'font-size': 10, fill: '#9ca3af' }, svg).textContent = modeLabel() + ' · ' + n + ' / ' + EVAL_EPS + ' episodes';
+  }
+
+  function updateReadout(n) {
+    const avg = (name, key) => (n ? acc[name][key] / n : 0);
+    const name = LAB.active;
+    const full = avg(name, 'full'), dropped = avg(name, 'dropped');
+    const d = dropped - full;
+    $('#dropFull').textContent = n ? fmt(full) : '—';
+    $('#dropLost').textContent = n ? fmt(dropped) : '—';
+    $('#dropDelta').textContent = n ? fmtS(d) : '—';
+    $('#dropDelta').style.color = n && d < -0.005 ? '#dc2626' : '#111';
+
+    let maxAbs = 0.001;
+    for (const nm of LAB.names) maxAbs = Math.max(maxAbs, Math.abs(avg(nm, 'dropped') - avg(nm, 'full')));
+    $('#dropRows').innerHTML = LAB.names.map(nm => {
+      const dd = avg(nm, 'dropped') - avg(nm, 'full');
+      const pct = Math.min(50, Math.abs(dd) / maxAbs * 50);
+      const trans = dd < 0 ? 'transform:translateX(-100%)' : '';
+      const col = dd < 0 ? '#dc2626' : '#2563eb';
+      return `<div class="vrow"><span class="vlabel">${nm}</span><div class="vtrack"><div class="vzero"></div><div class="vbar ${dd < 0 ? 'neg' : 'pos'}" style="width:${pct.toFixed(1)}%;${trans}"></div></div><span class="vval" style="color:${col}">${n ? fmtS(dd) : '—'}</span></div>`;
+    }).join('');
+
+    if (!n) {
+      T($('#dropEq'), '\\text{press Evaluate to replay the same starts with and without a partner}');
+    } else {
+      T($('#dropEq'), '\\Delta=R_{\\text{drop}}-R_{\\text{full}}=' + fmt(dropped) + '-' + fmt(full) + '=' + fmtS(d) + '\\qquad(\\text{' + name + ', ' + modeLabel() + '})', true);
+    }
+  }
+
+  function startEval() {
+    if (!LAB.L) return;
+    if (timer) { clearInterval(timer); timer = null; }
+    acc = {};
+    for (const name of LAB.names) acc[name] = { full: 0, dropped: 0 };
+    done = 0;
+    const starts = makeStarts();
+    const drop = mode === 'A' ? 0 : mode === 'B' ? 1 : null;
+    const step = () => {
+      const end = Math.min(done + CHUNK, starts.length);
+      for (let e = done; e < end; e++) {
+        for (const name of LAB.names) {
+          const L = LAB.L[name];
+          acc[name].full += epFromStart(L, starts[e], null);
+          acc[name].dropped += epFromStart(L, starts[e], drop);
+        }
+      }
+      done = end;
+      drawBars(done);
+      updateReadout(done);
+      if (done >= starts.length) {
+        clearInterval(timer); timer = null;
+      }
+    };
+    step();
+    timer = setInterval(step, 110);
+  }
+
+  $('#dropTabs').addEventListener('click', e => {
+    const b = e.target.closest('.tab');
+    if (!b) return;
+    mode = b.dataset.d;
+    $$('#dropTabs .tab').forEach(x => x.classList.toggle('active', x.dataset.d === mode));
+    startEval();
+  });
+  $('#dropEval').addEventListener('click', startEval);
+
+  LAB.onTrained = startEval;
+  emptyChart('train, then press Evaluate');
+  updateReadout(0);
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  initCode();
+  initTrain();
+  initJoint();
+  initMono();
+  initDropout();
+  initScroll();
+});
+
+</script>
+
+
+<!-- reader-script -->
+<script>
+(function () {
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
+</script>
+</body>
+</html>

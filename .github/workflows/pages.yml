@@ -30,6 +30,7 @@ jobs:
           cp index.html _site/
           cp .nojekyll _site/ 2>/dev/null || true
           cp -r outputs _site/
+          cp -r projects _site/ 2>/dev/null || true
           cp RL.html _site/ 2>/dev/null || true
 
       - name: Configure Pages

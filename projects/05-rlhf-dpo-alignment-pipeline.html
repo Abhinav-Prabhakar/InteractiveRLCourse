@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<!--
+  Project 5 — RLHF / DPO Alignment Pipeline
+  Assumptions (per prompt-projects.md):
+   · The three required algorithms are implemented at toy scale in the page: a
+     Bradley–Terry reward model over 36 responses on a 2-D latent space, PPO-RLHF
+     with a sampled score-function gradient and an exact KL leash, and DPO with its
+     analytic preference gradient. Every plotted number is computed live.
+   · Four interactives: (1) preference dataset with a correctness↔verbosity slider,
+     (2) reward model trained live, (3) PPO-RLHF vs DPO with a beta slider,
+     (4) the implicit reward and before/after rankings.
+   · The shared preference slider rebuilds the dataset and the fitted reward model,
+     so all four labs read the same synthetic annotator. Beta is separate.
+   · No quizzes, no external images. Chrome is normalized afterwards.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project 5 · RLHF / DPO Alignment Pipeline</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ---------------- base ---------------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:#fff;color:#111;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  font-size:17px;line-height:1.68;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4{letter-spacing:-.022em;line-height:1.2;font-weight:650;margin:0}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:19px;margin:34px 0 10px}
+h4{font-size:15px;margin:22px 0 6px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+p{margin:14px 0}
+a{color:#111}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;background:#f4f4f5;padding:1px 5px;border-radius:4px}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+.wide{max-width:1000px;margin:0 auto;padding:0 24px}
+section{border-top:1px solid #ececec;padding-top:44px;margin-top:64px}
+.num{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.1em;color:#9ca3af;vertical-align:middle;margin-right:12px;transform:translateY(-3px)}
+.muted{color:#6b7280}
+.small{font-size:14.5px}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);border-bottom:1px solid #f0f0f0}
+.topbar-in{max-width:1000px;margin:0 auto;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px}
+.brand{font-weight:650;letter-spacing:-.01em}
+.nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav a{color:#6b7280;text-decoration:none;transition:color .15s}
+.nav a:hover{color:#111}
+#progress{position:absolute;left:0;bottom:-1px;height:2px;background:#111;width:0;transition:width .1s linear}
+
+/* ---------------- hero ---------------- */
+.hero{padding:80px 0 10px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#9ca3af;font-weight:600;margin:0 0 18px}
+.hero h1{font-size:clamp(34px,5.2vw,52px);font-weight:680;letter-spacing:-.035em;line-height:1.08}
+.lede{font-size:19px;color:#4b5563;max-width:640px;margin-top:22px;line-height:1.6}
+
+/* ---------------- panels ---------------- */
+.panel{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff}
+.panel+.panel{margin-top:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.panel-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1 1 300px;min-width:0}
+
+/* ---------------- controls ---------------- */
+button{font:inherit;font-size:13px;font-weight:550;padding:7px 14px;border-radius:9px;border:1px solid #dcdcdc;background:#fff;color:#111;cursor:pointer;transition:all .15s;line-height:1.4}
+button:hover{border-color:#111}
+button:active{transform:translateY(1px)}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.primary:hover{background:#000}
+button.active{background:#111;color:#fff;border-color:#111}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:disabled:hover{border-color:#dcdcdc}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;background:#e5e5e5;border-radius:3px;outline:none;margin:14px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#111;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #111}
+.slider-row{display:flex;align-items:center;gap:14px}
+.slider-row .val{font-family:ui-monospace,monospace;font-size:13px;min-width:44px;text-align:right;font-weight:600}
+
+/* ---------------- math ---------------- */
+.katex{font-size:1.03em}
+.katex-display{margin:1.25em 0!important}
+.eqbox{background:#fafafa;border:1px solid #f0f0f0;border-radius:12px;padding:6px 16px;overflow-x:auto;margin:18px 0}
+.eqbox .katex-display{margin:.85em 0!important}
+
+/* ---------------- shared plot bits ---------------- */
+svg{display:block;max-width:100%;height:auto}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.readout{font-family:ui-monospace,monospace;font-size:12.5px;color:#6b7280;margin:10px 0 0;line-height:1.6}
+.readout b{color:#111;font-weight:650}
+.plot-cap{font-size:12.5px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;margin:0 0 8px}
+.legend{display:flex;align-items:center;gap:9px;font-size:11.5px;color:#6b7280;margin-top:12px;justify-content:center;font-family:ui-monospace,monospace;flex-wrap:wrap}
+.legend .grad{width:110px;height:8px;border-radius:4px;background:linear-gradient(90deg,#dc2626,rgba(220,38,38,.05),#fff,rgba(37,99,235,.05),#2563eb)}
+
+/* ---------------- trajectory ---------------- */
+.traj{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:13px;min-height:34px;margin-top:6px}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f4f5;font-weight:650}
+.chip.now{background:#111;color:#fff}
+.arw{color:#c4c4c8}
+
+/* ---------------- table ---------------- */
+table.cmp{width:100%;border-collapse:collapse;font-size:14.5px;margin:20px 0}
+table.cmp th,table.cmp td{text-align:left;padding:11px 12px;border-bottom:1px solid #eee;vertical-align:top}
+table.cmp th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:650}
+table.cmp td:first-child{font-weight:600;color:#374151;width:34%}
+
+.note{border-left:2px solid #111;padding:2px 0 2px 18px;margin:22px 0;color:#374151}
+.note b{color:#111}
+hr.soft{border:0;border-top:1px solid #f0f0f0;margin:30px 0}
+footer{border-top:1px solid #ececec;margin-top:70px;padding:34px 0 70px;color:#9ca3af;font-size:13.5px}
+
+@media(max-width:640px){
+  body{font-size:16px}
+  h2{font-size:25px}
+  .hero{padding:52px 0 0}
+  .nav{display:none}
+  .panel{padding:16px;border-radius:13px}
+  .lab{padding:16px;border-radius:13px}
+  table.cmp{font-size:13.5px}
+  table.cmp th,table.cmp td{padding:9px 6px}
+}
+/* ---------------- inter-chapter navigation ---------------- */
+.brand{text-decoration:none}
+.pager{max-width:720px;margin:64px auto 0;padding:0 24px;display:flex;gap:14px;align-items:stretch}
+.pager a{flex:1 1 0;min-width:0;text-decoration:none;color:inherit;border:1px solid #ececec;border-radius:12px;padding:12px 16px;transition:border-color .12s,background .12s}
+.pager a:hover{border-color:#dcdcdc;background:#fafafa}
+.pager a.pg-home{flex:0 0 auto;text-align:center;display:flex;flex-direction:column;justify-content:center}
+.pager a.pg-next{text-align:right}
+.pager .pg-k{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.pager .pg-t{display:block;font-weight:600;font-size:14.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager a[aria-disabled="true"]{opacity:.35;pointer-events:none}
+@media(max-width:640px){.pager{flex-wrap:wrap}.pager .pg-t{white-space:normal}.pager a.pg-home{order:3;width:100%}}
+
+/* ---------------- code ---------------- */
+.cb{border:1px solid #e8e8e8;border-radius:12px;overflow:hidden;margin:18px 0;background:#fafafa}
+.cb-head{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #f0f0f0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;letter-spacing:.06em;color:#9ca3af}
+.cb-file{font-weight:650;color:#6b7280}
+.cb-lang{color:#9ca3af}
+.cb-copy{margin-left:auto;font:inherit;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:7px;border:1px solid #dcdcdc;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.cb-copy:hover{border-color:#111;color:#111}
+.cb pre{margin:0;padding:14px 16px;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.8px;line-height:1.65;color:#111;background:#fafafa}
+.cb code{background:none;padding:0;font-size:inherit;color:inherit}
+.t-c{color:#9ca3af;font-style:italic}
+.t-k{color:#1e3a8a;font-weight:600}
+.t-b{color:#6b7280}
+.t-n{color:#dc2626}
+.t-s{color:#2563eb}
+.t-f{color:#1e3a8a}
+.t-d{color:#6b7280;font-weight:600}
+.t-o{color:#374151}
+
+/* ---------------- lab scaffolding ---------------- */
+.lab{border:1px solid #e8e8e8;border-radius:16px;padding:20px;background:#fff;margin:22px 0}
+.lab-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.lab-title{font-size:12.5px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:#6b7280}
+.steps{list-style:none;counter-reset:s;margin:18px 0;padding:0}
+.steps li{counter-increment:s;position:relative;padding:2px 0 16px 42px;border-left:1px solid #f0f0f0;margin-left:13px}
+.steps li:last-child{border-left-color:transparent;padding-bottom:0}
+.steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:-13px;top:0;width:26px;height:26px;border-radius:8px;background:#eef2ff;color:#1e3a8a;font:600 12px/26px ui-monospace,monospace;text-align:center}
+.steps b{color:#111}
+.deliverable{border-left:2px solid #1e3a8a;background:#eef2ff;padding:12px 16px;border-radius:0 10px 10px 0;margin:22px 0;color:#1e3a8a;font-size:15px}
+.deliverable b{color:#1e3a8a}
+.metrics{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}
+.metric{flex:1 1 150px;border:1px solid #e8e8e8;border-radius:12px;padding:12px 14px;background:#fafafa}
+.metric-k{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
+.metric-v{font-family:ui-monospace,monospace;font-size:22px;font-weight:650;color:#111;margin-top:4px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.tab{font-size:13px;padding:5px 11px;border-radius:8px;border:1px solid #e5e5e5;background:#fff;color:#6b7280;cursor:pointer;transition:all .15s}
+.tab:hover{border-color:#111;color:#111}
+.tab.active{background:#111;color:#fff;border-color:#111}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="../index.html">P05 · RLHF / DPO</a>
+    <nav class="nav">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#prefs">Preferences</a>
+      <a href="#rewardmodel">Reward model</a>
+      <a href="#compare">PPO vs DPO</a>
+      <a href="#implicit">Implicit reward</a>
+      <a href="#measure">Measure</a>
+    </nav>
+  </div>
+  <div id="progress"></div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Reinforcement Learning · Projects · Project 5</p>
+    <h1>RLHF / DPO Alignment Pipeline</h1>
+    <p class="lede">Build a miniature alignment stack — pairwise preferences, a Bradley–Terry reward model, PPO with a KL leash, and DPO — and watch the same judgments move two policies.</p>
+  </div>
+</header>
+
+<!-- ==================================================================== -->
+<section id="pipeline">
+  <div class="wrap">
+    <h2><span class="num">01</span>The pipeline, end to end</h2>
+    <p>A pretrained language model predicts the next token. Nothing in that objective says which of two answers a person would rather read. Alignment inserts a preference signal between the model and the update rule.</p>
+    <div class="traj" aria-label="Alignment pipeline">
+      <span class="chip">π_ref</span><span class="arw">→</span>
+      <span class="chip">pairs</span><span class="arw">→</span>
+      <span class="chip">r_φ</span><span class="arw">→</span>
+      <span class="chip">PPO / DPO</span><span class="arw">→</span>
+      <span class="chip now">π_θ</span>
+    </div>
+    <p><b>Preferences</b> are cheap: a person sees two completions and picks one. The <b>Bradley–Terry</b> model turns those choices into a scalar reward, and the reward turns into a policy. The policy is leashed to the reference by a <b>KL penalty</b>, because the reward model is only trustworthy near the data it saw.</p>
+    <div class="eqbox">
+      $$\max_{\pi_\theta}\ \mathbb{E}_{x\sim\mathcal{D}}\Big[\mathbb{E}_{y\sim\pi_\theta(\cdot\mid x)}\big[r_\phi(x,y)\big]\;-\;\beta\,D_{\mathrm{KL}}\!\big(\pi_\theta(\cdot\mid x)\,\big\|\,\pi_{\mathrm{ref}}(\cdot\mid x)\big)\Big]$$
+    </div>
+    <div class="deliverable">
+      <b>Deliverable.</b> A blog-style write-up with before/after samples, a reward-margin-versus-KL comparison, and a slider that changes what the annotators prefer.
+    </div>
+    <ol class="steps">
+      <li><b>Generate preferences.</b> Put 36 candidate responses on a two-dimensional landscape and sample pairwise judgments from a hidden reward.</li>
+      <li><b>Fit the reward model.</b> Train $r_\phi$ on the pairs with the Bradley–Terry logistic loss and draw the learned landscape.</li>
+      <li><b>Run PPO-RLHF.</b> Sample completions, score them with $r_\phi$, and ascend the KL-regularized objective.</li>
+      <li><b>Run DPO.</b> Delete the reward model and optimize the same pairs through the policy's own log-ratios.</li>
+      <li><b>Compare.</b> Track reward margin, KL to the reference, held-out accuracy, and the ranked samples each policy produces.</li>
+    </ol>
+    <p class="small muted">Everything below runs in the page at toy scale: 36 responses, a twelve-parameter reward model, and policies that are softmax distributions over those responses. The losses are the ones in Chapter 22.</p>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="prefs">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">02</span>Preferences are the dataset</h2>
+      <p>Fix one prompt. Each candidate response $y_i$ sits at a latent point $(u_i,v_i)$: $u$ is helpfulness, $v$ is verbosity. An annotator sees a pair and picks the answer they prefer. Bradley–Terry says the pick is a coin weighted by the reward gap:</p>
+      <div class="eqbox">
+        $$P\big(y_w\succ y_l\mid x\big)=\sigma\big(r(x,y_w)-r(x,y_l)\big),\qquad \sigma(z)=\frac{1}{1+e^{-z}}$$
+      </div>
+      <p>The slider below changes the hidden reward the annotators use. Slide it left and they reward correctness; slide it right and they reward length. The pair labels are regenerated, so the dataset itself changes.</p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab 1 · the synthetic preference set</span>
+        <div class="slider-row" style="width:280px">
+          <span class="small muted">λ · correctness ↔ verbosity</span>
+          <input type="range" id="prefLambda" min="0" max="1" step="0.02" value="0.3" aria-label="preference emphasis from correctness to verbosity">
+          <span class="val" id="prefLambdaVal">0.30</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <svg id="prefSvg" role="img" aria-label="Hidden preference landscape with candidate responses and the sampled pair"></svg>
+          <div class="legend"><span>low reward</span><span class="grad"></span><span>high reward</span></div>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <p class="plot-cap">Sampled pairs · y_w ≻ y_l</p>
+          <div id="prefPairs"></div>
+          <div class="btnrow" style="margin-top:12px"><button id="prefResample">Resample pairs</button></div>
+          <div class="eqbox" id="prefEq" style="min-height:96px"></div>
+        </div>
+      </div>
+      <p class="small muted" style="margin:12px 0 0">Each row is one judgment. The number on the right is the true reward margin $r_w-r_l$. The rings on the map mark the first pair; move the slider and watch which region the winners come from.</p>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p><b>Read the equation again.</b> Only the difference $r_w-r_l$ appears. Add a constant to every reward and no probability changes: the reward is identified only up to a shift. The reward model will inherit that freedom, and DPO will cancel it exactly.</p>
+    </div>
+  </div>
+</section>
+<!-- ==================================================================== -->
+<section id="rewardmodel">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">03</span>Fit a reward model</h2>
+      <p>Give the reward model a small feature map — a bias, two linear terms, and nine radial bumps — and fit its weights by maximum likelihood on the pairs:</p>
+      <div class="eqbox">
+        $$\mathcal{L}_{\mathrm{RM}}(\phi)=-\mathbb{E}_{(x,y_w,y_l)\sim\mathcal{D}}\Big[\log\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big)\Big]$$
+      </div>
+      <p>The gradient is the Bradley–Terry residual times the feature difference. When the model already ranks a pair correctly with confidence, $\sigma(-m)$ is near zero and the pair teaches almost nothing.</p>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">reward_model.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">import numpy as np
+
+# 36 candidate responses on a 2-D latent space: (helpfulness, verbosity)
+U, V = np.meshgrid(np.linspace(-.85, .85, 6), np.linspace(-.85, .85, 6))
+O = np.stack([U.ravel(), V.ravel()], axis=1)
+
+CENTERS = [(cu, cv) for cu in (-.6, 0, .6) for cv in (-.6, 0, .6)]
+
+def phi(u, v):
+    """12 features: bias, two linear terms, nine RBF bumps."""
+    rbf = [np.exp(-((u - cu)**2 + (v - cv)**2) / (2 * .5**2))
+           for cu, cv in CENTERS]
+    return np.array([1., u, v] + rbf)
+
+FE = np.stack([phi(u, v) for u, v in O])            # (36, 12)
+pairs = sample_preferences(lam=.3, n=260)           # (n, 2), columns w, l
+
+def bradley_terry_loss(w, pairs):
+    r = FE @ w
+    margin = r[pairs[:, 0]] - r[pairs[:, 1]]        # winner - loser
+    return -np.mean(np.log(1 / (1 + np.exp(-margin))))
+
+def rm_grad(w, pairs):
+    r = FE @ w
+    margin = r[pairs[:, 0]] - r[pairs[:, 1]]
+    s = 1 / (1 + np.exp(-margin))                   # P(winner beats loser)
+    coef = -(1 - s)                                 # d loss / d margin
+    g = np.zeros_like(w)
+    np.add.at(g, pairs[:, 0], coef[:, None] * FE[pairs[:, 0]])
+    np.add.at(g, pairs[:, 1], -coef[:, None] * FE[pairs[:, 1]])
+    return g / len(pairs)
+
+w = np.zeros(12)
+for step in range(450):
+    g = rm_grad(w, pairs) + 3e-4 * w                # tiny ridge pins the constant
+    w -= .5 * g
+    if np.linalg.norm(g) &lt; 1e-3:
+        break</code></pre>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab 2 · reward model, trained live</span>
+        <div class="btnrow">
+          <button id="rmStep">Step</button>
+          <button id="rmReset">Reset</button>
+          <button id="rmRun" class="primary">Train ▶</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <p class="plot-cap">Learned reward r_φ over the latent space</p>
+          <svg id="rmSvg" role="img" aria-label="Learned reward landscape"></svg>
+          <div class="legend"><span>low r_φ</span><span class="grad"></span><span>high r_φ</span></div>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <div class="metrics">
+            <div class="metric"><div class="metric-k">BT loss</div><div class="metric-v" id="rmLoss">—</div></div>
+            <div class="metric"><div class="metric-k">train acc</div><div class="metric-v" id="rmAcc">—</div></div>
+            <div class="metric"><div class="metric-k">step</div><div class="metric-v" id="rmIters">0</div></div>
+          </div>
+          <div class="slider-row">
+            <span class="small muted">lr</span>
+            <input type="range" id="rmLr" min="0.1" max="1" step="0.05" value="0.5" aria-label="reward model learning rate">
+            <span class="val" id="rmLrVal">0.50</span>
+          </div>
+          <div class="eqbox" id="rmEq" style="min-height:118px"></div>
+          <p class="small muted" style="margin:0">The run stops at 450 steps or when the gradient norm falls below $10^{-3}$. The dots are the 36 responses; colour is the learned score.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <div class="note">
+        <b>The reward model is a proxy.</b> It is smooth wherever it has evidence and extrapolates everywhere else. Optimize it hard enough and the policy finds the extrapolation — fluent, confident, wrong answers that score beautifully. The KL leash exists to keep the policy inside the calibrated region.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="compare">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">04</span>PPO-RLHF and DPO, side by side</h2>
+      <p>PPO keeps the reward model and treats alignment as an RL problem. Each step samples completions, scores them with $r_\phi$, and ascends the KL-regularized objective. The KL term enters as a penalty on the policy's drift:</p>
+      <div class="eqbox">
+        $$\nabla_\theta J=\mathbb{E}_{y\sim\pi_\theta}\big[\nabla_\theta\log\pi_\theta(y)\,r_\phi(y)\big]-\beta\,\nabla_\theta D_{\mathrm{KL}}\!\big(\pi_\theta\,\|\,\pi_{\mathrm{ref}}\big)$$
+      </div>
+      <p>DPO never builds $r_\phi$. Substitute the implicit reward $\hat r_\theta=\beta\log(\pi_\theta/\pi_{\mathrm{ref}})$ into the Bradley–Terry likelihood and the reward model disappears:</p>
+      <div class="eqbox">
+        $$\mathcal{L}_{\mathrm{DPO}}(\theta)=-\mathbb{E}_{(x,y_w,y_l)}\Big[\log\sigma\Big(\beta\log\frac{\pi_\theta(y_w\mid x)}{\pi_{\mathrm{ref}}(y_w\mid x)}-\beta\log\frac{\pi_\theta(y_l\mid x)}{\pi_{\mathrm{ref}}(y_l\mid x)}\Big)\Big]$$
+      </div>
+      <p>Its gradient is one supervised step with a self-weighting term: raise the winner, lower the loser, scaled by how badly the implicit reward still ranks the pair.</p>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">ppo_rlhf.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">import numpy as np
+
+def ppo_step(z, rm_weights, beta, lr, rng, batch=128):
+    p = softmax(z)                                  # policy over 36 responses
+    y = rng.choice(len(z), size=batch, p=p)         # sample completions
+    r = FE[y] @ rm_weights                          # reward-model scores
+    adv = r - r.mean()                              # batch mean baseline
+
+    # score-function gradient of E_pi[r]
+    grad = np.zeros_like(z)
+    for k in range(len(z)):
+        grad[k] = np.mean(((y == k) - p[k]) * adv)
+
+    # exact gradient of the KL leash, then a trust-region clip
+    logp = np.log(p + 1e-12)
+    KL = np.sum(p * (logp - log_ref))
+    grad -= beta * p * (logp - log_ref - KL)
+    norm = np.linalg.norm(grad)
+    if norm &gt; 1.:
+        grad /= norm
+    z += lr * grad
+    return z, KL</code></pre>
+    </div>
+
+    <div class="cb">
+      <div class="cb-head"><span class="cb-file">dpo.py</span><span class="cb-lang">python</span><button class="cb-copy" type="button">Copy</button></div>
+      <pre class="code"><code data-lang="python">def dpo_step(z, pairs, beta, lr):
+    logp = log_softmax(z)                           # log pi_theta
+    lw = logp[pairs[:, 0]] - log_ref[pairs[:, 0]]
+    ll = logp[pairs[:, 1]] - log_ref[pairs[:, 1]]
+    margin = beta * (lw - ll)                       # implicit reward gap
+    s = 1 / (1 + np.exp(-margin))                   # P(preferred wins)
+
+    g = np.zeros_like(z)
+    np.add.at(g, pairs[:, 0], -beta * (1 - s))      # raise the winner
+    np.add.at(g, pairs[:, 1],  beta * (1 - s))      # lower the loser
+    z -= lr * g / len(pairs)
+    return -np.mean(np.log(s + 1e-12))</code></pre>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab 3 · train both on the same preferences</span>
+        <div class="btnrow">
+          <button id="cmpStep">Step</button>
+          <button id="cmpReset">Reset</button>
+          <button id="cmpRun" class="primary">Train both ▶</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 300px">
+          <div class="slider-row">
+            <span class="small muted">β · KL leash</span>
+            <input type="range" id="cmpBeta" min="0.2" max="1.5" step="0.05" value="0.5" aria-label="KL coefficient beta">
+            <span class="val" id="cmpBetaVal">0.50</span>
+          </div>
+          <div class="readout" id="cmpReadout" style="min-height:64px"></div>
+          <div class="eqbox" id="cmpEq" style="min-height:150px"></div>
+          <p class="small muted" style="margin:0">DPO is the black curve, PPO-RLHF the blue one. Both start at $\pi_{\mathrm{ref}}$, so both margins and both KLs begin at zero.</p>
+        </div>
+        <div class="col" style="flex:1 1 380px">
+          <p class="plot-cap">Reward margin · held-out pairs</p>
+          <svg id="cmpMargin" role="img" aria-label="Reward margin over training steps for DPO and PPO"></svg>
+          <p class="plot-cap" style="margin-top:16px">KL to the reference policy</p>
+          <svg id="cmpKl" role="img" aria-label="KL divergence over training steps for DPO and PPO"></svg>
+          <div class="legend">
+            <span style="display:inline-block;width:16px;height:2px;background:#111"></span><span>DPO</span>
+            <span style="display:inline-block;width:16px;height:2px;background:#2563eb;margin-left:8px"></span><span>PPO-RLHF</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap" style="padding:0">
+      <p>What to watch. Both margins climb, and the KL curves are the price. Lower $\beta$ gives PPO a longer leash: its KL rises faster and its policy chases the reward model further. DPO has no sampler to exploit the proxy, so its path is smoother. At matched KL the two margins should land near each other — they target the same Gibbs optimum.</p>
+    </div>
+  </div>
+</section>
+<!-- ==================================================================== -->
+<section id="implicit">
+  <div class="wide">
+    <div class="wrap" style="padding:0">
+      <h2><span class="num">05</span>Read the reward back out of the policy</h2>
+      <p>The KL-regularized objective has a closed-form optimum, $\pi^\star\propto\pi_{\mathrm{ref}}e^{r/\beta}$. Rearranged, any policy defines a reward:</p>
+      <div class="eqbox">
+        $$\hat r_\theta(x,y)=\beta\log\frac{\pi_\theta(y\mid x)}{\pi_{\mathrm{ref}}(y\mid x)}=r_\phi(x,y)-\underbrace{\beta\log Z(x)}_{\text{prompt-only constant}}$$
+      </div>
+      <p>Below, the landscape is that implicit reward. It has the shape of the reward model, shifted by a constant that no preference can see. Move $\beta$: the implicit reward keeps its shape while the policy's mass sharpens or relaxes.</p>
+    </div>
+
+    <div class="lab">
+      <div class="lab-head">
+        <span class="lab-title">Lab 4 · implicit reward and the policy shift</span>
+        <div class="slider-row" style="width:220px">
+          <span class="small muted">β</span>
+          <input type="range" id="impBeta" min="0.2" max="1.5" step="0.05" value="0.5" aria-label="beta for the implicit reward and policy shift">
+          <span class="val" id="impBetaVal">0.50</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col" style="flex:1 1 340px">
+          <p class="plot-cap">Implicit reward β·log(π_θ / π_ref)</p>
+          <svg id="impSvg" role="img" aria-label="Implicit reward landscape with policy mass"></svg>
+          <div class="legend"><span>low</span><span class="grad"></span><span>high</span><span style="margin-left:10px">dot area ∝ π_θ</span></div>
+        </div>
+        <div class="col" style="flex:1 1 300px">
+          <h4 style="margin-top:0">Before · π_ref ranking</h4>
+          <div id="impBefore"></div>
+          <h4>After · π_θ ranking</h4>
+          <div id="impAfter"></div>
+          <div class="eqbox" id="impEq" style="min-height:118px"></div>
+        </div>
+      </div>
+      <p class="small muted" style="margin:12px 0 0">The rankings list the five responses with the most mass, with their share of the distribution. The implicit reward field is computed from the fitted reward model; the policy is the Gibbs optimum at the chosen $\beta$.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<section id="measure">
+  <div class="wrap">
+    <h2><span class="num">06</span>What to compare, and what to report</h2>
+    <p>One number is never enough. Report the reward margin and the KL that bought it, because a margin without its KL is uninterpretable. Score held-out pairs, and check the proxy against a reward you trust.</p>
+    <table class="cmp">
+      <tr><th></th><th>PPO-RLHF</th><th>DPO</th></tr>
+      <tr><td>Extra network</td><td>A reward model $r_\phi$ and a policy</td><td>None beyond the frozen $\pi_{\mathrm{ref}}$</td></tr>
+      <tr><td>Data use</td><td>Fresh samples scored by $r_\phi$</td><td>The same fixed pairs, reused</td></tr>
+      <tr><td>KL control</td><td>Explicit penalty and a trust region</td><td>Implicit, through $\beta$ in the log-ratio</td></tr>
+      <tr><td>Failure mode</td><td>Reward hacking; noisy RL updates</td><td>Overfitting preferred pairs; verbosity bias</td></tr>
+      <tr><td>What to plot</td><td>Margin, KL, proxy and gold reward</td><td>Margin, KL, held-out accuracy</td></tr>
+    </table>
+    <div class="eqbox">
+      $$\begin{aligned}
+      P(y_w\succ y_l)&=\sigma\big(r(y_w)-r(y_l)\big)\\[2pt]
+      \pi^\star(y)&=\frac{1}{Z}\,\pi_{\mathrm{ref}}(y)\exp\!\Big(\frac{r(y)}{\beta}\Big)\\[2pt]
+      \hat r_\theta(y)&=\beta\log\frac{\pi_\theta(y)}{\pi_{\mathrm{ref}}(y)}\\[2pt]
+      \mathcal{L}_{\mathrm{DPO}}&=-\mathbb{E}\big[\log\sigma\big(\hat r_\theta(y_w)-\hat r_\theta(y_l)\big)\big]
+      \end{aligned}$$
+    </div>
+    <p class="small muted">Move the preference slider and the whole stack moves with it: the dataset, the reward landscape, both training runs, and the sample rankings. That coupling is the lesson. The algorithm is only as aligned as the comparisons that feed it.</p>
+  </div>
+</section>
+
+<!-- project-pager -->
+<nav class="pager" aria-label="Project navigation"><a class="pg-prev" href="04-model-based-world-model.html"><span class="pg-k">Previous</span><span class="pg-t">Model-Based World Model</span></a><a class="pg-home" href="../index.html"><span class="pg-k">Contents</span></a><a class="pg-next" href="06-multi-agent-coordination.html"><span class="pg-k">Next</span><span class="pg-t">Multi-Agent Coordination</span></a></nav>
+<footer>
+  <div class="wrap">Built as a self-contained alignment lab. Move the preference slider, then retrain.</div>
+</footer>
+
+<script>
+/* =====================================================================
+   Utilities
+   ===================================================================== */
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function T(node, tex, display = false) {
+  if (!window.katex || !node) return;
+  katex.render(tex, node, { throwOnError: false, displayMode: display });
+}
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function colorFor(v) {
+  const t = Math.max(-1, Math.min(1, Math.tanh(v)));
+  const a = Math.min(0.9, Math.abs(t) * 0.95);
+  return t >= 0 ? `rgba(37,99,235,${a.toFixed(3)})` : `rgba(220,38,38,${a.toFixed(3)})`;
+}
+const fmt = (v, d = 2) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+const texn = (v, d = 2) => (v < 0 ? '-' : '') + Math.abs(v).toFixed(d);
+const pad2 = n => (n < 10 ? '0' : '') + n;
+
+/* =====================================================================
+   Shared synthetic model
+   36 responses on a 2-D latent space. u = helpfulness, v = verbosity.
+   ===================================================================== */
+const OUT = [];
+for (let i = 0; i < 6; i++) {
+  for (let j = 0; j < 6; j++) {
+    OUT.push({ u: -0.85 + i * (1.7 / 5), v: -0.85 + j * (1.7 / 5) });
+  }
+}
+const N = OUT.length;
+
+const rCorrect = (u, v) => 2.0 * Math.exp(-(((u - 0.5) ** 2) + (v ** 2)) / 0.5);
+const rStyle = (u, v) => 1.7 * Math.exp(-(((u - 0.1) ** 2) + ((v - 0.6) ** 2)) / 0.4) - 0.35 * u;
+const rStar = (u, v, l) => (1 - l) * rCorrect(u, v) + l * rStyle(u, v);
+const logRefOff = (u, v) => -(u * u + v * v) / 0.9;
+
+const CTR = [];
+for (const cu of [-0.6, 0, 0.6]) for (const cv of [-0.6, 0, 0.6]) CTR.push([cu, cv]);
+const RBFSIG = 0.5;
+function feats(u, v) {
+  const f = [1, u, v];
+  for (const [cu, cv] of CTR) f.push(Math.exp(-(((u - cu) ** 2) + ((v - cv) ** 2)) / (2 * RBFSIG * RBFSIG)));
+  return f;
+}
+const K = 3 + CTR.length;
+const FE = OUT.map(o => feats(o.u, o.v));
+const LOGREF = OUT.map(o => logRefOff(o.u, o.v));
+
+function dot(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+function softmax(z) {
+  const m = Math.max(...z);
+  const e = z.map(x => Math.exp(x - m));
+  const s = e.reduce((a, b) => a + b, 0);
+  return e.map(x => x / s);
+}
+function logsumexp(z) {
+  const m = Math.max(...z);
+  return m + Math.log(z.reduce((a, b) => a + Math.exp(b - m), 0));
+}
+function logsoftmax(z) {
+  const lz = logsumexp(z);
+  return z.map(x => x - lz);
+}
+const LOGQ = logsoftmax(LOGREF);
+
+const LABEL_H = ['unhelpful', 'adequate', 'helpful'];
+const LABEL_V = ['terse', 'balanced', 'long'];
+function outLabel(o) {
+  const h = o.u > 0.28 ? 2 : o.u < -0.28 ? 0 : 1;
+  const v = o.v > 0.28 ? 2 : o.v < -0.28 ? 0 : 1;
+  return LABEL_H[h] + ' · ' + LABEL_V[v];
+}
+
+/* --- preference data / reward model --- */
+function makePairs(lambda, seed, n) {
+  const rng = mulberry32(seed);
+  const r = OUT.map(o => rStar(o.u, o.v, lambda));
+  const temp = 0.4;
+  const pairs = [];
+  let guard = 0;
+  while (pairs.length < n && guard < n * 40) {
+    guard++;
+    const i = Math.floor(rng() * N);
+    const j = Math.floor(rng() * N);
+    if (i === j) continue;
+    const p = 1 / (1 + Math.exp(-(r[i] - r[j]) / temp));
+    const win = rng() < p ? i : j;
+    pairs.push(win === i ? [i, j] : [j, i]);
+  }
+  return pairs;
+}
+
+function rmGrad(w, pairs) {
+  const g = new Float64Array(K);
+  let loss = 0;
+  for (const [wi, li] of pairs) {
+    const rw = dot(w, FE[wi]), rl = dot(w, FE[li]);
+    const s = 1 / (1 + Math.exp(-(rw - rl)));
+    loss += -Math.log(Math.max(s, 1e-12));
+    const c = -(1 - s);
+    for (let k = 0; k < K; k++) g[k] += c * (FE[wi][k] - FE[li][k]);
+  }
+  for (let k = 0; k < K; k++) g[k] = g[k] / pairs.length + 3e-4 * w[k];
+  return { g, loss: loss / pairs.length };
+}
+function rmAccuracy(w, pairs) {
+  let ok = 0;
+  for (const [wi, li] of pairs) if (dot(w, FE[wi]) > dot(w, FE[li])) ok++;
+  return ok / pairs.length;
+}
+function fitRM(pairs, steps = 450, lr = 0.5) {
+  const w = new Float64Array(K);
+  for (let s = 0; s < steps; s++) {
+    const { g } = rmGrad(w, pairs);
+    for (let k = 0; k < K; k++) w[k] -= lr * g[k];
+    let gn = 0;
+    for (let k = 0; k < K; k++) gn += g[k] * g[k];
+    if (Math.sqrt(gn) < 1e-3) break;
+  }
+  return w;
+}
+
+const PIPE = {
+  lambda: 0.3,
+  seed: 11,
+  pairs: [],
+  held: [],
+  rm: null,
+  subs: [],
+  rebuild() {
+    this.pairs = makePairs(this.lambda, this.seed, 260);
+    this.held = makePairs(this.lambda, this.seed + 1000, 180);
+    this.rm = fitRM(this.pairs);
+    this.subs.forEach(fn => fn());
+  }
+};
+
+/* =====================================================================
+   Landscape helpers
+   ===================================================================== */
+const LW = 340, LH = 340, LPAD = 14, LD = 1.0;
+const ux = u => LPAD + ((u + LD) / (2 * LD)) * (LW - 2 * LPAD);
+const uy = v => (LH - LPAD) - ((v + LD) / (2 * LD)) * (LH - 2 * LPAD);
+
+function makeField(svg, nu = 28) {
+  svg.setAttribute('viewBox', `0 0 ${LW} ${LH}`);
+  const rects = [], us = [], vs = [];
+  const cw = (LW - 2 * LPAD) / nu, ch = (LH - 2 * LPAD) / nu;
+  for (let i = 0; i < nu; i++) {
+    for (let j = 0; j < nu; j++) {
+      const u = -LD + ((i + 0.5) / nu) * 2 * LD;
+      const v = LD - ((j + 0.5) / nu) * 2 * LD;
+      us.push(u); vs.push(v);
+      rects.push(el('rect', {
+        x: LPAD + i * cw, y: LPAD + j * ch,
+        width: cw + 0.7, height: ch + 0.7, fill: '#fff'
+      }, svg));
+    }
+  }
+  return {
+    paint(fn, scale) {
+      const sc = Math.max(0.05, scale || 1);
+      for (let k = 0; k < rects.length; k++) {
+        rects[k].setAttribute('fill', colorFor(fn(us[k], vs[k]) / sc));
+      }
+    }
+  };
+}
+function addDots(svg, radius = 3.4) {
+  return OUT.map(o => el('circle', {
+    cx: ux(o.u), cy: uy(o.v), r: radius,
+    fill: '#111', stroke: '#fff', 'stroke-width': 1.1
+  }, svg));
+}
+function drawFrame(svg) {
+  el('rect', { x: LPAD, y: LPAD, width: LW - 2 * LPAD, height: LH - 2 * LPAD, fill: 'none', stroke: '#e8e8e8', rx: 4 }, svg);
+}
+function sampleCat(p, rng) {
+  let r = rng(), acc = 0;
+  for (let k = 0; k < p.length; k++) { acc += p[k]; if (r <= acc + 1e-12) return k; }
+  return p.length - 1;
+}
+function topK(p, k) {
+  return p.map((v, i) => i).sort((a, b) => p[b] - p[a]).slice(0, k);
+}
+
+/* =====================================================================
+   Lab 1 — preference dataset
+   ===================================================================== */
+function initPrefs() {
+  const svg = $('#prefSvg');
+  const field = makeField(svg);
+  addDots(svg, 3.2);
+  const ringW = el('circle', { r: 10, fill: 'none', stroke: '#2563eb', 'stroke-width': 2 }, svg);
+  const ringL = el('circle', { r: 10, fill: 'none', stroke: '#dc2626', 'stroke-width': 2 }, svg);
+  const tagW = el('text', { 'font-size': 11, 'font-weight': 650, fill: '#2563eb', class: 'mono' }, svg);
+  const tagL = el('text', { 'font-size': 11, 'font-weight': 650, fill: '#dc2626', class: 'mono' }, svg);
+  drawFrame(svg);
+
+  let shown = PIPE.lambda, target = PIPE.lambda, raf = null;
+
+  function paint(lam) {
+    field.paint((u, v) => rStar(u, v, lam), 1.6);
+    const p0 = PIPE.pairs[0];
+    if (!p0) return;
+    const a = OUT[p0[0]], b = OUT[p0[1]];
+    ringW.setAttribute('cx', ux(a.u)); ringW.setAttribute('cy', uy(a.v));
+    ringL.setAttribute('cx', ux(b.u)); ringL.setAttribute('cy', uy(b.v));
+    tagW.setAttribute('x', ux(a.u) + 12); tagW.setAttribute('y', uy(a.v) - 8); tagW.textContent = 'y_w';
+    tagL.setAttribute('x', ux(b.u) + 12); tagL.setAttribute('y', uy(b.v) - 8); tagL.textContent = 'y_l';
+  }
+  function animate() {
+    shown += (target - shown) * 0.28;
+    if (Math.abs(target - shown) < 0.002) { shown = target; paint(shown); raf = null; return; }
+    paint(shown);
+    raf = requestAnimationFrame(animate);
+  }
+
+  function pairRow(wi, li) {
+    const a = OUT[wi], b = OUT[li];
+    const m = rStar(a.u, a.v, PIPE.lambda) - rStar(b.u, b.v, PIPE.lambda);
+    return '<div style="display:flex;align-items:center;gap:8px;margin:6px 0;font-family:ui-monospace,monospace;font-size:12.5px">' +
+      '<span class="chip" style="background:#eef2ff;color:#1e3a8a">y' + pad2(wi) + '</span>' +
+      '<span style="color:#c2c9d4">≻</span>' +
+      '<span class="chip" style="background:#fff;border:1px solid #e5e5e5;color:#6b7280">y' + pad2(li) + '</span>' +
+      '<span style="flex:1;text-align:right;color:' + (m >= 0 ? '#2563eb' : '#dc2626') + '">' + (m >= 0 ? '+' : '') + fmt(m) + '</span>' +
+      '</div>';
+  }
+  function renderList() {
+    $('#prefPairs').innerHTML = PIPE.pairs.slice(0, 6).map(p => pairRow(p[0], p[1])).join('');
+    const p0 = PIPE.pairs[0];
+    if (!p0) return;
+    const a = OUT[p0[0]], b = OUT[p0[1]];
+    const m = rStar(a.u, a.v, PIPE.lambda) - rStar(b.u, b.v, PIPE.lambda);
+    const prob = 1 / (1 + Math.exp(-m));
+    T($('#prefEq'),
+      '\\begin{aligned}' +
+      'w &= ' + texn(a.u) + ',' + texn(a.v) + '\\quad l = ' + texn(b.u) + ',' + texn(b.v) + '\\\\' +
+      'r_w-r_l &= ' + texn(m, 3) + '\\\\' +
+      'P(y_w\\succ y_l) &= \\sigma(' + texn(m, 3) + ') = \\mathbf{' + texn(prob, 3) + '}' +
+      '\\end{aligned}', true);
+  }
+
+  paint(PIPE.lambda);
+  renderList();
+
+  $('#prefLambda').addEventListener('input', e => {
+    target = parseFloat(e.target.value);
+    $('#prefLambdaVal').textContent = target.toFixed(2);
+    PIPE.lambda = target;
+    PIPE.rebuild();
+    renderList();
+    if (!raf) raf = requestAnimationFrame(animate);
+  });
+  $('#prefResample').addEventListener('click', () => {
+    PIPE.seed++;
+    PIPE.rebuild();
+    renderList();
+    paint(target);
+  });
+}
+
+/* =====================================================================
+   Lab 2 — reward model, trained live
+   ===================================================================== */
+function initRM() {
+  const svg = $('#rmSvg');
+  const field = makeField(svg);
+  addDots(svg, 3.2);
+  drawFrame(svg);
+
+  let w = new Float64Array(K);
+  let it = 0;
+  let timer = null;
+  const NMAX = 450;
+
+  const scoreAt = (u, v) => dot(w, feats(u, v));
+  function maxAbs() {
+    let m = 0.4;
+    for (let i = 0; i < N; i++) m = Math.max(m, Math.abs(dot(w, FE[i])));
+    return m;
+  }
+  function gradNorm(g) {
+    let gn = 0; for (let k = 0; k < K; k++) gn += g[k] * g[k];
+    return Math.sqrt(gn);
+  }
+  function render() {
+    field.paint(scoreAt, maxAbs());
+    const { loss, g } = rmGrad(w, PIPE.pairs);
+    const gn = gradNorm(g);
+    const acc = rmAccuracy(w, PIPE.pairs);
+    $('#rmLoss').textContent = loss.toFixed(4);
+    $('#rmAcc').textContent = Math.round(acc * 100) + '%';
+    $('#rmIters').textContent = it;
+    T($('#rmEq'),
+      '\\begin{aligned}' +
+      '\\mathcal{L}_{\\mathrm{RM}} &= -\\mathbb{E}\\big[\\log\\sigma(r_\\phi(y_w)-r_\\phi(y_l))\\big] = \\mathbf{' + texn(loss, 4) + '}\\\\' +
+      '\\|\\nabla_\\phi\\mathcal{L}\\| &= ' + texn(gn, 4) + '\\\\' +
+      '\\text{train accuracy} &= ' + texn(acc * 100, 1) + '\\%' +
+      '\\end{aligned}', true);
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+  function run() {
+    if (timer) return;
+    $('#rmRun').textContent = 'Pause';
+    timer = setInterval(() => {
+      const lr = parseFloat($('#rmLr').value);
+      let gn = 0;
+      for (let s = 0; s < 2; s++) {
+        const { g } = rmGrad(w, PIPE.pairs);
+        for (let k = 0; k < K; k++) w[k] -= lr * g[k];
+        it++; gn = gradNorm(g);
+      }
+      render();
+      if (gn < 1e-3 || it >= NMAX) { stop(); $('#rmRun').textContent = 'Train ▶'; }
+    }, 110);
+  }
+  function reset() {
+    stop();
+    w = new Float64Array(K);
+    it = 0;
+    render();
+    $('#rmRun').textContent = 'Train ▶';
+  }
+
+  $('#rmRun').addEventListener('click', () => {
+    if (timer) { stop(); $('#rmRun').textContent = 'Train ▶'; } else run();
+  });
+  $('#rmStep').addEventListener('click', () => {
+    const was = !!timer;
+    stop();
+    const lr = parseFloat($('#rmLr').value);
+    for (let s = 0; s < 2; s++) {
+      const { g } = rmGrad(w, PIPE.pairs);
+      for (let k = 0; k < K; k++) w[k] -= lr * g[k];
+      it++;
+    }
+    render();
+    if (was) run();
+  });
+  $('#rmReset').addEventListener('click', reset);
+  $('#rmLr').addEventListener('input', e => {
+    $('#rmLrVal').textContent = parseFloat(e.target.value).toFixed(2);
+  });
+
+  PIPE.subs.push(() => { reset(); run(); });
+
+  render();
+  run();
+}
+
+/* =====================================================================
+   Lab 3 — PPO-RLHF vs DPO
+   ===================================================================== */
+const CMP_NMAX = 360;
+function dpoStep(z, pairs, beta, lr) {
+  const logp = logsoftmax(z);
+  const g = new Float64Array(N);
+  let loss = 0;
+  for (const [wi, li] of pairs) {
+    const d = beta * ((logp[wi] - LOGQ[wi]) - (logp[li] - LOGQ[li]));
+    const s = 1 / (1 + Math.exp(-d));
+    loss += -Math.log(Math.max(s, 1e-12));
+    const wgt = -(1 - s) * beta;
+    g[wi] += wgt;
+    g[li] -= wgt;
+  }
+  for (let k = 0; k < N; k++) g[k] /= pairs.length;
+  for (let k = 0; k < N; k++) z[k] -= lr * g[k];
+  return loss / pairs.length;
+}
+function ppoStep(z, rmw, beta, lr, rng, batch = 128) {
+  const p = softmax(z);
+  const g = new Float64Array(N);
+  const ys = [];
+  for (let m = 0; m < batch; m++) ys.push(sampleCat(p, rng));
+  const rew = ys.map(y => dot(rmw, FE[y]));
+  const base = rew.reduce((a, b) => a + b, 0) / batch;
+  for (let m = 0; m < batch; m++) {
+    const adv = rew[m] - base;
+    const y = ys[m];
+    for (let k = 0; k < N; k++) g[k] += (((k === y) ? 1 : 0) - p[k]) * adv;
+  }
+  for (let k = 0; k < N; k++) g[k] /= batch;
+
+  const logp = p.map(x => Math.log(x + 1e-12));
+  let KL = 0;
+  for (let k = 0; k < N; k++) KL += p[k] * (logp[k] - LOGQ[k]);
+  for (let k = 0; k < N; k++) g[k] -= beta * p[k] * (logp[k] - LOGQ[k] - KL);
+
+  let gn = 0;
+  for (let k = 0; k < N; k++) gn += g[k] * g[k];
+  gn = Math.sqrt(gn);
+  if (gn > 1) for (let k = 0; k < N; k++) g[k] /= gn;
+  for (let k = 0; k < N; k++) z[k] += lr * g[k];
+  return KL;
+}
+function policyStats(z, beta, rmw) {
+  const p = softmax(z);
+  const logp = logsoftmax(z);
+  let KL = 0, gold = 0, proxy = 0;
+  for (let k = 0; k < N; k++) {
+    if (p[k] > 1e-12) KL += p[k] * (logp[k] - LOGQ[k]);
+    gold += p[k] * rStar(OUT[k].u, OUT[k].v, PIPE.lambda);
+    proxy += p[k] * dot(rmw, FE[k]);
+  }
+  let margin = 0, acc = 0;
+  for (const [wi, li] of PIPE.held) {
+    const m = beta * ((logp[wi] - LOGQ[wi]) - (logp[li] - LOGQ[li]));
+    margin += m;
+    if (m > 0) acc++;
+  }
+  margin /= PIPE.held.length;
+  acc /= PIPE.held.length;
+  return { KL, gold, proxy, margin, acc };
+}
+function drawSeries(svg, series, yMax, xMax) {
+  svg.innerHTML = '';
+  const W = 420, H = 168, L = 44, R = 12, TOP = 12, B = 26;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const xs = t => L + (t / xMax) * (W - L - R);
+  const ys = y => TOP + (1 - y / yMax) * (H - TOP - B);
+  el('line', { x1: L, x2: W - R, y1: ys(0), y2: ys(0), stroke: '#e5e5e5' }, svg);
+  el('line', { x1: L, x2: L, y1: TOP, y2: ys(0), stroke: '#e5e5e5' }, svg);
+  for (let q = 0; q <= 2; q++) {
+    const val = yMax * q / 2;
+    if (q > 0) el('line', { x1: L, x2: W - R, y1: ys(val), y2: ys(val), stroke: '#f4f4f5' }, svg);
+    el('text', { x: L - 7, y: ys(val) + 4, 'text-anchor': 'end', 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = val.toFixed(1);
+  }
+  [0, xMax / 2, xMax].forEach(t => {
+    el('text', { x: xs(t), y: H - 8, 'text-anchor': 'middle', 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = Math.round(t);
+  });
+  el('text', { x: W - R, y: H - 8, 'text-anchor': 'end', 'font-size': 10.5, fill: '#9ca3af', class: 'mono' }, svg).textContent = 'steps';
+  series.forEach(s => {
+    const vals = s.values;
+    if (vals.length < 2) return;
+    const pts = [];
+    for (let i = 0; i < vals.length; i++) pts.push(`${xs(i).toFixed(1)},${ys(Math.min(vals[i], yMax)).toFixed(1)}`);
+    el('polyline', { points: pts.join(' '), fill: 'none', stroke: s.color, 'stroke-width': 2.2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+  });
+}
+
+function initCompare() {
+  const svgM = $('#cmpMargin'), svgK = $('#cmpKl');
+  let zD, zP, rng, step = 0, timer = null;
+  let hM = [[0], [0]], hK = [[0], [0]];
+  let beta = parseFloat($('#cmpBeta').value);
+
+  function stop() {
+    if (timer) { clearInterval(timer); timer = null; }
+    $('#cmpRun').textContent = 'Train both ▶';
+  }
+  function reset() {
+    stop();
+    zD = LOGREF.slice();
+    zP = LOGREF.slice();
+    rng = mulberry32(12345);
+    step = 0;
+    hM = [[0], [0]];
+    hK = [[0], [0]];
+    render();
+  }
+  function render() {
+    const rmw = PIPE.rm;
+    const sD = policyStats(zD, beta, rmw);
+    const sP = policyStats(zP, beta, rmw);
+    drawSeries(svgM, [{ values: hM[0], color: '#111' }, { values: hM[1], color: '#2563eb' }], 1.2, CMP_NMAX);
+    drawSeries(svgK, [{ values: hK[0], color: '#111' }, { values: hK[1], color: '#2563eb' }], 3.0, CMP_NMAX);
+
+    $('#cmpReadout').innerHTML =
+      'DPO · margin <b>' + fmt(sD.margin, 3) + '</b> · KL <b>' + fmt(sD.KL, 3) + '</b> · gold <b>' + fmt(sD.gold, 3) + '</b><br>' +
+      'PPO · margin <b>' + fmt(sP.margin, 3) + '</b> · KL <b>' + fmt(sP.KL, 3) + '</b> · gold <b>' + fmt(sP.gold, 3) + '</b>';
+
+    T($('#cmpEq'),
+      '\\begin{aligned}' +
+      '\\text{step} &= ' + step + ',\\quad \\beta = ' + texn(beta) + '\\\\' +
+      '\\text{DPO } &: \\mathcal{L}=-\\mathbb{E}\\log\\sigma(\\hat r_\\theta(y_w)-\\hat r_\\theta(y_l)),\\ D_{\\mathrm{KL}}=' + texn(sD.KL, 3) + '\\\\' +
+      '\\text{PPO } &: \\max_\\pi\\ \\mathbb{E}[r_\\phi]-\\beta D_{\\mathrm{KL}},\\ D_{\\mathrm{KL}}=' + texn(sP.KL, 3) + '\\\\' +
+      '\\text{gold } &: \\mathbb{E}_{\\pi_{\\mathrm{DPO}}}[r^\\star]=' + texn(sD.gold, 3) + ',\\ \\mathbb{E}_{\\pi_{\\mathrm{PPO}}}[r^\\star]=' + texn(sP.gold, 3) +
+      '\\end{aligned}', true);
+  }
+  function stepOnce(n) {
+    for (let s = 0; s < n; s++) {
+      if (step >= CMP_NMAX) break;
+      dpoStep(zD, PIPE.pairs, beta, 2.5);
+      ppoStep(zP, PIPE.rm, beta, 0.8, rng, 128);
+      step++;
+      hM[0].push(policyStats(zD, beta, PIPE.rm).margin);
+      hM[1].push(policyStats(zP, beta, PIPE.rm).margin);
+      hK[0].push(policyStats(zD, beta, PIPE.rm).KL);
+      hK[1].push(policyStats(zP, beta, PIPE.rm).KL);
+    }
+    render();
+    if (step >= CMP_NMAX) stop();
+    else if (step > 40 && step % 10 === 0) {
+      const i = hM[0].length - 1, j = Math.max(0, i - 10);
+      if (Math.abs(hM[0][i] - hM[0][j]) < 2e-4 && Math.abs(hM[1][i] - hM[1][j]) < 2e-4) stop();
+    }
+  }
+  function run() {
+    if (timer) return;
+    $('#cmpRun').textContent = 'Pause';
+    timer = setInterval(() => stepOnce(2), 110);
+  }
+
+  $('#cmpRun').addEventListener('click', () => { if (timer) stop(); else run(); });
+  $('#cmpStep').addEventListener('click', () => { stop(); stepOnce(2); });
+  $('#cmpReset').addEventListener('click', reset);
+  $('#cmpBeta').addEventListener('input', e => {
+    beta = parseFloat(e.target.value);
+    $('#cmpBetaVal').textContent = beta.toFixed(2);
+    const was = !!timer;
+    reset();
+    if (was) run();
+  });
+
+  PIPE.subs.push(() => { reset(); run(); });
+
+  reset();
+  run();
+}
+
+/* =====================================================================
+   Lab 4 — implicit reward and rankings
+   ===================================================================== */
+function initImplicit() {
+  const svg = $('#impSvg');
+  const field = makeField(svg);
+  const dots = OUT.map(o => el('circle', {
+    cx: ux(o.u), cy: uy(o.v), r: 3,
+    fill: '#111', stroke: '#fff', 'stroke-width': 1.1
+  }, svg));
+  drawFrame(svg);
+
+  let beta = parseFloat($('#impBeta').value);
+  let dispR = dots.map(() => 3), targetR = dots.map(() => 3), raf = null;
+
+  function compute() {
+    const rmw = PIPE.rm;
+    const rphi = OUT.map((o, i) => dot(rmw, FE[i]));
+    const z = LOGREF.map((lr, i) => lr + rphi[i] / beta);
+    const logpi = logsoftmax(z);
+    const pi = softmax(z);
+    const C = logsumexp(z) - logsumexp(LOGREF);
+    return { rmw, logpi, pi, C };
+  }
+  function rankList(p, k) {
+    const idx = topK(p, k);
+    const max = Math.max(...p);
+    return idx.map((i, r) => {
+      const active = p[i] >= max * 0.6;
+      return '<div style="display:flex;align-items:center;gap:8px;margin:5px 0;font-size:13px">' +
+        '<span class="chip" style="min-width:28px;' + (active ? 'background:#eef2ff;color:#1e3a8a' : '') + '">' + (r + 1) + '</span>' +
+        '<span style="flex:1">' + outLabel(OUT[i]) + ' <span class="muted mono" style="font-size:11px">y' + pad2(i) + '</span></span>' +
+        '<span class="mono" style="color:#6b7280;font-size:12px">' + (p[i] * 100).toFixed(1) + '%</span>' +
+        '</div>';
+    }).join('');
+  }
+  function animate() {
+    let d = 0;
+    for (let i = 0; i < dots.length; i++) {
+      const nd = dispR[i] + (targetR[i] - dispR[i]) * 0.25;
+      d = Math.max(d, Math.abs(nd - targetR[i]));
+      dispR[i] = nd;
+      dots[i].setAttribute('r', nd.toFixed(2));
+    }
+    raf = d > 0.03 ? requestAnimationFrame(animate) : null;
+  }
+  function render() {
+    const S = compute();
+    const h = OUT.map((o, i) => beta * (S.logpi[i] - LOGQ[i]));
+    let scale = 0.4;
+    for (const v of h) scale = Math.max(scale, Math.abs(v));
+    field.paint((u, v) => dot(S.rmw, feats(u, v)) - beta * S.C, scale);
+
+    const maxP = Math.max(...S.pi);
+    targetR = S.pi.map(p => 3 + 11 * (p / maxP));
+    if (!raf) raf = requestAnimationFrame(animate);
+
+    $('#impBefore').innerHTML = rankList(softmax(LOGREF), 5);
+    $('#impAfter').innerHTML = rankList(S.pi, 5);
+
+    const gold = S.pi.reduce((a, x, k) => a + x * rStar(OUT[k].u, OUT[k].v, PIPE.lambda), 0);
+    const proxy = S.pi.reduce((a, x, k) => a + x * dot(S.rmw, FE[k]), 0);
+    T($('#impEq'),
+      '\\begin{aligned}' +
+      '\\hat r_\\theta(y) &= \\beta\\log\\frac{\\pi_\\theta(y)}{\\pi_{\\mathrm{ref}}(y)} = r_\\phi(y) - \\underbrace{\\beta\\log Z}_{' + texn(beta * S.C, 3) + '}\\\\' +
+      'D_{\\mathrm{KL}} &= ' + texn(S.pi.reduce((a, x, k) => a + (x > 1e-12 ? x * (S.logpi[k] - LOGQ[k]) : 0), 0), 3) + '\\\\' +
+      '\\mathbb{E}_{\\pi_\\theta}[r^\\star] &= ' + texn(gold, 3) + ',\\quad \\mathbb{E}_{\\pi_\\theta}[r_\\phi] = ' + texn(proxy, 3) +
+      '\\end{aligned}', true);
+  }
+
+  $('#impBeta').addEventListener('input', e => {
+    beta = parseFloat(e.target.value);
+    $('#impBetaVal').textContent = beta.toFixed(2);
+    render();
+  });
+  PIPE.subs.push(() => render());
+
+  render();
+}
+
+/* =====================================================================
+   Code highlighting
+   ===================================================================== */
+function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+const PY_KEYWORDS = new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case self'.split(' '));
+const PY_BUILTINS = new Set('abs all any bool dict enumerate filter float int len list map max min print range reversed round set sorted str sum tuple zip isinstance super type'.split(' '));
+function highlightPython(src){
+  const re = /(#[^\n]*)|((?:[rbfu]{0,2})(?:'''[\s\S]*?'''|"""[\s\S]*?"""|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"))|(@[A-Za-z_]\w*)|(\b\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?\b)|([A-Za-z_]\w*)|([^\w\s]+)|(\s+)/g;
+  let out='',m;
+  while((m=re.exec(src))){
+    if(m[1]) out+='<span class="t-c">'+escapeHtml(m[1])+'</span>';
+    else if(m[2]) out+='<span class="t-s">'+escapeHtml(m[2])+'</span>';
+    else if(m[3]) out+='<span class="t-d">'+escapeHtml(m[3])+'</span>';
+    else if(m[4]) out+='<span class="t-n">'+escapeHtml(m[4])+'</span>';
+    else if(m[5]){const w=m[5];
+      if(PY_KEYWORDS.has(w)) out+='<span class="t-k">'+w+'</span>';
+      else if(PY_BUILTINS.has(w)) out+='<span class="t-b">'+w+'</span>';
+      else if(/^\s*\(/.test(src.slice(re.lastIndex))) out+='<span class="t-f">'+w+'</span>';
+      else out+=w;
+    }
+    else if(m[6]) out+='<span class="t-o">'+escapeHtml(m[6])+'</span>';
+    else if(m[7]) out+=m[7];
+  }
+  return out;
+}
+function initCode(){
+  document.querySelectorAll('pre.code code[data-lang]').forEach(function(c){
+    c.innerHTML = highlightPython(c.textContent);
+  });
+  document.querySelectorAll('.cb-copy').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var code = btn.closest('.cb').querySelector('code');
+      (navigator.clipboard ? navigator.clipboard.writeText(code.textContent) : Promise.reject())
+        .then(function(){ btn.textContent='Copied'; setTimeout(function(){ btn.textContent='Copy'; },1400); })
+        .catch(function(){});
+    });
+  });
+}
+
+/* =====================================================================
+   Scroll progress
+   ===================================================================== */
+function initScroll() {
+  const bar = $('#progress');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.renderMathInElement) {
+    renderMathInElement(document.body, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ],
+      throwOnError: false
+    });
+  }
+  PIPE.rebuild();
+  initPrefs();
+  initRM();
+  initCompare();
+  initImplicit();
+  initCode();
+  initScroll();
+});
+</script>
+<!-- reader-script -->
+<script>
+(function () {
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var a = e.key === 'ArrowLeft' ? document.querySelector('.pager .pg-prev[href]')
+          : e.key === 'ArrowRight' ? document.querySelector('.pager .pg-next[href]') : null;
+    if (a) location.href = a.getAttribute('href');
+  });
+})();
+</script>
+</body>
+</html>
